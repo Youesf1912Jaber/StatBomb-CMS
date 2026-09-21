@@ -2,6 +2,7 @@ import "server-only";
 
 import type { DistributionMatchRow } from "@/lib/sync/google-sheets";
 import { normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId } from "@/lib/sync/google-sheets";
+import { parseDistributionSla } from "@/lib/distribution-assignments";
 import type { AssignmentRow, MatchRow, ProfileRow } from "@/types/database.types";
 
 export type PreviewResult =
@@ -58,8 +59,8 @@ function identity(matchId: string, hrCode: string, task: string, half: string): 
 
 const VALID_HALVES = new Set(["Half 1", "Half 2", "Half 3", "Half 4", "Full Match"]);
 
-function validSla(value: string | null): boolean {
-  return Boolean(value) && !Number.isNaN(new Date(value!).getTime());
+function validSla(value: string | null, fallbackDate?: string | null): boolean {
+  return Boolean(parseDistributionSla(value, fallbackDate));
 }
 
 function comparableShiftDate(value: string | null): string | null {
@@ -208,7 +209,7 @@ export function classifyDistributionRows(
     } else if (!VALID_HALVES.has(half)) {
       supabaseStatus = "INVALID_HALF";
       reason = "Distribution half is invalid.";
-    } else if (!validSla(row.sla)) {
+    } else if (!validSla(row.sla, row.shift_date ?? row.match_date)) {
       supabaseStatus = "INVALID_SLA";
       reason = "Distribution SLA must be a valid date/time.";
     } else {

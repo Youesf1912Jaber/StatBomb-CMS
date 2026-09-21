@@ -20,10 +20,155 @@ export type DistributionAssignmentPlanResult =
   | { ok: true; plan: DistributionAssignmentPlan }
   | { ok: false; reason: string; conflict: boolean };
 
-function toSla(value: string | null): string | null {
-  if (!value) return null;
-  const date = new Date(value);
+type ParsedCivilDateTime = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+};
+
+const CAIRO_OFFSET = "+03:00";
+
+function pad(value: number, size = 2): string {
+  return value.toString().padStart(size, "0");
+}
+
+function isValidCivilDate(year: number, month: number, day: number): boolean {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function resolveDayMonth(first: number, second: number): { day: number; month: number } | null {
+  if (first > 12 && second <= 12) return { day: first, month: second };
+  if (second > 12 && first <= 12) return { day: second, month: first };
+  if (first <= 12 && second <= 12) return { day: first, month: second };
+  return null;
+}
+
+function parseTimeParts(value: string): { hour: number; minute: number; second: number } | null {
+  const match = value.trim().match(/^(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?(?:\s*([AaPp][Mm]))?$/);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const second = Number(match[3] ?? 0);
+  const meridiem = match[4]?.toLowerCase();
+  if (meridiem === "pm" && hour < 12) hour += 12;
+  if (meridiem === "am" && hour === 12) hour = 0;
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  return { hour, minute, second };
+}
+
+function fromCivil(parts: ParsedCivilDateTime): string | null {
+  if (
+    !Number.isInteger(parts.year) ||
+    !Number.isInteger(parts.month) ||
+    !Number.isInteger(parts.day) ||
+    !Number.isInteger(parts.hour) ||
+    !Number.isInteger(parts.minute) ||
+    !Number.isInteger(parts.second)
+  ) {
+    return null;
+  }
+  if (
+    parts.month < 1 ||
+    parts.month > 12 ||
+    parts.day < 1 ||
+    parts.day > 31 ||
+    parts.hour < 0 ||
+    parts.hour > 23 ||
+    parts.minute < 0 ||
+    parts.minute > 59 ||
+    parts.second < 0 ||
+    parts.second > 59 ||
+    !isValidCivilDate(parts.year, parts.month, parts.day)
+  ) {
+    return null;
+  }
+  const iso = `${pad(parts.year, 4)}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}:${pad(parts.second)}${CAIRO_OFFSET}`;
+  const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function parseDistributionDateTime(value: string | null): ParsedCivilDateTime | null {
+  const text = value?.replace(/\u00a0/g, " ").trim() ?? "";
+  if (!text) return null;
+
+  const iso = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/i
+  );
+  if (iso) {
+    return {
+      year: Number(iso[1]),
+      month: Number(iso[2]),
+      day: Number(iso[3]),
+      hour: Number(iso[4] ?? 0),
+      minute: Number(iso[5] ?? 0),
+      second: Number(iso[6] ?? 0),
+    };
+  }
+
+  const combined = text.match(
+    /^(\d{1,4})[./-](\d{1,2})[./-](\d{1,4})(?:[ T,.-]+(\d{1,2}[:.]\d{2}(?:[:.]\d{2})?(?:\s*[AaPp][Mm])?))?$/
+  );
+  if (!combined) return null;
+
+  const firstToken = combined[1];
+  const secondToken = combined[2];
+  const thirdToken = combined[3];
+  if (!firstToken || !secondToken || !thirdToken) return null;
+  const first = Number(firstToken);
+  const second = Number(secondToken);
+  const third = Number(thirdToken);
+  const time = combined[4] ? parseTimeParts(combined[4]) : { hour: 0, minute: 0, second: 0 };
+  if (!time) return null;
+
+  if (firstToken.length === 4) {
+    return { year: first, month: second, day: third, ...time };
+  }
+  if (thirdToken.length === 4) {
+    const resolved = resolveDayMonth(first, second);
+    if (!resolved) return null;
+    return { year: third, month: resolved.month, day: resolved.day, ...time };
+  }
+  return null;
+}
+
+export function parseDistributionSla(value: string | null, fallbackDate?: string | null): string | null {
+  const text = value?.replace(/\u00a0/g, " ").trim() ?? "";
+  if (!text) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text) && /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  const parsed = parseDistributionDateTime(text);
+  if (parsed) return fromCivil(parsed);
+
+  const timeOnly = parseTimeParts(text);
+  if (timeOnly) {
+    const fallback = parseDistributionDateTime(fallbackDate ?? null);
+    if (!fallback) return null;
+    return fromCivil({ ...fallback, ...timeOnly });
+  }
+
+  return null;
+}
+
+function toShiftDate(value: string | null): string | null {
+  const parsed = parseDistributionDateTime(value);
+  if (!parsed || !isValidCivilDate(parsed.year, parsed.month, parsed.day)) return null;
+  return `${pad(parsed.year, 4)}-${pad(parsed.month)}-${pad(parsed.day)}`;
+}
+
+function toSla(value: string | null, fallbackDate?: string | null): string | null {
+  return parseDistributionSla(value, fallbackDate);
 }
 
 /**
@@ -58,7 +203,7 @@ export function planDistributionAssignment(
     return { ok: false, conflict: false, reason: "Distribution half is invalid." };
   }
 
-  const sla = toSla(row.sla);
+  const sla = toSla(row.sla, row.shift_date ?? row.match_date);
   if (!sla) return { ok: false, conflict: false, reason: "Distribution SLA must be a valid date/time." };
 
   const existing = assignments.find(
@@ -74,5 +219,5 @@ export function planDistributionAssignment(
     };
   }
 
-  return { ok: true, plan: { row, collector, match, task, half: half as AssignmentHalf, sla, shiftDate: row.shift_date } };
+  return { ok: true, plan: { row, collector, match, task, half: half as AssignmentHalf, sla, shiftDate: toShiftDate(row.shift_date) } };
 }
