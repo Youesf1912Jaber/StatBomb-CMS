@@ -6,3 +6,6 @@ node_modules/
 .vercel/
 *.log
 *.tsbuildinfo
+
+# Supabase local CLI state
+supabase/.temp/
