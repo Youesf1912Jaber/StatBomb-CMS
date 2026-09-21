@@ -135,3 +135,5 @@ beyond `npm run build`. Before deploying:
 
 Service-role key, VAPID keys, and `CRON_SECRET` are not needed until Phases
 3 and 6 land — don't set them yet if you'd rather not provision them early.
+
+Supabase GitHub deployment integration enabled.
