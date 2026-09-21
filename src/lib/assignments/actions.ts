@@ -35,7 +35,7 @@ export async function startWork(assignmentId: string): Promise<AssignmentActionS
 
 /**
  * Complete Work. Same pattern as startWork — `complete_assignment` guards
- * `collector_id = auth.uid() AND status = 'In Progress'` atomically.
+ * `collector_id = auth.uid() AND status in ('In Progress', 'Overdue')` atomically.
  */
 export async function completeWork(assignmentId: string): Promise<AssignmentActionState> {
   const supabase = createClient();

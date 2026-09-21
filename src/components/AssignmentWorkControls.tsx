@@ -51,7 +51,7 @@ export function AssignmentWorkControls({ assignmentId, status }: AssignmentWorkC
         </button>
       )}
 
-      {status === "In Progress" && (
+      {(status === "In Progress" || status === "Overdue") && (
         <button
           onClick={handleComplete}
           disabled={isPending}
