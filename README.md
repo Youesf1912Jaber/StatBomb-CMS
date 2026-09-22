@@ -131,7 +131,7 @@ beyond `npm run build`. Before deploying:
 2. Add the deployed origin to Supabase's Auth redirect allow-list (see step 4
    above).
 3. Run the Phase 1 migration against the target Supabase project before the
-   first deploy touches it thanks.
+   first deploy touches it.
 
 Service-role key, VAPID keys, and `CRON_SECRET` are not needed until Phases
 3 and 6 land — don't set them yet if you'd rather not provision them early.
