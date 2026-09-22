@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { classifyDistributionRows } from "@/lib/distribution-preview";
+import { fetchAllMatches } from "@/lib/match-master-preview";
 import { readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,19 +17,18 @@ export async function GET() {
   }
 
   try {
-    const [distributionRows, profilesResult, matchesResult, assignmentsResult] = await Promise.all([
+    const [distributionRows, profilesResult, matches, assignmentsResult] = await Promise.all([
       readDistributionRowsForPreview(),
       supabase.from("profiles").select("*"),
-      supabase.from("matches").select("*"),
+      fetchAllMatches(supabase),
       supabase.from("assignments").select("*"),
     ]);
     if (profilesResult.error) throw profilesResult.error;
-    if (matchesResult.error) throw matchesResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
     const preview = classifyDistributionRows(
       distributionRows,
       profilesResult.data ?? [],
-      matchesResult.data ?? [],
+      matches,
       assignmentsResult.data ?? [],
     );
     return NextResponse.json(preview);

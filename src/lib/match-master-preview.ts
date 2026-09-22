@@ -24,6 +24,12 @@ export async function fetchAllMatches(client: SupabaseClient<Database>): Promise
   return rows;
 }
 
+export function findMatchByExternalId(matches: MatchRow[], matchId: string | null | undefined): MatchRow | undefined {
+  const normalized = normalizeMatchId(matchId);
+  if (!normalized) return undefined;
+  return matches.find((match) => normalizeMatchId(match.external_id) === normalized);
+}
+
 export type MatchMasterPreviewResult =
   | "NEW_MATCH"
   | "EXISTING_UNCHANGED"

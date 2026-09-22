@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { planDistributionAssignment } from "@/lib/distribution-assignments";
+import { fetchAllMatches } from "@/lib/match-master-preview";
 import { normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,14 +27,13 @@ export async function POST(request: Request) {
   try {
     // Re-read the source and all database references immediately before
     // writing: preview output is advisory and never trusted as write input.
-    const [rows, profilesResult, matchesResult, assignmentsResult] = await Promise.all([
+    const [rows, profilesResult, matches, assignmentsResult] = await Promise.all([
       readDistributionRowsForPreview(),
       supabase.from("profiles").select("*"),
-      supabase.from("matches").select("*"),
+      fetchAllMatches(supabase),
       supabase.from("assignments").select("*"),
     ]);
     if (profilesResult.error) throw profilesResult.error;
-    if (matchesResult.error) throw matchesResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
 
     const results: Array<{ sourceRow: number; result: "inserted" | "existing" | "conflict" | "error"; assignmentId?: string; reason?: string }> = [];
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
         results.push({ sourceRow, result: "conflict", reason: "Distribution assigns this Match + Task + Half to different collectors." });
         continue;
       }
-      const planned = planDistributionAssignment(row, profilesResult.data ?? [], matchesResult.data ?? [], assignmentsResult.data ?? []);
+      const planned = planDistributionAssignment(row, profilesResult.data ?? [], matches, assignmentsResult.data ?? []);
       if (!planned.ok) {
         results.push({ sourceRow, result: planned.conflict ? "conflict" : "existing", reason: planned.reason });
         continue;

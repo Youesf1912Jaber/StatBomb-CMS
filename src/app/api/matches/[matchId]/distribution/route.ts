@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { createDistributionAssignments, normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId, pullTeamSheet, readDistributionRowsForMatch, readMatchesMasterSheet } from "@/lib/sync/google-sheets";
 import { planDistributionAssignment } from "@/lib/distribution-assignments";
+import { fetchAllMatches, findMatchByExternalId } from "@/lib/match-master-preview";
 import { PreviewInputError } from "@/lib/sync/preview";
 import { createClient } from "@/lib/supabase/server";
 
@@ -73,15 +74,15 @@ export async function POST(
 
     const roster = await pullTeamSheet();
     const supabase = createClient();
-    const [profilesResult, matchesResult, assignmentsResult] = await Promise.all([
+    const [profilesResult, databaseMatches, assignmentsResult] = await Promise.all([
       supabase.from("profiles").select("*"),
-      supabase.from("matches").select("*"),
+      fetchAllMatches(supabase),
       supabase.from("assignments").select("*"),
     ]);
-    if (profilesResult.error || matchesResult.error || assignmentsResult.error) {
+    if (profilesResult.error || assignmentsResult.error) {
       throw new PreviewInputError("Unable to validate assignment ownership and logical identity.");
     }
-    const databaseMatch = (matchesResult.data ?? []).find((candidate) => candidate.external_id === normalizedMatchId);
+    const databaseMatch = findMatchByExternalId(databaseMatches, normalizedMatchId);
     if (!databaseMatch) {
       throw new PreviewInputError("The selected Match Master record is not available in Supabase.");
     }
@@ -149,7 +150,7 @@ export async function POST(
         return NextResponse.json({ success: false, error: "Distribution row saved, but assignment creation failed: the saved row could not be re-read." }, { status: 500 });
       }
       const currentAssignments = [...(assignmentsResult.data ?? []), ...persisted];
-      const planned = planDistributionAssignment(source, profilesResult.data ?? [], matchesResult.data ?? [], currentAssignments);
+      const planned = planDistributionAssignment(source, profilesResult.data ?? [], databaseMatches, currentAssignments);
       if (!planned.ok) {
         return NextResponse.json({ success: false, error: `Distribution row saved, but assignment creation failed: ${planned.reason}` }, { status: planned.conflict ? 409 : 422 });
       }
