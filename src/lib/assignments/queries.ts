@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, MatchRow } from "@/types/database.types";
+import type { AssignmentTaskTimerRow, Database, MatchRow } from "@/types/database.types";
 import type { AssignmentWithMatch } from "./types";
 
 type Client = SupabaseClient<Database>;
@@ -75,6 +75,20 @@ export async function getMatchCollaborators(supabase: Client, matchId: string) {
   const { data, error } = await supabase.rpc("get_match_collaborators", {
     p_match_id: matchId,
   });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getAssignmentTaskTimers(
+  supabase: Client,
+  assignmentId: string
+): Promise<AssignmentTaskTimerRow[]> {
+  const { data, error } = await supabase
+    .from("assignment_task_timers")
+    .select("*")
+    .eq("assignment_id", assignmentId)
+    .order("started_at", { ascending: true });
+
   if (error) throw error;
   return data ?? [];
 }

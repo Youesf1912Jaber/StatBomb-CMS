@@ -88,6 +88,17 @@ export type AssignmentRow = {
   updated_at: string;
 };
 
+export type AssignmentTaskTimerRow = {
+  id: string;
+  assignment_id: string;
+  task_name: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type NotificationRow = {
   id: string;
   recipient_id: string;
@@ -239,6 +250,21 @@ export interface Database {
         Update: Partial<AssignmentRow>;
         Relationships: [];
       };
+      assignment_task_timers: {
+        Row: AssignmentTaskTimerRow;
+        Insert: {
+          id?: string;
+          assignment_id: string;
+          task_name: string;
+          started_at: string;
+          ended_at?: string | null;
+          duration_seconds?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<AssignmentTaskTimerRow>;
+        Relationships: [];
+      };
       notifications: {
         Row: NotificationRow;
         Insert: {
@@ -338,6 +364,14 @@ export interface Database {
       complete_assignment: {
         Args: { p_assignment_id: string };
         Returns: AssignmentRow;
+      };
+      start_assignment_task: {
+        Args: { p_assignment_id: string; p_task_name: string };
+        Returns: AssignmentTaskTimerRow;
+      };
+      end_assignment_task: {
+        Args: { p_assignment_id: string; p_task_name: string };
+        Returns: AssignmentTaskTimerRow;
       };
       create_assignment: {
         Args: {

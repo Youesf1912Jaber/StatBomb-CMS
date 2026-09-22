@@ -8,9 +8,14 @@ import type { AssignmentStatus } from "@/types/database.types";
 interface AssignmentWorkControlsProps {
   assignmentId: string;
   status: AssignmentStatus;
+  hasActiveTaskTimer?: boolean;
 }
 
-export function AssignmentWorkControls({ assignmentId, status }: AssignmentWorkControlsProps) {
+export function AssignmentWorkControls({
+  assignmentId,
+  status,
+  hasActiveTaskTimer = false,
+}: AssignmentWorkControlsProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -28,6 +33,10 @@ export function AssignmentWorkControls({ assignmentId, status }: AssignmentWorkC
   }
 
   function handleComplete() {
+    if (hasActiveTaskTimer) {
+      setError("Please end all active tasks before completing the assignment.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const result = await completeWork(assignmentId);

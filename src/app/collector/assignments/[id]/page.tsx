@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
-import { getAssignmentById, getMatchCollaborators } from "@/lib/assignments/queries";
+import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } from "@/lib/assignments/queries";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AssignmentWorkControls } from "@/components/AssignmentWorkControls";
+import { AssignmentTaskTracking } from "@/components/AssignmentTaskTracking";
 
 function formatTimestamp(value: string | null): string {
   if (!value) return "—";
@@ -28,6 +29,7 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
 
   const collaborators = await getMatchCollaborators(supabase, assignment.match_id);
   const others = collaborators.filter((c) => c.collector_id !== profile.id);
+  const taskTimers = await getAssignmentTaskTimers(supabase, assignment.id);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -90,7 +92,18 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
         </div>
       )}
 
-      <AssignmentWorkControls assignmentId={assignment.id} status={assignment.status} />
+      <AssignmentWorkControls
+        assignmentId={assignment.id}
+        status={assignment.status}
+        hasActiveTaskTimer={taskTimers.some((timer) => timer.ended_at === null)}
+      />
+
+      <AssignmentTaskTracking
+        assignmentId={assignment.id}
+        status={assignment.status}
+        startedAt={assignment.started_at}
+        timers={taskTimers}
+      />
 
       <div>
         <h2 className="font-display text-lg text-chalk-50">Teammates</h2>

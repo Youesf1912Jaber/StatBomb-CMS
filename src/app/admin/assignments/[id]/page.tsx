@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAssignmentById, getMatchCollaborators } from "@/lib/assignments/queries";
+import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } from "@/lib/assignments/queries";
 import { getActivityLogsForAssignment } from "@/lib/activity-logs/queries";
 import { SlaCountdown } from "@/components/SlaCountdown";
+import { AdminAssignmentTaskTimers } from "@/components/AdminAssignmentTaskTimers";
 import { ReassignButton } from "./ReassignButton";
 import { EditButton } from "./EditButton";
 
@@ -27,6 +28,7 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
 
   const collaborators = await getMatchCollaborators(supabase, assignment.match_id);
   const activityHistory = await getActivityLogsForAssignment(supabase, assignment.id);
+  const taskTimers = await getAssignmentTaskTimers(supabase, assignment.id);
 
   const { data: allCollectors } = await supabase
     .from("profiles")
@@ -105,6 +107,8 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
           <dd className="mt-2 whitespace-pre-wrap text-sm text-chalk-50">{assignment.notes}</dd>
         </div>
       )}
+
+      <AdminAssignmentTaskTimers timers={taskTimers} />
 
       {collaborators.length > 1 && (
         <div>

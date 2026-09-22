@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { translateSupabaseError, type AppErrorCode } from "@/lib/errors";
+import { isAssignmentTaskName } from "./task-names";
 
 export interface AssignmentActionState {
   error: string | null;
@@ -104,5 +105,58 @@ export async function updateAssignment(
 
   revalidatePath(`/admin/assignments/${assignmentId}`);
   revalidatePath("/admin");
+  return OK;
+}
+
+function revalidateAssignmentPaths(assignmentId: string) {
+  revalidatePath(`/collector/assignments/${assignmentId}`);
+  revalidatePath(`/admin/assignments/${assignmentId}`);
+  revalidatePath("/collector");
+  revalidatePath("/admin");
+}
+
+export async function startAssignmentTask(
+  assignmentId: string,
+  taskName: string
+): Promise<AssignmentActionState> {
+  if (!isAssignmentTaskName(taskName)) {
+    return { error: "That task is not allowed.", errorCode: "INVALID_TASK_NAME" };
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase.rpc("start_assignment_task", {
+    p_assignment_id: assignmentId,
+    p_task_name: taskName,
+  });
+
+  if (error) {
+    const appError = translateSupabaseError(error);
+    return { error: appError.message, errorCode: appError.code };
+  }
+
+  revalidateAssignmentPaths(assignmentId);
+  return OK;
+}
+
+export async function endAssignmentTask(
+  assignmentId: string,
+  taskName: string
+): Promise<AssignmentActionState> {
+  if (!isAssignmentTaskName(taskName)) {
+    return { error: "That task is not allowed.", errorCode: "INVALID_TASK_NAME" };
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase.rpc("end_assignment_task", {
+    p_assignment_id: assignmentId,
+    p_task_name: taskName,
+  });
+
+  if (error) {
+    const appError = translateSupabaseError(error);
+    return { error: appError.message, errorCode: appError.code };
+  }
+
+  revalidateAssignmentPaths(assignmentId);
   return OK;
 }

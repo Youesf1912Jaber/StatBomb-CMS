@@ -17,6 +17,12 @@ export type AppErrorCode =
   | "INVALID_REASSIGNMENT_MODE"
   | "SAME_COLLECTOR_REASSIGNMENT"
   | "NOT_FOUND"
+  | "INVALID_TASK_NAME"
+  | "ASSIGNMENT_TASK_NOT_STARTABLE"
+  | "TASK_ALREADY_STARTED"
+  | "TASK_TIMER_ACTIVE"
+  | "TASK_TIMER_NOT_ACTIVE"
+  | "ACTIVE_TASK_TIMER"
   | "UNKNOWN";
 
 export class AppError extends Error {
@@ -51,6 +57,13 @@ const USER_MESSAGES: Record<AppErrorCode, string> = {
   SAME_COLLECTOR_REASSIGNMENT:
     "Cannot reassign an assignment to the same collector.",
   NOT_FOUND: "That record couldn't be found.",
+  INVALID_TASK_NAME: "That task is not allowed.",
+  ASSIGNMENT_TASK_NOT_STARTABLE:
+    "This task can't be started — the assignment must already be started and not completed.",
+  TASK_ALREADY_STARTED: "This task has already been started and cannot be restarted.",
+  TASK_TIMER_ACTIVE: "End the active task before starting another.",
+  TASK_TIMER_NOT_ACTIVE: "This task is not running.",
+  ACTIVE_TASK_TIMER: "Please end all active tasks before completing the assignment.",
   UNKNOWN: "Something went wrong. Please try again.",
 };
 
@@ -75,6 +88,24 @@ export function translateSupabaseError(error: PostgrestLikeError | null | undefi
   }
   if (message.includes("ASSIGNMENT_NOT_COMPLETABLE")) {
     return new AppError("ASSIGNMENT_NOT_COMPLETABLE", USER_MESSAGES.ASSIGNMENT_NOT_COMPLETABLE);
+  }
+  if (message.includes("ACTIVE_TASK_TIMER")) {
+    return new AppError("ACTIVE_TASK_TIMER", USER_MESSAGES.ACTIVE_TASK_TIMER);
+  }
+  if (message.includes("INVALID_TASK_NAME")) {
+    return new AppError("INVALID_TASK_NAME", USER_MESSAGES.INVALID_TASK_NAME);
+  }
+  if (message.includes("ASSIGNMENT_TASK_NOT_STARTABLE")) {
+    return new AppError("ASSIGNMENT_TASK_NOT_STARTABLE", USER_MESSAGES.ASSIGNMENT_TASK_NOT_STARTABLE);
+  }
+  if (message.includes("TASK_ALREADY_STARTED")) {
+    return new AppError("TASK_ALREADY_STARTED", USER_MESSAGES.TASK_ALREADY_STARTED);
+  }
+  if (message.includes("TASK_TIMER_ACTIVE")) {
+    return new AppError("TASK_TIMER_ACTIVE", USER_MESSAGES.TASK_TIMER_ACTIVE);
+  }
+  if (message.includes("TASK_TIMER_NOT_ACTIVE")) {
+    return new AppError("TASK_TIMER_NOT_ACTIVE", USER_MESSAGES.TASK_TIMER_NOT_ACTIVE);
   }
   if (message.includes("invalid reassignment mode")) {
     return new AppError("INVALID_REASSIGNMENT_MODE", USER_MESSAGES.INVALID_REASSIGNMENT_MODE);
