@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildMatchMasterApplyPlan, createMatchMasterPreviewFingerprint, normalizeMatchMasterDate, normalizeMatchMasterKickoff } from "@/lib/match-master-preview";
+import { buildMatchMasterApplyPlan, createMatchMasterPreviewFingerprint, fetchAllMatches, normalizeMatchMasterDate, normalizeMatchMasterKickoff } from "@/lib/match-master-preview";
 import { readMatchesMasterSheetForPreview } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import type { MatchRow } from "@/types/database.types";
@@ -61,12 +61,10 @@ export async function POST(request: Request) {
   if (!body.fingerprint) return NextResponse.json({ error: "A fresh preview fingerprint is required." }, { status: 400 });
 
   try {
-    const [sourceRows, currentMatchesResult] = await Promise.all([
+    const [sourceRows, currentMatches] = await Promise.all([
       readMatchesMasterSheetForPreview(),
-      supabase.from("matches").select("*"),
+      fetchAllMatches(supabase),
     ]);
-    if (currentMatchesResult.error) throw currentMatchesResult.error;
-    const currentMatches = currentMatchesResult.data ?? [];
     const currentFingerprint = createMatchMasterPreviewFingerprint(sourceRows, currentMatches);
     if (currentFingerprint !== body.fingerprint) {
       return NextResponse.json({ error: "Source or Supabase Match Master data changed. Refresh the preview before applying." }, { status: 409 });
@@ -99,17 +97,57 @@ export async function POST(request: Request) {
     const service = createServiceRoleClient();
     const applied: { external_id: string; sourceRow: number; result: string }[] = [];
     const failed: { external_id: string; error: string }[] = [];
+
+    async function verifyInserted(item: (typeof inserts)[number]): Promise<void> {
+      const { data: actual, error: verifyError } = await service
+        .from("matches")
+        .select("*")
+        .eq("external_id", item.row.external_id)
+        .maybeSingle();
+      if (verifyError) {
+        failed.push({ external_id: item.row.external_id, error: verifyError.message });
+        return;
+      }
+      if (!actual || actual.home_team !== item.row.home_team || actual.away_team !== item.row.away_team ||
+        actual.competition !== item.row.competition || actual.match_date !== item.row.match_date) {
+        failed.push({ external_id: item.row.external_id, error: "Inserted row failed field verification." });
+        return;
+      }
+      applied.push({ external_id: item.row.external_id, sourceRow: item.candidate.retainedSourceRow, result: item.candidate.result });
+    }
+
+    async function insertOne(item: (typeof inserts)[number], fallbackError?: string): Promise<void> {
+      const { error } = await service.from("matches").insert(item.row);
+      if (!error) {
+        await verifyInserted(item);
+        return;
+      }
+      const duplicate = error.code === "23505" || error.message.includes("matches_external_id_key") || error.message.includes("duplicate key");
+      if (duplicate) {
+        const { data: existing } = await service
+          .from("matches")
+          .select("external_id")
+          .eq("external_id", item.row.external_id)
+          .maybeSingle();
+        if (existing) return;
+      }
+      failed.push({
+        external_id: item.row.external_id,
+        error: error.message || fallbackError || "Unable to insert match.",
+      });
+    }
+
     for (let index = 0; index < inserts.length; index += BATCH_SIZE) {
       const batch = inserts.slice(index, index + BATCH_SIZE);
       const { error } = await service.from("matches").insert(batch.map((item) => item.row));
       if (error) {
-        for (const item of batch) failed.push({ external_id: item.row.external_id, error: error.message });
+        for (const item of batch) await insertOne(item, error.message);
         continue;
       }
       const ids = batch.map((item) => item.row.external_id);
       const { data: verified, error: verifyError } = await service.from("matches").select("*").in("external_id", ids);
       if (verifyError) {
-        for (const id of ids) failed.push({ external_id: id, error: verifyError.message });
+        for (const item of batch) await verifyInserted(item);
         continue;
       }
       const verifiedById = new Map((verified ?? []).map((match) => [match.external_id, match as MatchRow]));
@@ -123,11 +161,15 @@ export async function POST(request: Request) {
         }
       }
     }
-    const { data: finalMatches, error: finalError } = await service.from("matches").select("external_id");
-    if (finalError) throw finalError;
+    const finalMatches = await fetchAllMatches(service);
     const counts = new Map<string, number>();
-    for (const match of finalMatches ?? []) counts.set(match.external_id, (counts.get(match.external_id) ?? 0) + 1);
+    for (const match of finalMatches) counts.set(match.external_id, (counts.get(match.external_id) ?? 0) + 1);
     const duplicateExternalIds = [...counts.entries()].filter(([, count]) => count > 1).map(([external_id]) => external_id);
+    const failedSample = failed.slice(0, 20);
+    const failedByError = failed.reduce<Record<string, number>>((acc, item) => {
+      acc[item.error] = (acc[item.error] ?? 0) + 1;
+      return acc;
+    }, {});
     return NextResponse.json({
       candidates: plan.candidates.length,
       applied: applied.length,
@@ -138,9 +180,11 @@ export async function POST(request: Request) {
       duplicateExactDeduped: applied.filter((item) => item.result === "DUPLICATE_EXACT_DEDUPED"),
       appliedRows: applied,
       failedRows: failed,
+      failedSample,
+      failedByError,
       verified: applied.length,
       duplicateExternalIds,
-      finalMatchCount: finalMatches?.length ?? 0,
+      finalMatchCount: finalMatches.length,
     });
   } catch (error) {
     console.error("Match Master apply failed", error);

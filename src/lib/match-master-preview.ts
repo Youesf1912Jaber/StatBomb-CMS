@@ -1,9 +1,28 @@
 import "server-only";
 
 import { createHash } from "crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MatchMasterPreviewRow } from "@/lib/sync/google-sheets";
 import { normalizeMatchId } from "@/lib/sync/google-sheets";
-import type { MatchRow } from "@/types/database.types";
+import type { Database, MatchRow } from "@/types/database.types";
+
+const MATCHES_PAGE_SIZE = 1000;
+
+export async function fetchAllMatches(client: SupabaseClient<Database>): Promise<MatchRow[]> {
+  const rows: MatchRow[] = [];
+  for (let from = 0; ; from += MATCHES_PAGE_SIZE) {
+    const { data, error } = await client
+      .from("matches")
+      .select("*")
+      .order("id", { ascending: true })
+      .range(from, from + MATCHES_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < MATCHES_PAGE_SIZE) break;
+  }
+  return rows;
+}
 
 export type MatchMasterPreviewResult =
   | "NEW_MATCH"

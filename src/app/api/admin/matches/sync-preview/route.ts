@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPreviewFingerprint } from "@/lib/match-master-preview";
+import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPreviewFingerprint, fetchAllMatches } from "@/lib/match-master-preview";
 import { readMatchesMasterSheetForPreview } from "@/lib/sync/google-sheets";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,12 +16,10 @@ export async function GET() {
   }
 
   try {
-    const [sourceRows, matchesResult] = await Promise.all([
+    const [sourceRows, matches] = await Promise.all([
       readMatchesMasterSheetForPreview(),
-      supabase.from("matches").select("*"),
+      fetchAllMatches(supabase),
     ]);
-    if (matchesResult.error) throw matchesResult.error;
-    const matches = matchesResult.data ?? [];
     const preview = classifyMatchMasterRows(sourceRows, matches);
     const plan = buildMatchMasterApplyPlan(sourceRows, matches);
     return NextResponse.json({

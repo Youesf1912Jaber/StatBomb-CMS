@@ -62,9 +62,26 @@ export function MatchMasterPreviewClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ fingerprint: data.fingerprint }),
       });
-      const payload = await response.json();
+      const payload = await response.json() as {
+        error?: string;
+        applied?: number;
+        blocked?: number;
+        failed?: number;
+        failedByError?: Record<string, number>;
+        failedSample?: Array<{ external_id: string; error: string }>;
+      };
       if (!response.ok) throw new Error(payload.error ?? "Unable to apply Match Master records.");
-      setApplyResult(`Applied ${payload.applied} records; blocked ${payload.blocked} duplicate-conflict rows; failed ${payload.failed}.`);
+      const errorSummary = payload.failedByError
+        ? Object.entries(payload.failedByError).map(([message, count]) => `${count}× ${message}`).join(" | ")
+        : "";
+      const sample = (payload.failedSample ?? []).slice(0, 5)
+        .map((item) => `${item.external_id}: ${item.error}`)
+        .join("; ");
+      setApplyResult([
+        `Applied ${payload.applied ?? 0} records; blocked ${payload.blocked ?? 0} duplicate-conflict rows; failed ${payload.failed ?? 0}.`,
+        errorSummary ? `Reasons: ${errorSummary}` : null,
+        sample ? `Examples: ${sample}` : null,
+      ].filter(Boolean).join(" "));
       const refreshed = await fetch("/api/admin/matches/sync-preview", { cache: "no-store" });
       const refreshedPayload = await refreshed.json();
       if (refreshed.ok) setData(refreshedPayload);
