@@ -145,13 +145,13 @@ export function classifyDistributionRows(
   const matchesByExternalId = new Map(
     matches.map((match) => [normalizeMatchId(match.external_id)!, match]),
   );
-  const matchesById = new Map(matches.map((match) => [match.id, normalizeMatchId(match.external_id) ?? ""]));
-  const profilesById = new Map(profiles.map((profile) => [profile.id, normalizeDistributionCollectorHrCode(profile.hr_code) ?? ""]));
+  const matchesById = new Map(matches.map((match) => [match.id, match]));
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
   const assignmentContext = new Map(assignments.map((assignment) => [
     assignment.id,
     {
-      matchId: matchesById.get(assignment.match_id) ?? "",
-      hrCode: profilesById.get(assignment.collector_id) ?? "",
+      matchId: normalizeMatchId(matchesById.get(assignment.match_id)?.external_id) ?? "",
+      hrCode: normalizeDistributionCollectorHrCode(profilesById.get(assignment.collector_id)?.hr_code) ?? "",
     },
   ]));
   const assignmentsByIdentity = new Map<string, AssignmentRow>();
@@ -299,8 +299,6 @@ export function classifyDistributionRows(
     adminHrCodes: 0, suspendedCollectors: 0, deletedCollectors: 0,
   });
   const presentKeys = currentDistributionKeys(rows);
-  const matchesById = new Map(matches.map((match) => [match.id, match]));
-  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
   for (const assignment of assignments) {
     const match = matchesById.get(assignment.match_id);
     const matchId = match ? (normalizeMatchId(match.external_id) ?? "") : "";
