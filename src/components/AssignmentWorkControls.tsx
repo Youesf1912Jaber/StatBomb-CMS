@@ -63,7 +63,7 @@ export function AssignmentWorkControls({
       {(status === "In Progress" || status === "Overdue") && (
         <button
           onClick={handleComplete}
-          disabled={isPending}
+          disabled={isPending || hasActiveTaskTimer}
           className="rounded-card bg-clock-amber px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-[#e3b45c] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isPending ? "Completing…" : "Complete Work"}
@@ -72,6 +72,12 @@ export function AssignmentWorkControls({
 
       {status === "Completed" && (
         <p className="text-sm text-chalk-200">This assignment is complete.</p>
+      )}
+
+      {hasActiveTaskTimer && (status === "In Progress" || status === "Overdue") && (
+        <p className="mt-2 text-sm text-chalk-200">
+          End the running task before completing the assignment.
+        </p>
       )}
 
       {error && (

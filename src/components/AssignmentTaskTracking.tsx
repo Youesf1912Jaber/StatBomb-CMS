@@ -36,9 +36,13 @@ export function AssignmentTaskTracking({
   startedAt,
   timers,
 }: AssignmentTaskTrackingProps) {
-  if (!startedAt || status === "Not Started") return null;
+  // Visibility is keyed off status, not started_at: an In Progress assignment
+  // must always expose task tracking. Started tasks remain start-blocked by
+  // the RPC when started_at is null (e.g. an Overdue assignment that never
+  // started), so only enable mutation when the assignment is actually started.
+  if (status === "Not Started") return null;
 
-  const canMutate = status === "In Progress" || status === "Overdue";
+  const canMutate = status === "In Progress" || (status === "Overdue" && startedAt !== null);
 
   return (
     <AssignmentTaskTrackingInner
