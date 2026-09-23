@@ -3,12 +3,15 @@ import "server-only";
 import type { DistributionMatchRow } from "@/lib/sync/google-sheets";
 import { normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId } from "@/lib/sync/google-sheets";
 import { parseDistributionSla } from "@/lib/distribution-assignments";
+import { assignmentLogicalKey, currentDistributionKeys } from "@/lib/sync/reconcile";
 import type { AssignmentRow, MatchRow, ProfileRow } from "@/types/database.types";
 
 export type PreviewResult =
   | "NEW"
   | "EXISTING_UNCHANGED"
   | "EXISTING_DIFFERENT"
+  | "RESTORED"
+  | "MISSING_DISTRIBUTION"
   | "INVALID_HR_CODE"
   | "ADMIN_HR_CODE"
   | "SUSPENDED_COLLECTOR"
@@ -44,6 +47,8 @@ export type DistributionPreviewSummary = {
   newAssignments: number;
   existingUnchanged: number;
   existingDifferent: number;
+  restoredAssignments: number;
+  missingDistributionAssignments: number;
   duplicateSource: number;
   missingMatchIds: number;
   missingMatches: number;
@@ -236,6 +241,9 @@ export function classifyDistributionRows(
           reason = diagnostic
             ? `No exact assignment exists; ${diagnostic}.`
             : "No matching Supabase assignment exists.";
+        } else if (!existing.distribution_present) {
+          supabaseStatus = "RESTORED";
+          reason = "Matching assignment exists and will be reused; Distribution was previously missing.";
         } else if (!comparableFieldsMatch(row, existing)) {
           supabaseStatus = "EXISTING_DIFFERENT";
           reason = "The exact assignment identity exists, but a comparable shift date differs.";
@@ -266,6 +274,8 @@ export function classifyDistributionRows(
     if (row.supabaseStatus === "NEW") result.newAssignments += 1;
     if (row.supabaseStatus === "EXISTING_UNCHANGED") result.existingUnchanged += 1;
     if (row.supabaseStatus === "EXISTING_DIFFERENT") result.existingDifferent += 1;
+    if (row.supabaseStatus === "RESTORED") result.restoredAssignments += 1;
+    if (row.supabaseStatus === "MISSING_DISTRIBUTION") result.missingDistributionAssignments += 1;
     if (row.supabaseStatus === "DUPLICATE_SOURCE") result.duplicateSource += 1;
     if (row.supabaseStatus === "MATCH_ID_MISSING") result.missingMatchIds += 1;
     if (row.supabaseStatus === "MATCH_NOT_FOUND") result.missingMatches += 1;
@@ -273,17 +283,45 @@ export function classifyDistributionRows(
     if (row.supabaseStatus === "ADMIN_HR_CODE") result.adminHrCodes += 1;
     if (row.supabaseStatus === "SUSPENDED_COLLECTOR") result.suspendedCollectors += 1;
     if (row.supabaseStatus === "DELETED_COLLECTOR") result.deletedCollectors += 1;
-    if (["NEW", "EXISTING_UNCHANGED", "EXISTING_DIFFERENT", "DUPLICATE_SOURCE"].includes(row.supabaseStatus)) {
+    if (["NEW", "EXISTING_UNCHANGED", "EXISTING_DIFFERENT", "RESTORED", "DUPLICATE_SOURCE"].includes(row.supabaseStatus)) {
       result.validRows += 1;
+    } else if (row.supabaseStatus === "MISSING_DISTRIBUTION") {
+      // Historical assignments are reported separately and are not source rows.
     } else {
       result.invalidRows += 1;
     }
     return result;
   }, {
     totalRows: 0, validRows: 0, invalidRows: 0, newAssignments: 0,
-    existingUnchanged: 0, existingDifferent: 0, duplicateSource: 0,
+    existingUnchanged: 0, existingDifferent: 0, restoredAssignments: 0,
+    missingDistributionAssignments: 0, duplicateSource: 0,
     missingMatchIds: 0, missingMatches: 0, invalidHrCodes: 0,
     adminHrCodes: 0, suspendedCollectors: 0, deletedCollectors: 0,
   });
+  const presentKeys = currentDistributionKeys(rows);
+  const matchesById = new Map(matches.map((match) => [match.id, match]));
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
+  for (const assignment of assignments) {
+    const match = matchesById.get(assignment.match_id);
+    const matchId = match ? (normalizeMatchId(match.external_id) ?? "") : "";
+    const key = assignmentLogicalKey(assignment, matchId);
+    if (!key || presentKeys.has(key)) continue;
+    const profile = profilesById.get(assignment.collector_id);
+    previewRows.push({
+      sourceRow: 0,
+      matchId,
+      homeTeam: match?.home_team ?? null,
+      awayTeam: match?.away_team ?? null,
+      hrCode: normalizeDistributionCollectorHrCode(profile?.hr_code) ?? "",
+      collector: profile?.full_name ?? null,
+      task: normalizeDistributionTask(assignment.task),
+      half: normalizeDistributionHalf(assignment.half),
+      sourceStatus: null,
+      sla: assignment.sla,
+      supabaseStatus: "MISSING_DISTRIBUTION",
+      reason: "No matching current Distribution row. Assignment is preserved for Admin/history.",
+    });
+    summary.missingDistributionAssignments += 1;
+  }
   return { rows: previewRows, summary };
 }

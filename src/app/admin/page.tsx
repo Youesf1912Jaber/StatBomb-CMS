@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getAllAssignments } from "@/lib/assignments/queries";
+import { isOperationalAssignment } from "@/lib/assignments/distribution-presence";
 import { AssignmentTable } from "@/components/AssignmentTable";
 
 const STATUS_ORDER = ["In Progress", "Not Started", "Completed"] as const;
@@ -20,8 +21,10 @@ export default async function AdminDashboardPage() {
     }
   }
 
+  const operationalAssignments = assignments.filter(isOperationalAssignment);
+  const missingDistributionCount = assignments.filter((a) => !a.distribution_present).length;
   const counts = STATUS_ORDER.reduce<Record<string, number>>((acc, status) => {
-    acc[status] = assignments.filter((a) => a.status === status).length;
+    acc[status] = operationalAssignments.filter((a) => a.status === status).length;
     return acc;
   }, {});
 
@@ -30,8 +33,8 @@ export default async function AdminDashboardPage() {
       <div>
         <h1 className="font-display text-2xl text-chalk-50">Dashboard</h1>
         <p className="mt-1 text-sm text-chalk-200">
-          Assignment and match visibility. Live SLA-warning/overdue monitoring and the Needs
-          Attention panel land with the SLA scanner in Phase 3.
+          Assignment and match visibility. Historical assignments remain after a Distribution row
+          is removed; In Progress work stays visible.
         </p>
       </div>
 
@@ -42,12 +45,19 @@ export default async function AdminDashboardPage() {
             <p className="mt-1 text-xs uppercase tracking-wide text-chalk-200">{status}</p>
           </div>
         ))}
+        {missingDistributionCount > 0 && (
+          <div className="rounded-card border border-clock-amber/40 bg-pitch-900 px-4 py-4">
+            <p className="text-2xl font-display text-clock-amber">{missingDistributionCount}</p>
+            <p className="mt-1 text-xs uppercase tracking-wide text-chalk-200">Distribution Missing</p>
+          </div>
+        )}
       </div>
 
       <section>
         <h2 className="font-display text-lg text-chalk-50">All Assignments</h2>
         <p className="mb-2 text-sm text-chalk-200">
           {assignments.length} assignment{assignments.length === 1 ? "" : "s"} across all collectors.
+          Not Started rows removed from Distribution stay in history and are not current active Distribution assignments.
         </p>
         {assignments.length === 0 ? (
           <div className="rounded-card border border-dashed border-pitch-700 px-6 py-16 text-center">

@@ -2,7 +2,16 @@ import "server-only";
 
 import { createSign } from "crypto";
 import { DISTRIBUTION_TASK_OPTIONS } from "@/lib/distribution-options";
+import {
+  normalizeDistributionHalf as normalizeDistributionHalfValue,
+  normalizeDistributionTask as normalizeDistributionTaskValue,
+  normalizeMatchId as normalizeMatchIdValue,
+} from "@/lib/sync/distribution-identity";
 import { PREVIEW_LIMITS, PreviewInputError } from "@/lib/sync/preview";
+
+export const normalizeMatchId = normalizeMatchIdValue;
+export const normalizeDistributionTask = normalizeDistributionTaskValue;
+export const normalizeDistributionHalf = normalizeDistributionHalfValue;
 
 export type SourceRows = {
   sheetName: string;
@@ -158,14 +167,6 @@ async function findConfiguredSheet(
     raw_match_id: string | null;
     match_id_valid: boolean;
   };
-
-  export function normalizeMatchId(value: unknown): string | null {
-    if (typeof value === "number") {
-      return Number.isSafeInteger(value) ? String(value) : null;
-    }
-    const text = String(value ?? "").trim();
-    return /^\d+$/.test(text) ? text : null;
-  }
 
   function cleanSheetValue(value: unknown): string | null {
     const text = String(value ?? "").trim();
@@ -607,38 +608,6 @@ function matchesDistributionIdentity(
     normalizeDistributionCollectorHrCode(row[indexes.hr] ?? null) === collectorHrCode &&
     normalizeDistributionTask(row[indexes.task] ?? null).toLowerCase() === task.toLowerCase() &&
     normalizeDistributionHalf(row[indexes.half] ?? null).toLowerCase() === half.toLowerCase();
-}
-
-export function normalizeDistributionTask(value: unknown): string {
-  const text = String(value ?? "").trim();
-  return text
-    .replace(/\s*\/\s*/g, " / ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-export function normalizeDistributionHalf(value: unknown): string {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "Full Match";
-  const key = raw.toLowerCase().replace(/\s+/g, " ");
-  const map: Record<string, string> = {
-    "1": "Half 1",
-    "half 1": "Half 1",
-    "h1": "Half 1",
-    "2": "Half 2",
-    "half 2": "Half 2",
-    "h2": "Half 2",
-    "3": "Half 3",
-    "half 3": "Half 3",
-    "h3": "Half 3",
-    "4": "Half 4",
-    "half 4": "Half 4",
-    "h4": "Half 4",
-    full: "Full Match",
-    "full match": "Full Match",
-    "full game": "Full Match",
-  };
-  return map[key] ?? raw;
 }
 
 export async function appendDistributionRow(input: DistributionAppendInput): Promise<DistributionMatchRow> {

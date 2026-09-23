@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
+import { isOperationalAssignment } from "@/lib/assignments/distribution-presence";
 import { getAssignmentsForCollector } from "@/lib/assignments/queries";
 import { getCairoToday, toCairoDateString } from "@/lib/dates";
 import { SlaCountdown } from "@/components/SlaCountdown";
@@ -66,16 +67,17 @@ export default async function CollectorDashboardPage() {
   const supabase = createClient();
   const assignments = await getAssignmentsForCollector(supabase, profile.id);
   const today = getCairoToday();
+  const currentAssignments = assignments.filter(isOperationalAssignment);
 
   // A) Today's Work — shift_date is the operational grouping, not match_date.
-  const todaysWork = assignments.filter((a) => a.shift_date === today);
+  const todaysWork = currentAssignments.filter((a) => a.shift_date === today);
 
   // B) Currently In Progress — regardless of shift/match date.
-  const inProgress = assignments.filter((a) => a.status === "In Progress");
+  const inProgress = currentAssignments.filter((a) => a.status === "In Progress");
 
   // C) Upcoming — Not Started, and either shift-dated in the future or
   // not-yet-shift-dated with a future-or-today match date.
-  const upcoming = assignments.filter((a) => {
+  const upcoming = currentAssignments.filter((a) => {
     if (a.status !== "Not Started") return false;
     if (a.shift_date) return a.shift_date > today;
     return a.match.match_date >= today;

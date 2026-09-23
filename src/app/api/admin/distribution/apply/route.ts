@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { planDistributionAssignment } from "@/lib/distribution-assignments";
 import { fetchAllMatches } from "@/lib/match-master-preview";
+import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
 import { normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 import { createClient } from "@/lib/supabase/server";
+import type { AssignmentRow } from "@/types/database.types";
 
 export const runtime = "nodejs";
+
+type ApplyResult = "inserted" | "existing" | "restored" | "conflict" | "error" | "missing";
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -25,8 +29,6 @@ export async function POST(request: Request) {
   if (sourceRows.length === 0) return NextResponse.json({ error: "Select at least one Distribution row to apply." }, { status: 422 });
 
   try {
-    // Re-read the source and all database references immediately before
-    // writing: preview output is advisory and never trusted as write input.
     const [rows, profilesResult, matches, assignmentsResult] = await Promise.all([
       readDistributionRowsForPreview(),
       supabase.from("profiles").select("*"),
@@ -36,11 +38,12 @@ export async function POST(request: Request) {
     if (profilesResult.error) throw profilesResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
 
-    const results: Array<{ sourceRow: number; result: "inserted" | "existing" | "conflict" | "error"; assignmentId?: string; reason?: string }> = [];
+    const assignments: AssignmentRow[] = [...(assignmentsResult.data ?? [])];
+    const results: Array<{ sourceRow: number; result: ApplyResult; assignmentId?: string; reason?: string }> = [];
     for (const sourceRow of sourceRows) {
       const row = rows.find((candidate) => candidate.raw_row_number === sourceRow);
       if (!row) {
-        results.push({ sourceRow, result: "error", reason: "Distribution row no longer exists." });
+        results.push({ sourceRow, result: "missing", reason: "Distribution row no longer exists." });
         continue;
       }
       const sourceConflict = rows.some((candidate) =>
@@ -54,12 +57,23 @@ export async function POST(request: Request) {
         results.push({ sourceRow, result: "conflict", reason: "Distribution assigns this Match + Task + Half to different collectors." });
         continue;
       }
-      const planned = planDistributionAssignment(row, profilesResult.data ?? [], matches, assignmentsResult.data ?? []);
+      const planned = planDistributionAssignment(row, profilesResult.data ?? [], matches, assignments);
       if (!planned.ok) {
-        results.push({ sourceRow, result: planned.conflict ? "conflict" : "existing", reason: planned.reason });
+        results.push({ sourceRow, result: planned.conflict ? "conflict" : "error", reason: planned.reason });
         continue;
       }
       const { plan } = planned;
+      if (plan.existing) {
+        results.push({
+          sourceRow,
+          result: plan.existing.distribution_present ? "existing" : "restored",
+          assignmentId: plan.existing.id,
+          reason: plan.existing.distribution_present
+            ? "Matching assignment already exists and was reused."
+            : "Matching assignment was restored from a previously missing Distribution row.",
+        });
+        continue;
+      }
       const { data, error } = await supabase.rpc("create_assignment", {
         p_match_id: plan.match.id,
         p_collector_id: plan.collector.id,
@@ -75,11 +89,20 @@ export async function POST(request: Request) {
         continue;
       }
       results.push({ sourceRow, result: "inserted", assignmentId: data.id });
-      assignmentsResult.data?.push(data);
+      assignments.push(data);
     }
-    const counts = results.reduce<Record<"inserted" | "existing" | "conflict" | "error", number>>(
+
+    const currentAssignments = await supabase.from("assignments").select("*");
+    if (currentAssignments.error) throw currentAssignments.error;
+    await persistReconciledDistributionPresence(supabase, {
+      distributionRows: rows,
+      assignments: currentAssignments.data ?? assignments,
+      matches,
+    });
+
+    const counts = results.reduce<Record<ApplyResult, number>>(
       (result, item) => ({ ...result, [item.result]: result[item.result] + 1 }),
-      { inserted: 0, existing: 0, conflict: 0, error: 0 },
+      { inserted: 0, existing: 0, restored: 0, conflict: 0, error: 0, missing: 0 },
     );
     return NextResponse.json({ results, counts });
   } catch (error) {

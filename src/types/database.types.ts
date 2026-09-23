@@ -84,6 +84,7 @@ export type AssignmentRow = {
   sla_warning_sent_at: string | null;
   overdue_notified_at: string | null;
   notes: string | null;
+  distribution_present: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -244,6 +245,7 @@ export interface Database {
           sla_warning_sent_at?: string | null;
           overdue_notified_at?: string | null;
           notes?: string | null;
+          distribution_present?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -420,6 +422,13 @@ export interface Database {
           p_notes: string | null;
         };
         Returns: AssignmentRow;
+      };
+      reconcile_distribution_presence: {
+        Args: {
+          p_present_ids: string[];
+          p_match_id?: string | null;
+        };
+        Returns: { updated_present: number; updated_missing: number }[];
       };
     };
     Enums: {

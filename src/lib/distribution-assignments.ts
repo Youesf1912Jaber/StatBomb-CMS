@@ -2,6 +2,7 @@ import "server-only";
 
 import type { DistributionMatchRow } from "@/lib/sync/google-sheets";
 import { normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId } from "@/lib/sync/google-sheets";
+import { findAssignmentByLogicalKey } from "@/lib/sync/reconcile";
 import type { AssignmentHalf, AssignmentRow, MatchRow, ProfileRow } from "@/types/database.types";
 
 const VALID_HALVES = new Set<AssignmentHalf>(["Half 1", "Half 2", "Half 3", "Half 4", "Full Match"]);
@@ -14,6 +15,7 @@ export type DistributionAssignmentPlan = {
   half: AssignmentHalf;
   sla: string;
   shiftDate: string | null;
+  existing: AssignmentRow | null;
 };
 
 export type DistributionAssignmentPlanResult =
@@ -206,18 +208,26 @@ export function planDistributionAssignment(
   const sla = toSla(row.sla, row.shift_date ?? row.match_date);
   if (!sla) return { ok: false, conflict: false, reason: "Distribution SLA must be a valid date/time." };
 
-  const existing = assignments.find(
-    (candidate) => candidate.match_id === match.id && candidate.task === task && candidate.half === half,
-  );
-  if (existing) {
+  const existing = findAssignmentByLogicalKey(assignments, match.id, task, half);
+  if (existing && existing.collector_id !== collector.id) {
     return {
       ok: false,
-      conflict: existing.collector_id !== collector.id,
-      reason: existing.collector_id === collector.id
-        ? "This logical assignment already exists."
-        : "A different collector already owns this Match + Task + Half assignment.",
+      conflict: true,
+      reason: "A different collector already owns this Match + Task + Half assignment.",
     };
   }
 
-  return { ok: true, plan: { row, collector, match, task, half: half as AssignmentHalf, sla, shiftDate: toShiftDate(row.shift_date) } };
+  return {
+    ok: true,
+    plan: {
+      row,
+      collector,
+      match,
+      task,
+      half: half as AssignmentHalf,
+      sla,
+      shiftDate: toShiftDate(row.shift_date),
+      existing: existing ?? null,
+    },
+  };
 }

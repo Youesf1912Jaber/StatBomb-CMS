@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { distributionPresenceLabel } from "@/lib/assignments/distribution-presence";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
 import { SlaCountdown } from "./SlaCountdown";
 import { createClient } from "@/lib/supabase/client";
@@ -104,6 +105,7 @@ export function AssignmentTable({
                 <th className="px-3 py-2">Half</th>
                 {showCollector && <th className="px-3 py-2">Collector</th>}
                 <th className="px-3 py-2">Status</th>
+                {showCollector && <th className="px-3 py-2">Distribution</th>}
                 <th className="px-3 py-2">SLA</th>
                 <th className="px-3 py-2">Started</th>
                 <th className="px-3 py-2">Completed</th>
@@ -129,6 +131,15 @@ export function AssignmentTable({
                     </td>
                   )}
                   <td className="px-3 py-2 text-chalk-200">{a.status}</td>
+                  {showCollector && (
+                    <td className="px-3 py-2">
+                      {a.distribution_present ? (
+                        <span className="text-chalk-200">{distributionPresenceLabel(true)}</span>
+                      ) : (
+                        <span className="font-medium text-clock-amber">{distributionPresenceLabel(false)}</span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2">
                     <SlaCountdown sla={a.sla} status={a.status} />
                   </td>

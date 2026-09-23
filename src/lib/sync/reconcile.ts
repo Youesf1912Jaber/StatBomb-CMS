@@ -1,0 +1,146 @@
+import {
+  logicalAssignmentKey as buildLogicalAssignmentKey,
+  normalizeDistributionHalf,
+  normalizeDistributionTask,
+  normalizeMatchId,
+  VALID_ASSIGNMENT_HALVES,
+} from "@/lib/sync/distribution-identity";
+import type { AssignmentRow, MatchRow } from "@/types/database.types";
+
+type DistributionIdentityRow = {
+  match_id: string;
+  task: string | null;
+  half: string | null;
+};
+
+export type DistributionLogicalKey = string;
+
+export type ReconciliationAssignment = {
+  assignment: AssignmentRow;
+  matchExternalId: string;
+  key: DistributionLogicalKey;
+};
+
+export type DistributionReconciliation = {
+  presentAssignmentIds: string[];
+  missingAssignmentIds: string[];
+  restoredAssignmentIds: string[];
+  unchangedPresentAssignmentIds: string[];
+  unchangedMissingAssignmentIds: string[];
+  presentKeys: DistributionLogicalKey[];
+  assignmentsByKey: Map<DistributionLogicalKey, ReconciliationAssignment>;
+};
+
+function normalizeHalf(value: string | null | undefined): string {
+  return normalizeDistributionHalf(value ?? "");
+}
+
+function normalizeTask(value: string | null | undefined): string {
+  return normalizeDistributionTask(value ?? "");
+}
+
+export function logicalAssignmentKey(
+  matchExternalId: string,
+  task: string,
+  half: string,
+): DistributionLogicalKey {
+  return buildLogicalAssignmentKey(matchExternalId, task, half);
+}
+
+export function distributionRowLogicalKey(row: DistributionIdentityRow): DistributionLogicalKey | null {
+  const matchId = normalizeMatchId(row.match_id);
+  const task = normalizeTask(row.task);
+  const half = normalizeHalf(row.half);
+  if (!matchId || !task || !VALID_ASSIGNMENT_HALVES.has(half)) return null;
+  return logicalAssignmentKey(matchId, task, half);
+}
+
+export function assignmentLogicalKey(
+  assignment: Pick<AssignmentRow, "task" | "half">,
+  matchExternalId: string,
+): DistributionLogicalKey | null {
+  const matchId = normalizeMatchId(matchExternalId);
+  const task = normalizeTask(assignment.task);
+  const half = normalizeHalf(assignment.half);
+  if (!matchId || !task || !VALID_ASSIGNMENT_HALVES.has(half)) return null;
+  return logicalAssignmentKey(matchId, task, half);
+}
+
+export function currentDistributionKeys(rows: DistributionIdentityRow[]): Set<DistributionLogicalKey> {
+  const keys = new Set<DistributionLogicalKey>();
+  for (const row of rows) {
+    const key = distributionRowLogicalKey(row);
+    if (key) keys.add(key);
+  }
+  return keys;
+}
+
+export function matchHasCurrentDistribution(
+  matchExternalId: string,
+  rows: DistributionIdentityRow[],
+): boolean {
+  const matchId = normalizeMatchId(matchExternalId);
+  if (!matchId) return false;
+  return rows.some((row) => normalizeMatchId(row.match_id) === matchId);
+}
+
+export function findAssignmentByLogicalKey(
+  assignments: AssignmentRow[],
+  matchId: string,
+  task: string,
+  half: string,
+): AssignmentRow | undefined {
+  const normalizedTask = normalizeTask(task);
+  const normalizedHalf = normalizeHalf(half);
+  return assignments.find((candidate) =>
+    candidate.match_id === matchId &&
+    normalizeTask(candidate.task) === normalizedTask &&
+    normalizeHalf(candidate.half) === normalizedHalf
+  );
+}
+
+export function reconcileDistributionPresence(input: {
+  distributionRows: DistributionIdentityRow[];
+  assignments: AssignmentRow[];
+  matches: MatchRow[];
+}): DistributionReconciliation {
+  const presentKeys = currentDistributionKeys(input.distributionRows);
+  const matchesById = new Map(
+    input.matches.map((match) => [match.id, normalizeMatchId(match.external_id) ?? ""]),
+  );
+  const assignmentsByKey = new Map<DistributionLogicalKey, ReconciliationAssignment>();
+  const presentAssignmentIds: string[] = [];
+  const missingAssignmentIds: string[] = [];
+  const restoredAssignmentIds: string[] = [];
+  const unchangedPresentAssignmentIds: string[] = [];
+  const unchangedMissingAssignmentIds: string[] = [];
+
+  for (const assignment of input.assignments) {
+    const matchExternalId = matchesById.get(assignment.match_id) ?? "";
+    const key = assignmentLogicalKey(assignment, matchExternalId);
+    if (!key) {
+      missingAssignmentIds.push(assignment.id);
+      if (!assignment.distribution_present) unchangedMissingAssignmentIds.push(assignment.id);
+      continue;
+    }
+    assignmentsByKey.set(key, { assignment, matchExternalId, key });
+    if (presentKeys.has(key)) {
+      presentAssignmentIds.push(assignment.id);
+      if (assignment.distribution_present) unchangedPresentAssignmentIds.push(assignment.id);
+      else restoredAssignmentIds.push(assignment.id);
+    } else {
+      missingAssignmentIds.push(assignment.id);
+      if (!assignment.distribution_present) unchangedMissingAssignmentIds.push(assignment.id);
+    }
+  }
+
+  return {
+    presentAssignmentIds,
+    missingAssignmentIds,
+    restoredAssignmentIds,
+    unchangedPresentAssignmentIds,
+    unchangedMissingAssignmentIds,
+    presentKeys: [...presentKeys],
+    assignmentsByKey,
+  };
+}

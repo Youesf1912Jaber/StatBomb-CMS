@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } from "@/lib/assignments/queries";
+import { distributionPresenceLabel } from "@/lib/assignments/distribution-presence";
 import { getActivityLogsForAssignment } from "@/lib/activity-logs/queries";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AdminAssignmentTaskTimers } from "@/components/AdminAssignmentTaskTimers";
@@ -50,6 +51,11 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
         <p className="mt-1 text-sm text-chalk-200">
           Assigned to {collector?.full_name ?? collector?.email ?? "Unknown collector"}
         </p>
+        {!assignment.distribution_present && (
+          <p className="mt-3 rounded-card border border-clock-amber/40 bg-pitch-900 px-4 py-3 text-sm text-clock-amber">
+            Distribution Missing/Removed. This assignment is preserved for Admin/history. Status, SLA, and task timers are unchanged.
+          </p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -84,6 +90,12 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
         <div>
           <dt className="text-chalk-200">Status</dt>
           <dd className="mt-0.5 text-chalk-50">{assignment.status}</dd>
+        </div>
+        <div>
+          <dt className="text-chalk-200">Distribution</dt>
+          <dd className={`mt-0.5 ${assignment.distribution_present ? "text-chalk-50" : "text-clock-amber"}`}>
+            {distributionPresenceLabel(assignment.distribution_present)}
+          </dd>
         </div>
         <div>
           <dt className="text-chalk-200">SLA</dt>

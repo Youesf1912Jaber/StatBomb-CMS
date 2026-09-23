@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { pullDistributionSheet } from "@/lib/sync/google-sheets";
+import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
+import { pullDistributionSheet, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 import {
   loadPreviewContext,
   parsePreviewSourceRows,
@@ -63,6 +64,12 @@ export async function POST(request: Request) {
   try {
     const context = await loadPreviewContext(serviceClient);
     const result = parsePreviewSourceRows(pull.rows, context);
+    const distributionRows = await readDistributionRowsForPreview();
+    await persistReconciledDistributionPresence(serviceClient, {
+      distributionRows,
+      assignments: context.assignments,
+      matches: context.matches,
+    });
     const update = await serviceClient
       .from("sync_runs")
       .update({

@@ -21,7 +21,7 @@ type PreviewData = {
   rows: PreviewRow[];
 };
 
-const resultFilters = ["All", "New", "Existing", "Invalid", "Duplicate"] as const;
+const resultFilters = ["All", "New", "Existing", "Restored", "Missing", "Invalid", "Duplicate"] as const;
 
 export function DistributionPreviewClient() {
   const [data, setData] = useState<PreviewData | null>(null);
@@ -54,7 +54,9 @@ export function DistributionPreviewClient() {
         result === "All" ||
         (result === "New" && row.supabaseStatus === "NEW") ||
         (result === "Existing" && row.supabaseStatus.startsWith("EXISTING_")) ||
-        (result === "Invalid" && !["NEW", "EXISTING_UNCHANGED", "EXISTING_DIFFERENT", "DUPLICATE_SOURCE"].includes(row.supabaseStatus)) ||
+        (result === "Restored" && row.supabaseStatus === "RESTORED") ||
+        (result === "Missing" && row.supabaseStatus === "MISSING_DISTRIBUTION") ||
+        (result === "Invalid" && !["NEW", "EXISTING_UNCHANGED", "EXISTING_DIFFERENT", "RESTORED", "MISSING_DISTRIBUTION", "DUPLICATE_SOURCE"].includes(row.supabaseStatus)) ||
         (result === "Duplicate" && row.supabaseStatus === "DUPLICATE_SOURCE");
       return resultMatches &&
         (!normalizedMatch || row.matchId.toLowerCase().includes(normalizedMatch)) &&
@@ -71,7 +73,8 @@ export function DistributionPreviewClient() {
   const summaryLabels: [string, string][] = [
     ["Total rows scanned", "totalRows"], ["Valid rows", "validRows"], ["Invalid rows", "invalidRows"],
     ["New assignments", "newAssignments"], ["Existing unchanged", "existingUnchanged"],
-    ["Existing different", "existingDifferent"], ["Duplicate source", "duplicateSource"],
+    ["Existing different", "existingDifferent"], ["Restored assignments", "restoredAssignments"],
+    ["Missing Distribution", "missingDistributionAssignments"], ["Duplicate source", "duplicateSource"],
     ["Missing Match IDs", "missingMatchIds"], ["Missing matches", "missingMatches"],
     ["Invalid HR-Codes", "invalidHrCodes"], ["Admin HR-Codes", "adminHrCodes"],
     ["Suspended Collectors", "suspendedCollectors"], ["Deleted Collectors", "deletedCollectors"],

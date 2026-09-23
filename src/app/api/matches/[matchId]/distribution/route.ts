@@ -3,8 +3,11 @@ import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { createDistributionAssignments, normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId, pullTeamSheet, readDistributionRowsForMatch, readMatchesMasterSheet } from "@/lib/sync/google-sheets";
 import { planDistributionAssignment } from "@/lib/distribution-assignments";
 import { fetchAllMatches, findMatchByExternalId } from "@/lib/match-master-preview";
+import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
+import { findAssignmentByLogicalKey } from "@/lib/sync/reconcile";
 import { PreviewInputError } from "@/lib/sync/preview";
 import { createClient } from "@/lib/supabase/server";
+import type { AssignmentRow } from "@/types/database.types";
 
 export const runtime = "nodejs";
 
@@ -109,13 +112,12 @@ export async function POST(
         throw new PreviewInputError("The pending list contains a duplicate Match + Task + Half assignment.");
       }
       logicalKeys.add(logicalKey);
-      const existing = (assignmentsResult.data ?? []).find((candidate) =>
-        candidate.match_id === databaseMatch.id && candidate.task === task && candidate.half === half
-      );
-      if (existing) {
-        throw new PreviewInputError(existing.collector_id === profileForHrCode.id
-          ? "This Match + Task + Half assignment already exists."
-          : "This Match + Task + Half assignment belongs to a different collector.");
+      const existing = findAssignmentByLogicalKey(assignmentsResult.data ?? [], databaseMatch.id, task, half);
+      if (existing && existing.collector_id !== profileForHrCode.id) {
+        throw new PreviewInputError("This Match + Task + Half assignment belongs to a different collector.");
+      }
+      if (existing?.distribution_present) {
+        throw new PreviewInputError("This Match + Task + Half assignment already exists.");
       }
       return {
         matchId: normalizedMatchId,
@@ -135,12 +137,10 @@ export async function POST(
     const created = await createDistributionAssignments(assignments);
     distributionSaved = true;
 
-    const persisted = [];
+    const persisted: AssignmentRow[] = [];
+    const currentDistributionRows = await readDistributionRowsForMatch(normalizedMatchId);
     for (const sourceRow of created) {
-      // The sheet owns SLA formula/calculation. Read the verified row back so
-      // the RPC receives the operational value, not client-provided data.
-      const rows = await readDistributionRowsForMatch(normalizedMatchId);
-      const source = rows.find((candidate) =>
+      const source = currentDistributionRows.find((candidate) =>
         candidate.raw_row_number === sourceRow.raw_row_number &&
         normalizeDistributionCollectorHrCode(candidate.collector_hr_code) === normalizeDistributionCollectorHrCode(sourceRow.collector_hr_code) &&
         normalizeDistributionTask(candidate.task) === normalizeDistributionTask(sourceRow.task) &&
@@ -153,6 +153,10 @@ export async function POST(
       const planned = planDistributionAssignment(source, profilesResult.data ?? [], databaseMatches, currentAssignments);
       if (!planned.ok) {
         return NextResponse.json({ success: false, error: `Distribution row saved, but assignment creation failed: ${planned.reason}` }, { status: planned.conflict ? 409 : 422 });
+      }
+      if (planned.plan.existing) {
+        persisted.push(planned.plan.existing);
+        continue;
       }
       const { data, error } = await supabase.rpc("create_assignment", {
         p_match_id: planned.plan.match.id,
@@ -171,6 +175,12 @@ export async function POST(
       }
       persisted.push(data);
     }
+    await persistReconciledDistributionPresence(supabase, {
+      distributionRows: currentDistributionRows,
+      assignments: [...(assignmentsResult.data ?? []), ...persisted],
+      matches: databaseMatches,
+      matchId: databaseMatch.id,
+    });
 
     return NextResponse.json({
       success: true,
