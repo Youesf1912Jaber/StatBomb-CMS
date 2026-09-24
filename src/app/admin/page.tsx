@@ -6,6 +6,8 @@ import { fetchAllMatches } from "@/lib/match-master-preview";
 import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
 import { readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 
+export const runtime = "nodejs";
+
 const STATUS_ORDER = ["In Progress", "Not Started", "Completed"] as const;
 
 export default async function AdminDashboardPage() {
