@@ -2,11 +2,25 @@ import { createClient } from "@/lib/supabase/server";
 import { getAllAssignments } from "@/lib/assignments/queries";
 import { isOperationalAssignment } from "@/lib/assignments/distribution-presence";
 import { AssignmentTable } from "@/components/AssignmentTable";
+import { fetchAllMatches } from "@/lib/match-master-preview";
+import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
+import { readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 
 const STATUS_ORDER = ["In Progress", "Not Started", "Completed"] as const;
 
 export default async function AdminDashboardPage() {
   const supabase = createClient();
+  const [distributionRows, matches, assignmentsResult] = await Promise.all([
+    readDistributionRowsForPreview(),
+    fetchAllMatches(supabase),
+    supabase.from("assignments").select("*"),
+  ]);
+  if (assignmentsResult.error) throw assignmentsResult.error;
+  await persistReconciledDistributionPresence(supabase, {
+    distributionRows,
+    assignments: assignmentsResult.data ?? [],
+    matches,
+  });
   const assignments = await getAllAssignments(supabase);
 
   const collectorIds = [...new Set(assignments.map((a) => a.collector_id))];
