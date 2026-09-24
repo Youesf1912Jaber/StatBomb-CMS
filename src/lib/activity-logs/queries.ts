@@ -38,6 +38,7 @@ const FIELD_LABELS: Record<string, string> = {
   status: "Status",
   started_at: "Started At",
   completed_at: "Completed At",
+  hidden_from_admin_dashboard: "Dashboard Visibility",
   mode: "Mode",
 };
 
@@ -50,6 +51,8 @@ function toTitleCase(value: string): string {
 function buildActionLabel(action: string): string {
   if (action === "assignment_reassigned") return "Assignment Reassigned";
   if (action === "assignment_updated") return "Assignment Updated";
+  if (action === "assignment_removed_from_dashboard") return "Removed From Dashboard";
+  if (action === "assignment_completed_by_admin") return "Completed By Admin";
   return toTitleCase(action.replace(/_/g, " "));
 }
 

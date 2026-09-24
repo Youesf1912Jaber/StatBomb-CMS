@@ -85,6 +85,7 @@ export type AssignmentRow = {
   overdue_notified_at: string | null;
   notes: string | null;
   distribution_present: boolean;
+  hidden_from_admin_dashboard: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -246,6 +247,7 @@ export interface Database {
           overdue_notified_at?: string | null;
           notes?: string | null;
           distribution_present?: boolean;
+          hidden_from_admin_dashboard?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -429,6 +431,14 @@ export interface Database {
           p_match_id?: string | null;
         };
         Returns: { updated_present: number; updated_missing: number }[];
+      };
+      hide_assignment_from_dashboard: {
+        Args: { p_assignment_id: string };
+        Returns: AssignmentRow;
+      };
+      admin_complete_assignment: {
+        Args: { p_assignment_id: string };
+        Returns: AssignmentRow;
       };
     };
     Enums: {

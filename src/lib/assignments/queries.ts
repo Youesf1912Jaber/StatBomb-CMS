@@ -54,6 +54,16 @@ export async function getAllAssignments(supabase: Client): Promise<AssignmentWit
   return attachMatches(supabase, data ?? []);
 }
 
+/** Admin Dashboard assignments. Hidden rows remain in the database and history. */
+export async function getAdminDashboardAssignments(supabase: Client): Promise<AssignmentWithMatch[]> {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("hidden_from_admin_dashboard", false);
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
+
 export async function getAssignmentById(
   supabase: Client,
   assignmentId: string

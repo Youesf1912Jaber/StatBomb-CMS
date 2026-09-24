@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { distributionPresenceLabel } from "@/lib/assignments/distribution-presence";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
+import { AdminAssignmentActions } from "./AdminAssignmentActions";
 import { SlaCountdown } from "./SlaCountdown";
 import { createClient } from "@/lib/supabase/client";
 
@@ -109,6 +110,7 @@ export function AssignmentTable({
                 <th className="px-3 py-2">SLA</th>
                 <th className="px-3 py-2">Started</th>
                 <th className="px-3 py-2">Completed</th>
+                {showCollector && <th className="px-3 py-2">Admin</th>}
               </tr>
             </thead>
             <tbody>
@@ -145,6 +147,11 @@ export function AssignmentTable({
                   </td>
                   <td className="px-3 py-2 text-chalk-200">{a.started_at ? new Date(a.started_at).toLocaleString() : "—"}</td>
                   <td className="px-3 py-2 text-chalk-200">{a.completed_at ? new Date(a.completed_at).toLocaleString() : "—"}</td>
+                  {showCollector && (
+                    <td className="px-3 py-2">
+                      <AdminAssignmentActions assignmentId={a.id} status={a.status} />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

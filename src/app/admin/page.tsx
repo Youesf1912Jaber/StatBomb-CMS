@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getAllAssignments } from "@/lib/assignments/queries";
+import { getAdminDashboardAssignments } from "@/lib/assignments/queries";
 import { isOperationalAssignment } from "@/lib/assignments/distribution-presence";
 import { AssignmentTable } from "@/components/AssignmentTable";
 import { RefreshDistributionButton } from "./RefreshDistributionButton";
@@ -10,7 +10,7 @@ const STATUS_ORDER = ["In Progress", "Not Started", "Completed"] as const;
 
 export default async function AdminDashboardPage() {
   const supabase = createClient();
-  const assignments = await getAllAssignments(supabase);
+  const assignments = await getAdminDashboardAssignments(supabase);
 
   const collectorIds = [...new Set(assignments.map((a) => a.collector_id))];
   const collectorNames: Record<string, string> = {};

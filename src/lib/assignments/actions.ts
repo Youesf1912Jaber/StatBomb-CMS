@@ -54,6 +54,40 @@ export async function completeWork(assignmentId: string): Promise<AssignmentActi
   return OK;
 }
 
+export async function hideAssignmentFromDashboard(assignmentId: string): Promise<AssignmentActionState> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("hide_assignment_from_dashboard", {
+    p_assignment_id: assignmentId,
+  });
+
+  if (error) {
+    const appError = translateSupabaseError(error);
+    return { error: appError.message, errorCode: appError.code };
+  }
+
+  revalidatePath(`/admin/assignments/${assignmentId}`);
+  revalidatePath("/admin");
+  return OK;
+}
+
+export async function adminMarkAssignmentComplete(assignmentId: string): Promise<AssignmentActionState> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("admin_complete_assignment", {
+    p_assignment_id: assignmentId,
+  });
+
+  if (error) {
+    const appError = translateSupabaseError(error);
+    return { error: appError.message, errorCode: appError.code };
+  }
+
+  revalidatePath(`/admin/assignments/${assignmentId}`);
+  revalidatePath("/admin");
+  revalidatePath(`/collector/assignments/${assignmentId}`);
+  revalidatePath("/collector");
+  return OK;
+}
+
 export type ReassignmentMode = "preserve" | "reset";
 
 export async function reassignAssignment(
