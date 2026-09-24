@@ -1,7 +1,7 @@
 import {
+  canonicalizeDistributionTask,
   logicalAssignmentKey as buildLogicalAssignmentKey,
   normalizeDistributionHalf,
-  normalizeDistributionTask,
   normalizeMatchId,
   VALID_ASSIGNMENT_HALVES,
 } from "@/lib/sync/distribution-identity";
@@ -35,8 +35,8 @@ function normalizeHalf(value: string | null | undefined): string {
   return normalizeDistributionHalf(value ?? "");
 }
 
-function normalizeTask(value: string | null | undefined): string {
-  return normalizeDistributionTask(value ?? "");
+function canonicalizeTask(value: string | null | undefined): string {
+  return canonicalizeDistributionTask(value ?? "");
 }
 
 export function logicalAssignmentKey(
@@ -49,18 +49,18 @@ export function logicalAssignmentKey(
 
 export function distributionRowLogicalKey(row: DistributionIdentityRow): DistributionLogicalKey | null {
   const matchId = normalizeMatchId(row.match_id);
-  const task = normalizeTask(row.task);
+  const task = canonicalizeTask(row.task);
   const half = normalizeHalf(row.half);
   if (!matchId || !task || !VALID_ASSIGNMENT_HALVES.has(half)) return null;
   return logicalAssignmentKey(matchId, task, half);
 }
 
 export function assignmentLogicalKey(
-  assignment: Pick<AssignmentRow, "task" | "half">,
+  assignment: Pick<AssignmentRow, "task" | "half" | "raw_task_value">,
   matchExternalId: string,
 ): DistributionLogicalKey | null {
   const matchId = normalizeMatchId(matchExternalId);
-  const task = normalizeTask(assignment.task);
+  const task = canonicalizeTask(assignment.task) || canonicalizeTask(assignment.raw_task_value);
   const half = normalizeHalf(assignment.half);
   if (!matchId || !task || !VALID_ASSIGNMENT_HALVES.has(half)) return null;
   return logicalAssignmentKey(matchId, task, half);
@@ -90,11 +90,14 @@ export function findAssignmentByLogicalKey(
   task: string,
   half: string,
 ): AssignmentRow | undefined {
-  const normalizedTask = normalizeTask(task);
+  const canonicalTask = canonicalizeTask(task);
   const normalizedHalf = normalizeHalf(half);
   return assignments.find((candidate) =>
     candidate.match_id === matchId &&
-    normalizeTask(candidate.task) === normalizedTask &&
+    (
+      canonicalizeTask(candidate.task) === canonicalTask ||
+      canonicalizeTask(candidate.raw_task_value) === canonicalTask
+    ) &&
     normalizeHalf(candidate.half) === normalizedHalf
   );
 }

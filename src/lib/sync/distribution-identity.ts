@@ -16,6 +16,13 @@ export function normalizeDistributionTask(value: unknown): string {
     .trim();
 }
 
+export function canonicalizeDistributionTask(value: unknown): string {
+  return normalizeDistributionTask(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 export function normalizeDistributionHalf(value: unknown): string {
   const raw = String(value ?? "").trim();
   if (!raw) return "Full Match";
@@ -41,5 +48,5 @@ export function normalizeDistributionHalf(value: unknown): string {
 }
 
 export function logicalAssignmentKey(matchExternalId: string, task: string, half: string): string {
-  return `${matchExternalId}|${normalizeDistributionTask(task).toLowerCase()}|${normalizeDistributionHalf(half).toLowerCase()}`;
+  return `${matchExternalId}|${canonicalizeDistributionTask(task)}|${normalizeDistributionHalf(half).toLowerCase()}`;
 }
