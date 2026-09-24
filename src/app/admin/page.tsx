@@ -10,17 +10,21 @@ const STATUS_ORDER = ["In Progress", "Not Started", "Completed"] as const;
 
 export default async function AdminDashboardPage() {
   const supabase = createClient();
-  const [distributionRows, matches, assignmentsResult] = await Promise.all([
-    readDistributionRowsForPreview(),
-    fetchAllMatches(supabase),
-    supabase.from("assignments").select("*"),
-  ]);
-  if (assignmentsResult.error) throw assignmentsResult.error;
-  await persistReconciledDistributionPresence(supabase, {
-    distributionRows,
-    assignments: assignmentsResult.data ?? [],
-    matches,
-  });
+  try {
+    const [distributionRows, matches, assignmentsResult] = await Promise.all([
+      readDistributionRowsForPreview(),
+      fetchAllMatches(supabase),
+      supabase.from("assignments").select("*"),
+    ]);
+    if (assignmentsResult.error) throw assignmentsResult.error;
+    await persistReconciledDistributionPresence(supabase, {
+      distributionRows,
+      assignments: assignmentsResult.data ?? [],
+      matches,
+    });
+  } catch (error) {
+    console.error("Failed to reconcile distribution presence for admin dashboard:", error);
+  }
   const assignments = await getAllAssignments(supabase);
 
   const collectorIds = [...new Set(assignments.map((a) => a.collector_id))];
