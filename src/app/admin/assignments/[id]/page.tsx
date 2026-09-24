@@ -129,8 +129,31 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
           <h2 className="font-display text-lg text-chalk-50">All collectors on this match</h2>
           <ul className="mt-2 divide-y divide-pitch-800 rounded-card border border-pitch-700">
             {collaborators.map((c) => (
-              <li key={c.assignment_id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span className="text-chalk-50">{c.full_name ?? "Unnamed collector"}</span>
+              <li
+                key={c.assignment_id}
+                className={`flex items-center justify-between px-4 py-2.5 text-sm ${
+                  c.assignment_id === assignment.id ? "bg-pitch-900" : ""
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  {c.assignment_id ? (
+                    <Link
+                      href={`/admin/assignments/${c.assignment_id}`}
+                      className="text-chalk-50 underline decoration-pitch-500 underline-offset-2 transition-colors hover:text-clock-amber"
+                    >
+                      {c.full_name ?? "Unnamed collector"}
+                    </Link>
+                  ) : (
+                    <span className="text-chalk-50">
+                      {c.full_name ?? "Unnamed collector"}
+                    </span>
+                  )}
+            
+                  {c.assignment_id === assignment.id && (
+                    <span className="text-xs text-pitch-500">(Current)</span>
+                  )}
+                </span>
+            
                 <span className="text-chalk-200">
                   {c.task} · {c.half} · {c.status}
                 </span>
