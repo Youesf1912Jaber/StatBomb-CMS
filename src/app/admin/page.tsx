@@ -2,9 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAllAssignments } from "@/lib/assignments/queries";
 import { isOperationalAssignment } from "@/lib/assignments/distribution-presence";
 import { AssignmentTable } from "@/components/AssignmentTable";
-import { fetchAllMatches } from "@/lib/match-master-preview";
-import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
-import { readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
+import { RefreshDistributionButton } from "./RefreshDistributionButton";
 
 export const runtime = "nodejs";
 
@@ -12,21 +10,6 @@ const STATUS_ORDER = ["In Progress", "Not Started", "Completed"] as const;
 
 export default async function AdminDashboardPage() {
   const supabase = createClient();
-  try {
-    const [distributionRows, matches, assignmentsResult] = await Promise.all([
-      readDistributionRowsForPreview(),
-      fetchAllMatches(supabase),
-      supabase.from("assignments").select("*"),
-    ]);
-    if (assignmentsResult.error) throw assignmentsResult.error;
-    await persistReconciledDistributionPresence(supabase, {
-      distributionRows,
-      assignments: assignmentsResult.data ?? [],
-      matches,
-    });
-  } catch (error) {
-    console.error("Failed to reconcile distribution presence for admin dashboard:", error);
-  }
   const assignments = await getAllAssignments(supabase);
 
   const collectorIds = [...new Set(assignments.map((a) => a.collector_id))];
@@ -50,12 +33,15 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-2xl text-chalk-50">Dashboard</h1>
-        <p className="mt-1 text-sm text-chalk-200">
-          Assignment and match visibility. Historical assignments remain after a Distribution row
-          is removed; In Progress work stays visible.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="font-display text-2xl text-chalk-50">Dashboard</h1>
+          <p className="mt-1 text-sm text-chalk-200">
+            Assignment and match visibility. Historical assignments remain after a Distribution row
+            is removed; In Progress work stays visible.
+          </p>
+        </div>
+        <RefreshDistributionButton />
       </div>
 
       <div className="grid grid-cols-3 gap-3">
