@@ -7,6 +7,9 @@
 alter table public.assignments
   add column if not exists hidden_from_admin_dashboard boolean not null default false;
 
+create index if not exists assignments_hidden_from_admin_dashboard_idx
+  on public.assignments (hidden_from_admin_dashboard);
+
 comment on column public.assignments.hidden_from_admin_dashboard is
   'True when an admin has removed the assignment from the Admin Dashboard view. The assignment row, status, timers, and history are preserved.';
 

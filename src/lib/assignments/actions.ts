@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { translateSupabaseError, type AppErrorCode } from "@/lib/errors";
 import { isAssignmentTaskName } from "./task-names";
 
@@ -55,6 +56,11 @@ export async function completeWork(assignmentId: string): Promise<AssignmentActi
 }
 
 export async function hideAssignmentFromDashboard(assignmentId: string): Promise<AssignmentActionState> {
+  const profile = await getProfileOrRedirect();
+  if (profile.role !== "admin") {
+    return { error: "You're not authorized to do that.", errorCode: "NOT_AUTHORIZED" };
+  }
+
   const supabase = createClient();
   const { error } = await supabase.rpc("hide_assignment_from_dashboard", {
     p_assignment_id: assignmentId,
@@ -71,6 +77,11 @@ export async function hideAssignmentFromDashboard(assignmentId: string): Promise
 }
 
 export async function adminMarkAssignmentComplete(assignmentId: string): Promise<AssignmentActionState> {
+  const profile = await getProfileOrRedirect();
+  if (profile.role !== "admin") {
+    return { error: "You're not authorized to do that.", errorCode: "NOT_AUTHORIZED" };
+  }
+
   const supabase = createClient();
   const { error } = await supabase.rpc("admin_complete_assignment", {
     p_assignment_id: assignmentId,

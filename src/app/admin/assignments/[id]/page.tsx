@@ -5,6 +5,7 @@ import { distributionPresenceLabel } from "@/lib/assignments/distribution-presen
 import { getActivityLogsForAssignment } from "@/lib/activity-logs/queries";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AdminAssignmentTaskTimers } from "@/components/AdminAssignmentTaskTimers";
+import { AdminAssignmentActions } from "@/components/AdminAssignmentActions";
 import { ReassignButton } from "./ReassignButton";
 import { EditButton } from "./EditButton";
 
@@ -76,6 +77,7 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
           availableCollectors={availableCollectors}
         />
         <EditButton assignment={assignment} />
+        <AdminAssignmentActions assignmentId={assignment.id} status={assignment.status} />
       </div>
 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-card border border-pitch-700 bg-pitch-900 p-5 text-sm sm:grid-cols-3">
