@@ -5,6 +5,7 @@ import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } fro
 import { distributionPresenceLabel } from "@/lib/assignments/distribution-presence";
 import { getActivityLogsForAssignment } from "@/lib/activity-logs/queries";
 import { SlaCountdown } from "@/components/SlaCountdown";
+import { SlaWarningAlarm } from "@/components/SlaWarningAlarm";
 import { AdminAssignmentTaskTimers } from "@/components/AdminAssignmentTaskTimers";
 import { AdminAssignmentActions } from "@/components/AdminAssignmentActions";
 import { ReassignButton } from "./ReassignButton";
@@ -51,6 +52,17 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
 
   return (
     <div className="max-w-2xl space-y-6">
+      <SlaWarningAlarm
+        assignmentId={assignment.id}
+        sla={assignment.sla}
+        status={assignment.status}
+        homeTeam={assignment.match.home_team}
+        awayTeam={assignment.match.away_team}
+        competition={assignment.match.competition}
+        collectorName={collector?.full_name ?? collector?.email ?? "Unknown collector"}
+        half={assignment.half}
+        task={assignment.task}
+      />
       <div>
         <p className="font-mono text-xs uppercase tracking-widest text-pitch-500">
           {assignment.match.competition ?? "Match"}
