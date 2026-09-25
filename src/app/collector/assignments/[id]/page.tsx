@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } from "@/lib/assignments/queries";
 import { SlaCountdown } from "@/components/SlaCountdown";
+import { SlaWarningAlarm } from "@/components/SlaWarningAlarm";
 import { AssignmentWorkControls } from "@/components/AssignmentWorkControls";
 import { AssignmentTaskTracking } from "@/components/AssignmentTaskTracking";
 
@@ -33,6 +34,11 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
 
   return (
     <div className="max-w-2xl space-y-6">
+      <SlaWarningAlarm
+        assignmentId={assignment.id}
+        sla={assignment.sla}
+        status={assignment.status}
+      />
       <div>
         <p className="font-mono text-xs uppercase tracking-widest text-pitch-500">
           {assignment.match.competition ?? "Match"}
