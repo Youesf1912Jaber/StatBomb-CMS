@@ -15,6 +15,7 @@ type PendingAssignment = {
   collectorName: string;
   task: string;
   half: string;
+  shiftDate: string | null;
 };
 
 const HALF_OPTIONS = ["Half 1", "Half 2", "Half 3", "Half 4", "Full Match"];
@@ -25,6 +26,7 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
   const [collectorHrCode, setCollectorHrCode] = useState("");
   const [task, setTask] = useState("");
   const [half, setHalf] = useState(HALF_OPTIONS[0] ?? "Half 1");
+  const [shiftDate, setShiftDate] = useState("");
   const [pending, setPending] = useState<PendingAssignment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +36,7 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
     setCollectorHrCode("");
     setTask("");
     setHalf(HALF_OPTIONS[0] ?? "Half 1");
+    setShiftDate("");
   }
 
   function addCollector() {
@@ -51,7 +54,7 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
       setError("Duplicate assignment detected in the pending list.");
       return;
     }
-    setPending((items) => [...items, { collectorHrCode, collectorName: collector.full_name, task, half }]);
+    setPending((items) => [...items, { collectorHrCode, collectorName: collector.full_name, task, half, shiftDate: shiftDate || null }]);
     setError(null);
     resetEntry();
   }
@@ -76,7 +79,7 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
       const response = await fetch(`/api/matches/${encodeURIComponent(matchId)}/distribution`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ assignments: pending.map(({ collectorHrCode: code, task: value, half: selectedHalf }) => ({ collectorHrCode: code, task: value, half: selectedHalf })) }),
+        body: JSON.stringify({ assignments: pending.map(({ collectorHrCode: code, task: value, half: selectedHalf, shiftDate: selectedShiftDate }) => ({ collectorHrCode: code, task: value, half: selectedHalf, shiftDate: selectedShiftDate })) }),
       });
       const payload = await response.json() as { success?: boolean; error?: string; count?: number; assignments?: Array<{ id: string; task: string; half: string }> };
       if (!response.ok || !payload.success) throw new Error(payload.error ?? "The assignments could not be created.");
@@ -111,7 +114,7 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
         <p className="mt-1 text-sm text-chalk-200">Assignments are written only after Confirm.</p>
       </div>
       {error && <p role="alert" className="rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">{error}</p>}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <label className="text-sm text-chalk-200">Collector
           <select required value={collectorHrCode} onChange={(event) => setCollectorHrCode(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50">
             <option value="">Select a collector</option>
@@ -129,15 +132,18 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
             {HALF_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
           </select>
         </label>
+        <label className="text-sm text-chalk-200">Shift Date
+          <input type="date" value={shiftDate} onChange={(event) => setShiftDate(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50" />
+        </label>
       </div>
       <button type="button" onClick={addCollector} disabled={submitting} className="rounded-[8px] border border-pitch-700 px-3 py-2 text-sm text-chalk-50 hover:border-clock-amber">Add Collector</button>
       <div>
         <p className="mb-2 text-sm text-chalk-200">Pending Assignments ({pending.length})</p>
         {pending.length > 0 && <div className="overflow-x-auto rounded-[8px] border border-pitch-700">
           <table className="w-full text-left text-sm">
-            <thead className="bg-pitch-950 text-xs uppercase text-pitch-500"><tr><th className="px-3 py-2">Collector</th><th className="px-3 py-2">Task</th><th className="px-3 py-2">Half</th><th className="px-3 py-2">Action</th></tr></thead>
+            <thead className="bg-pitch-950 text-xs uppercase text-pitch-500"><tr><th className="px-3 py-2">Collector</th><th className="px-3 py-2">Task</th><th className="px-3 py-2">Half</th><th className="px-3 py-2">Shift Date</th><th className="px-3 py-2">Action</th></tr></thead>
             <tbody className="divide-y divide-pitch-800">
-              {pending.map((item, index) => <tr key={`${item.collectorHrCode}-${item.task}-${item.half}-${index}`}><td className="px-3 py-2">{item.collectorName} ({item.collectorHrCode})</td><td className="px-3 py-2">{item.task}</td><td className="px-3 py-2">{item.half}</td><td className="px-3 py-2"><button type="button" onClick={() => setPending((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="text-xs text-red-200 underline">Remove</button></td></tr>)}
+              {pending.map((item, index) => <tr key={`${item.collectorHrCode}-${item.task}-${item.half}-${index}`}><td className="px-3 py-2">{item.collectorName} ({item.collectorHrCode})</td><td className="px-3 py-2">{item.task}</td><td className="px-3 py-2">{item.half}</td><td className="px-3 py-2">{item.shiftDate ?? "—"}</td><td className="px-3 py-2"><button type="button" onClick={() => setPending((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="text-xs text-red-200 underline">Remove</button></td></tr>)}
             </tbody>
           </table>
         </div>}

@@ -23,6 +23,8 @@ export type AppErrorCode =
   | "TASK_TIMER_ACTIVE"
   | "TASK_TIMER_NOT_ACTIVE"
   | "ACTIVE_TASK_TIMER"
+  | "INVALID_SHIFT_DATE"
+  | "INVALID_OFFICIAL_WEBSITE_URL"
   | "UNKNOWN";
 
 export class AppError extends Error {
@@ -64,6 +66,8 @@ const USER_MESSAGES: Record<AppErrorCode, string> = {
   TASK_TIMER_ACTIVE: "End the active task before starting another.",
   TASK_TIMER_NOT_ACTIVE: "This task is not running.",
   ACTIVE_TASK_TIMER: "Please end all active tasks before completing the assignment.",
+  INVALID_SHIFT_DATE: "Shift Date must be a valid date.",
+  INVALID_OFFICIAL_WEBSITE_URL: "Official Match URL must be a valid http or https address.",
   UNKNOWN: "Something went wrong. Please try again.",
 };
 
@@ -121,6 +125,9 @@ export function translateSupabaseError(error: PostgrestLikeError | null | undefi
   }
   if (message.includes("not found")) {
     return new AppError("NOT_FOUND", USER_MESSAGES.NOT_FOUND);
+  }
+  if (message.includes("invalid official website url")) {
+    return new AppError("INVALID_OFFICIAL_WEBSITE_URL", USER_MESSAGES.INVALID_OFFICIAL_WEBSITE_URL);
   }
 
   return new AppError("UNKNOWN", USER_MESSAGES.UNKNOWN);

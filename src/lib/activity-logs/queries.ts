@@ -34,6 +34,8 @@ const FIELD_LABELS: Record<string, string> = {
   task: "Task",
   half: "Half",
   sla: "SLA",
+  shift_date: "Shift Date",
+  official_website_url: "Official Match URL",
   notes: "Notes",
   status: "Status",
   started_at: "Started At",

@@ -153,6 +153,70 @@ export async function updateAssignment(
   return OK;
 }
 
+function isValidShiftDate(value: string | null): boolean {
+  if (value === null) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  if (year === undefined || month === undefined || day === undefined) return false;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function isValidOfficialWebsiteUrl(value: string | null): boolean {
+  if (value === null) return true;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Update Distribution Details. Admin-only. Updates assignment shift_date
+ * and the parent match official_website_url without touching status,
+ * timestamps, SLA, identity, or task timers.
+ */
+export async function updateDistributionDetails(
+  assignmentId: string,
+  shiftDate: string | null,
+  officialWebsiteUrl: string | null
+): Promise<AssignmentActionState> {
+  const profile = await getProfileOrRedirect();
+  if (profile.role !== "admin") {
+    return { error: "You're not authorized to do that.", errorCode: "NOT_AUTHORIZED" };
+  }
+
+  if (!isValidShiftDate(shiftDate)) {
+    return { error: "Shift Date must be a valid date.", errorCode: "INVALID_SHIFT_DATE" };
+  }
+
+  if (!isValidOfficialWebsiteUrl(officialWebsiteUrl)) {
+    return {
+      error: "Official Match URL must be a valid http or https address.",
+      errorCode: "INVALID_OFFICIAL_WEBSITE_URL",
+    };
+  }
+
+  const supabase = createClient();
+  const { error } = await supabase.rpc("update_distribution_details", {
+    p_assignment_id: assignmentId,
+    p_shift_date: shiftDate,
+    p_official_website_url: officialWebsiteUrl,
+  });
+
+  if (error) {
+    const appError = translateSupabaseError(error);
+    return { error: appError.message, errorCode: appError.code };
+  }
+
+  revalidatePath(`/admin/assignments/${assignmentId}`);
+  revalidatePath(`/collector/assignments/${assignmentId}`);
+  revalidatePath("/admin");
+  revalidatePath("/collector");
+  return OK;
+}
+
 function revalidateAssignmentPaths(assignmentId: string) {
   revalidatePath(`/collector/assignments/${assignmentId}`);
   revalidatePath(`/admin/assignments/${assignmentId}`);

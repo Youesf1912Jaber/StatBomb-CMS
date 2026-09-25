@@ -425,6 +425,14 @@ export interface Database {
         };
         Returns: AssignmentRow;
       };
+      update_distribution_details: {
+        Args: {
+          p_assignment_id: string;
+          p_shift_date: string | null;
+          p_official_website_url: string | null;
+        };
+        Returns: AssignmentRow;
+      };
       reconcile_distribution_presence: {
         Args: {
           p_present_ids: string[];

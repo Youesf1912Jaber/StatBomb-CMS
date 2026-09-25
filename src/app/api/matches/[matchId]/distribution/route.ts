@@ -63,7 +63,7 @@ export async function POST(
     }
 
     const body = await request.json() as {
-      assignments?: Array<{ collectorHrCode?: string; task?: string; half?: string }>;
+      assignments?: Array<{ collectorHrCode?: string; task?: string; half?: string; shiftDate?: string | null }>;
     };
     if (!Array.isArray(body.assignments) || body.assignments.length === 0) {
       return NextResponse.json({ success: false, error: "Add at least one assignment before confirming." }, { status: 422 });
@@ -131,7 +131,7 @@ export async function POST(
         awayTeam: match.away_team,
         matchDate: match.match_date,
         kickOffTime: match.kick_off_time,
-        shiftDate: match.match_date,
+        shiftDate: assignment.shiftDate ?? null,
       };
     });
     const created = await createDistributionAssignments(assignments);

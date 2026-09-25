@@ -9,10 +9,18 @@ import { AdminAssignmentTaskTimers } from "@/components/AdminAssignmentTaskTimer
 import { AdminAssignmentActions } from "@/components/AdminAssignmentActions";
 import { ReassignButton } from "./ReassignButton";
 import { EditButton } from "./EditButton";
+import { EditDistributionDetailsButton } from "./EditDistributionDetailsButton";
 
 function formatTimestamp(value: string | null): string {
   if (!value) return "—";
   return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function formatDateOnly(value: string | null): string {
+  if (!value) return "—";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
 }
 
 export default async function AdminAssignmentDetailsPage({ params }: { params: { id: string } }) {
@@ -78,6 +86,11 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
           availableCollectors={availableCollectors}
         />
         <EditButton assignment={assignment} />
+        <EditDistributionDetailsButton
+          assignmentId={assignment.id}
+          shiftDate={assignment.shift_date}
+          officialWebsiteUrl={assignment.match.official_website_url}
+        />
         <AdminAssignmentActions assignmentId={assignment.id} status={assignment.status} />
       </div>
 
@@ -98,6 +111,16 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
           <dt className="text-chalk-200">Distribution</dt>
           <dd className={`mt-0.5 ${assignment.distribution_present ? "text-chalk-50" : "text-clock-amber"}`}>
             {distributionPresenceLabel(assignment.distribution_present)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-chalk-200">Shift Date</dt>
+          <dd className="mt-0.5 text-chalk-50">{formatDateOnly(assignment.shift_date)}</dd>
+        </div>
+        <div>
+          <dt className="text-chalk-200">Official Match URL</dt>
+          <dd className="mt-0.5 text-chalk-50">
+            {assignment.match.official_website_url ? "Set" : "Not set"}
           </dd>
         </div>
         <div>

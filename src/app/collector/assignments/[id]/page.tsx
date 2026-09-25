@@ -15,6 +15,13 @@ function formatTimestamp(value: string | null): string {
   });
 }
 
+function formatDateOnly(value: string | null): string {
+  if (!value) return "—";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
 export default async function AssignmentDetailsPage({ params }: { params: { id: string } }) {
   const profile = await getProfileOrRedirect();
   const supabase = createClient();
@@ -64,7 +71,7 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
           rel="noopener noreferrer"
           className="inline-block rounded-card border border-pitch-700 px-4 py-2 text-sm text-chalk-50 transition-colors hover:border-clock-amber"
         >
-          Official Website ↗
+          Open Official Match
         </a>
       )}
 
@@ -80,6 +87,10 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
         <div>
           <dt className="text-chalk-200">Status</dt>
           <dd className="mt-0.5 text-chalk-50">{assignment.status}</dd>
+        </div>
+        <div>
+          <dt className="text-chalk-200">Shift Date</dt>
+          <dd className="mt-0.5 text-chalk-50">{formatDateOnly(assignment.shift_date)}</dd>
         </div>
         <div>
           <dt className="text-chalk-200">SLA</dt>
