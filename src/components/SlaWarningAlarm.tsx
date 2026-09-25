@@ -27,10 +27,7 @@ function isStopAlarmMessage(data: unknown, assignmentId: string): boolean {
   if (!data || typeof data !== "object") return false;
   const message = data as { type?: unknown; assignmentId?: unknown };
   if (message.type !== STOP_ALARM_MESSAGE_TYPE) return false;
-  if (typeof message.assignmentId === "string" && message.assignmentId !== assignmentId) {
-    return false;
-  }
-  return true;
+  return message.assignmentId === assignmentId;
 }
 
 function buildWarningBody(props: {

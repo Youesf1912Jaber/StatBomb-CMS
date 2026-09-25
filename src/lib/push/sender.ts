@@ -25,6 +25,95 @@ export interface NotificationSender {
 
 type ServiceClient = SupabaseClient<Database>;
 
+type SlaWarningPushDetails = {
+  homeTeam: string;
+  awayTeam: string;
+  competition: string | null;
+  collectorName: string;
+  half: string;
+  task: string;
+};
+
+function buildSlaWarningPushBody(details: SlaWarningPushDetails): string {
+  const lines = [`${details.homeTeam} vs ${details.awayTeam}`];
+  if (details.competition) {
+    lines.push(details.competition);
+  }
+  lines.push(`${details.half} — ${details.collectorName}`);
+  lines.push(`Task: ${details.task}`);
+  lines.push("SLA warning: 1 hour remaining.");
+  return lines.join("\n");
+}
+
+async function loadSlaWarningPushDetails(
+  serviceClient: ServiceClient,
+  assignmentIds: string[]
+): Promise<Map<string, SlaWarningPushDetails>> {
+  const uniqueIds = [...new Set(assignmentIds)];
+  const detailsByAssignmentId = new Map<string, SlaWarningPushDetails>();
+  if (uniqueIds.length === 0) return detailsByAssignmentId;
+
+  const { data: assignments, error: assignmentError } = await serviceClient
+    .from("assignments")
+    .select("id, task, half, collector_id, match_id")
+    .in("id", uniqueIds);
+
+  if (assignmentError) {
+    console.error("[push] failed to load assignment details", {
+      message: assignmentError.message,
+    });
+    return detailsByAssignmentId;
+  }
+
+  const matchIds = [...new Set((assignments ?? []).map((row) => row.match_id))];
+  const collectorIds = [...new Set((assignments ?? []).map((row) => row.collector_id))];
+
+  const [{ data: matches, error: matchError }, { data: collectors, error: collectorError }] =
+    await Promise.all([
+      matchIds.length
+        ? serviceClient
+            .from("matches")
+            .select("id, home_team, away_team, competition")
+            .in("id", matchIds)
+        : Promise.resolve({ data: [], error: null }),
+      collectorIds.length
+        ? serviceClient
+            .from("profiles")
+            .select("id, full_name, email")
+            .in("id", collectorIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+  if (matchError) {
+    console.error("[push] failed to load match details", { message: matchError.message });
+  }
+  if (collectorError) {
+    console.error("[push] failed to load collector details", {
+      message: collectorError.message,
+    });
+  }
+
+  const matchById = new Map((matches ?? []).map((row) => [row.id, row]));
+  const collectorById = new Map((collectors ?? []).map((row) => [row.id, row]));
+
+  for (const assignment of assignments ?? []) {
+    const match = matchById.get(assignment.match_id);
+    const collector = collectorById.get(assignment.collector_id);
+    if (!match) continue;
+
+    detailsByAssignmentId.set(assignment.id, {
+      homeTeam: match.home_team,
+      awayTeam: match.away_team,
+      competition: match.competition,
+      collectorName: collector?.full_name ?? collector?.email ?? "Unknown collector",
+      half: assignment.half,
+      task: assignment.task,
+    });
+  }
+
+  return detailsByAssignmentId;
+}
+
 let vapidConfigured = false;
 
 export type PushSkipReason = "vapid_missing" | null;
@@ -226,6 +315,14 @@ export async function dispatchPendingPushNotifications(
 
   if (!pending || pending.length === 0) return empty;
 
+  const slaWarningAssignmentIds = pending
+    .filter((notification) => notification.type === "sla_warning" && notification.assignment_id)
+    .map((notification) => notification.assignment_id as string);
+  const slaWarningDetails = await loadSlaWarningPushDetails(
+    serviceClient,
+    slaWarningAssignmentIds
+  );
+
   let pushesSent = 0;
   let subscriptionsFound = 0;
   let recipientsWithoutSubscriptions = 0;
@@ -233,9 +330,14 @@ export async function dispatchPendingPushNotifications(
   let failures = 0;
 
   for (const notification of pending) {
+    const details =
+      notification.type === "sla_warning" && notification.assignment_id
+        ? slaWarningDetails.get(notification.assignment_id)
+        : undefined;
+
     const result = await sendToRecipient(serviceClient, notification.recipient_id, {
-      title: notification.title,
-      message: notification.message,
+      title: details ? "SLA Warning" : notification.title,
+      message: details ? buildSlaWarningPushBody(details) : notification.message,
       type: notification.type,
       assignmentId: notification.assignment_id,
     });

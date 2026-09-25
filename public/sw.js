@@ -44,7 +44,11 @@ self.addEventListener("push", (event) => {
 });
 
 function notifyClientsToStopAlarm(assignmentId) {
-  const message = { type: "sla-stop-alarm", assignmentId: assignmentId || null };
+  if (typeof assignmentId !== "string" || assignmentId.length === 0) {
+    return Promise.resolve();
+  }
+
+  const message = { type: "sla-stop-alarm", assignmentId: assignmentId };
 
   try {
     const channel = new BroadcastChannel("sla-warning-alarm");
@@ -68,7 +72,7 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   if (event.action === "stop-alarm") {
-    event.waitUntil(notifyClientsToStopAlarm(data.assignmentId || null));
+    event.waitUntil(notifyClientsToStopAlarm(data.assignmentId));
     return;
   }
 
