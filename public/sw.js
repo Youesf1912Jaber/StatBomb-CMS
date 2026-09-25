@@ -39,8 +39,34 @@ self.addEventListener("push", (event) => {
   );
 });
 
+function notifyClientsToStopAlarm(assignmentId) {
+  const message = { type: "sla-stop-alarm", assignmentId: assignmentId || null };
+
+  try {
+    const channel = new BroadcastChannel("sla-warning-alarm");
+    channel.postMessage(message);
+    channel.close();
+  } catch {
+    // BroadcastChannel is optional; client.postMessage below is the fallback.
+  }
+
+  return self.clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then((allClients) => {
+      allClients.forEach((client) => {
+        client.postMessage(message);
+      });
+    });
+}
+
 self.addEventListener("notificationclick", (event) => {
+  const data = event.notification.data || {};
   event.notification.close();
+
+  if (event.action === "stop-alarm") {
+    event.waitUntil(notifyClientsToStopAlarm(data.assignmentId || null));
+    return;
+  }
 
   event.waitUntil(
     (async () => {
