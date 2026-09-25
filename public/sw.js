@@ -26,15 +26,19 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "StatBomb";
   const body = payload.message || "You have a new notification.";
   const type = payload.type || "notification";
+  const assignmentId = payload.assignmentId || null;
+  const isSlaWarning = type === "sla_warning" || type === "sla_warning_alarm";
 
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
       // Collapse repeat pushes for the same assignment+type instead of
       // stacking duplicates when the scanner retries.
-      tag: (payload.assignmentId || "general") + ":" + type,
+      tag: (assignmentId || "general") + ":" + type,
       renotify: true,
-      data: { type: type, assignmentId: payload.assignmentId || null },
+      requireInteraction: isSlaWarning,
+      data: { type: type, assignmentId: assignmentId },
+      actions: isSlaWarning ? [{ action: "stop-alarm", title: "Stop Alarm" }] : [],
     })
   );
 });

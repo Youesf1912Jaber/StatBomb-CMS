@@ -27,6 +27,21 @@ type ServiceClient = SupabaseClient<Database>;
 
 let vapidConfigured = false;
 
+export type PushSkipReason = "vapid_missing" | null;
+
+/** Presence-only VAPID status. Never includes key material. */
+export function getVapidStatus(): {
+  configured: boolean;
+  hasPublicKey: boolean;
+  hasPrivateKey: boolean;
+} {
+  return {
+    configured: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+    hasPublicKey: Boolean(process.env.VAPID_PUBLIC_KEY),
+    hasPrivateKey: Boolean(process.env.VAPID_PRIVATE_KEY),
+  };
+}
+
 /**
  * Configures VAPID once per process. Returns false when keys are absent, so
  * push degrades to a no-op instead of throwing and taking the scanner down.
@@ -34,11 +49,12 @@ let vapidConfigured = false;
 function ensureVapidConfigured(): boolean {
   if (vapidConfigured) return true;
 
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@statbomb.local";
+  const status = getVapidStatus();
+  if (!status.configured) return false;
 
-  if (!publicKey || !privateKey) return false;
+  const publicKey = process.env.VAPID_PUBLIC_KEY as string;
+  const privateKey = process.env.VAPID_PRIVATE_KEY as string;
+  const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@statbomb.local";
 
   webpush.setVapidDetails(subject, publicKey, privateKey);
   vapidConfigured = true;
@@ -59,10 +75,10 @@ async function sendToRecipient(
   serviceClient: ServiceClient,
   recipientId: string,
   payload: { title: string; message: string; type: NotificationType; assignmentId: string | null }
-): Promise<{ sent: number; removed: number; failed: number }> {
+): Promise<{ sent: number; removed: number; failed: number; found: number }> {
   const { data: subscriptions, error } = await serviceClient
     .from("push_subscriptions")
-    .select("*")
+    .select("id, profile_id, p256dh, auth_key, endpoint")
     .eq("profile_id", recipientId);
 
   if (error) {
@@ -70,7 +86,7 @@ async function sendToRecipient(
       recipientId,
       message: error.message,
     });
-    return { sent: 0, removed: 0, failed: 0 };
+    return { sent: 0, removed: 0, failed: 0, found: 0 };
   }
 
   let sent = 0;
@@ -117,7 +133,11 @@ async function sendToRecipient(
     }
   }
 
-  return { sent, removed, failed };
+  if ((subscriptions ?? []).length === 0) {
+    console.info("[push] no subscriptions for recipient", { recipientId });
+  }
+
+  return { sent, removed, failed, found: subscriptions?.length ?? 0 };
 }
 
 /** WebPushSender from spec §2, for one-off sends outside the scanner. */
@@ -144,9 +164,12 @@ export class WebPushSender implements NotificationSender {
 export interface PushDispatchResult {
   notificationsConsidered: number;
   pushesSent: number;
+  subscriptionsFound: number;
+  recipientsWithoutSubscriptions: number;
   subscriptionsRemoved: number;
   failures: number;
   skipped: boolean;
+  skipReason: PushSkipReason;
 }
 
 /**
@@ -170,14 +193,21 @@ export async function dispatchPendingPushNotifications(
   const empty: PushDispatchResult = {
     notificationsConsidered: 0,
     pushesSent: 0,
+    subscriptionsFound: 0,
+    recipientsWithoutSubscriptions: 0,
     subscriptionsRemoved: 0,
     failures: 0,
     skipped: false,
+    skipReason: null,
   };
 
   if (!ensureVapidConfigured()) {
-    console.warn("[push] VAPID keys not configured — skipping push fan-out");
-    return { ...empty, skipped: true };
+    const vapid = getVapidStatus();
+    console.warn("[push] VAPID keys not configured — skipping push fan-out", {
+      hasPublicKey: vapid.hasPublicKey,
+      hasPrivateKey: vapid.hasPrivateKey,
+    });
+    return { ...empty, skipped: true, skipReason: "vapid_missing" };
   }
 
   const { data: pending, error } = await serviceClient
@@ -197,6 +227,8 @@ export async function dispatchPendingPushNotifications(
   if (!pending || pending.length === 0) return empty;
 
   let pushesSent = 0;
+  let subscriptionsFound = 0;
+  let recipientsWithoutSubscriptions = 0;
   let subscriptionsRemoved = 0;
   let failures = 0;
 
@@ -209,6 +241,8 @@ export async function dispatchPendingPushNotifications(
     });
 
     pushesSent += result.sent;
+    subscriptionsFound += result.found;
+    if (result.found === 0) recipientsWithoutSubscriptions += 1;
     subscriptionsRemoved += result.removed;
     failures += result.failed;
 
@@ -231,8 +265,11 @@ export async function dispatchPendingPushNotifications(
   return {
     notificationsConsidered: pending.length,
     pushesSent,
+    subscriptionsFound,
+    recipientsWithoutSubscriptions,
     subscriptionsRemoved,
     failures,
     skipped: false,
+    skipReason: null,
   };
 }

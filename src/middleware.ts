@@ -95,7 +95,10 @@ export const config = {
      * called with no auth cookie (Vercel Cron) — session middleware would
      * redirect them to /login before the handler runs. They authenticate
      * themselves with CRON_SECRET instead.
-     */
-    "/((?!api/cron|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp)$).*)",
-  ],
-};
+      * `sw.js` is excluded so the browser can fetch the service worker as
+      * JavaScript without a session cookie. Auth middleware would otherwise
+      * redirect unauthenticated SW updates to /login HTML, which breaks push.
+      */
+      "/((?!api/cron|_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|webp)$).*)",
+    ],
+  };

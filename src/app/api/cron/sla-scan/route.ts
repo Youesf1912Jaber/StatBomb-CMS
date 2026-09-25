@@ -8,8 +8,9 @@ import { dispatchPendingPushNotifications } from "@/lib/push/sender";
  * seconds; not a client-callable RPC.
  *
  * All the actual state logic lives in the `evaluate_assignment_sla_states()`
- * database function (migration 0004): fire the 30-minute SLA warning once,
- * flip past-SLA incomplete assignments to 'Overdue' once. That function is
+ * database function (migration 0004, warning window updated in 0023): fire
+ * the 1-hour SLA warning once, flip past-SLA incomplete assignments to
+ * 'Overdue' once. That function is
  * state-based and guarded by `sla_warning_sent_at` / `overdue_notified_at`,
  * so this route is safe to call at any frequency, twice concurrently, or
  * after arbitrary downtime — a missed tick is simply caught by the next run
@@ -98,10 +99,14 @@ async function runScan(request: NextRequest) {
     console.info("[sla-scan] completed", {
       warningsFired: result.warnings_fired,
       overdueFired: result.overdue_fired,
+      notificationsConsidered: push?.notificationsConsidered ?? 0,
+      subscriptionsFound: push?.subscriptionsFound ?? 0,
+      recipientsWithoutSubscriptions: push?.recipientsWithoutSubscriptions ?? 0,
       pushesSent: push?.pushesSent ?? 0,
       pushSubscriptionsRemoved: push?.subscriptionsRemoved ?? 0,
       pushFailures: push?.failures ?? 0,
       pushSkipped: push?.skipped ?? true,
+      pushSkipReason: push?.skipReason ?? (push ? null : "fanout_failed"),
       durationMs,
     });
 
@@ -109,7 +114,13 @@ async function runScan(request: NextRequest) {
       ok: true,
       warningsFired: result.warnings_fired,
       overdueFired: result.overdue_fired,
+      notificationsConsidered: push?.notificationsConsidered ?? 0,
+      subscriptionsFound: push?.subscriptionsFound ?? 0,
+      recipientsWithoutSubscriptions: push?.recipientsWithoutSubscriptions ?? 0,
       pushesSent: push?.pushesSent ?? 0,
+      pushFailures: push?.failures ?? 0,
+      pushSkipped: push?.skipped ?? true,
+      pushSkipReason: push?.skipReason ?? (push ? null : "fanout_failed"),
       durationMs,
     });
   } catch (cause) {
