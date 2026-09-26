@@ -9,6 +9,13 @@ export interface NotificationActionState {
 
 const OK: NotificationActionState = { error: null };
 
+function revalidateNotificationViews() {
+  revalidatePath("/collector/notifications");
+  revalidatePath("/admin/notifications");
+  revalidatePath("/collector", "layout");
+  revalidatePath("/admin", "layout");
+}
+
 /**
  * Mark one of the caller's notifications read. Authorization is enforced by
  * RLS (`notifications_owner_update`: recipient-only) plus the explicit
@@ -31,8 +38,7 @@ export async function markNotificationRead(notificationId: string): Promise<Noti
 
   if (error) return { error: "Something went wrong. Please try again." };
 
-  revalidatePath("/collector/notifications");
-  revalidatePath("/admin/notifications");
+  revalidateNotificationViews();
   return OK;
 }
 
@@ -53,7 +59,44 @@ export async function markAllNotificationsRead(): Promise<NotificationActionStat
 
   if (error) return { error: "Something went wrong. Please try again." };
 
-  revalidatePath("/collector/notifications");
-  revalidatePath("/admin/notifications");
+  revalidateNotificationViews();
+  return OK;
+}
+
+/** Delete one notification belonging to the caller. */
+export async function deleteNotification(notificationId: string): Promise<NotificationActionState> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "You need to be signed in to do that." };
+
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .eq("id", notificationId)
+    .eq("recipient_id", user.id);
+
+  if (error) return { error: "Something went wrong. Please try again." };
+
+  revalidateNotificationViews();
+  return OK;
+}
+
+/** Delete every notification belonging to the caller. */
+export async function deleteAllNotifications(): Promise<NotificationActionState> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "You need to be signed in to do that." };
+
+  const { error } = await supabase.from("notifications").delete().eq("recipient_id", user.id);
+
+  if (error) return { error: "Something went wrong. Please try again." };
+
+  revalidateNotificationViews();
   return OK;
 }

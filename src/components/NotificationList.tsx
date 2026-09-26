@@ -1,6 +1,6 @@
 import type { NotificationRow, NotificationType } from "@/types/database.types";
 import { formatCairoDateTime } from "@/lib/dates";
-import { MarkAsReadButton } from "./NotificationMarkButtons";
+import { DeleteNotificationButton, MarkAsReadButton } from "./NotificationMarkButtons";
 
 /** Accent + label per notification type (only SLA types exist in Step 2). */
 const TYPE_STYLE: Record<NotificationType, { accent: string; label: string }> = {
@@ -41,7 +41,10 @@ function NotificationItem({ n }: { n: NotificationRow }) {
             {formatCairoDateTime(n.sent_at)}
             {unread ? " · Unread" : " · Read"}
           </p>
-          {unread && <MarkAsReadButton notificationId={n.id} />}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {unread && <MarkAsReadButton notificationId={n.id} />}
+            <DeleteNotificationButton notificationId={n.id} />
+          </div>
         </div>
       </div>
     </li>

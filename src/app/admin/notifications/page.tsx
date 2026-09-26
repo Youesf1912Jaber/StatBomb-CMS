@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { getNotificationsForUser } from "@/lib/notifications/queries";
 import { NotificationList } from "@/components/NotificationList";
-import { MarkAllAsReadButton } from "@/components/NotificationMarkButtons";
+import { ClearAllNotificationsButton, MarkAllAsReadButton } from "@/components/NotificationMarkButtons";
 
 export default async function AdminNotificationsPage() {
   const profile = await getProfileOrRedirect();
@@ -19,7 +19,10 @@ export default async function AdminNotificationsPage() {
             {unreadCount > 0 ? `${unreadCount} unread` : "You're all caught up."}
           </p>
         </div>
-        <MarkAllAsReadButton disabled={unreadCount === 0} />
+        <div className="flex flex-wrap items-center gap-2">
+          <MarkAllAsReadButton disabled={unreadCount === 0} />
+          <ClearAllNotificationsButton disabled={notifications.length === 0} />
+        </div>
       </div>
 
       <NotificationList notifications={notifications} />
