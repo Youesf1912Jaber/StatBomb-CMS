@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { AppShell, type NavItem } from "@/components/AppShell";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
+import { getAssignmentsForCollector } from "@/lib/assignments/queries";
+import { toSlaWarningAlarmItems } from "@/lib/assignments/sla-alarm";
 import { createClient } from "@/lib/supabase/server";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
 
@@ -27,6 +29,9 @@ export default async function CollectorLayout({
 
   const supabase = createClient();
   const unreadCount = await getUnreadNotificationCount(supabase, profile.id);
+  const assignments = await getAssignmentsForCollector(supabase, profile.id);
+  const collectorName = profile.full_name ?? profile.email;
+  const slaAlarmAssignments = toSlaWarningAlarmItems(assignments, () => collectorName);
 
   return (
     <AppShell
@@ -36,6 +41,7 @@ export default async function CollectorLayout({
       notificationsHref="/collector/notifications"
       unreadCount={unreadCount}
       vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
+      slaAlarmAssignments={slaAlarmAssignments}
     >
       {children}
     </AppShell>

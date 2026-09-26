@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { AppShell, type NavItem } from "@/components/AppShell";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
+import { getAdminDashboardAssignments } from "@/lib/assignments/queries";
+import { toSlaWarningAlarmItems } from "@/lib/assignments/sla-alarm";
 import { createClient } from "@/lib/supabase/server";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
 
@@ -28,6 +30,24 @@ export default async function AdminLayout({
 
   const supabase = createClient();
   const unreadCount = await getUnreadNotificationCount(supabase, profile.id);
+  const assignments = await getAdminDashboardAssignments(supabase);
+
+  const collectorIds = [...new Set(assignments.map((assignment) => assignment.collector_id))];
+  const collectorNames: Record<string, string> = {};
+  if (collectorIds.length > 0) {
+    const { data: collectors } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", collectorIds);
+    for (const collector of collectors ?? []) {
+      collectorNames[collector.id] = collector.full_name ?? collector.email;
+    }
+  }
+
+  const slaAlarmAssignments = toSlaWarningAlarmItems(
+    assignments,
+    (collectorId) => collectorNames[collectorId] ?? "Unknown collector"
+  );
 
   return (
     <AppShell
@@ -37,6 +57,7 @@ export default async function AdminLayout({
       notificationsHref="/admin/notifications"
       unreadCount={unreadCount}
       vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
+      slaAlarmAssignments={slaAlarmAssignments}
     >
       {children}
     </AppShell>

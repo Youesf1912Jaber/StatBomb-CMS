@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { SignOutButton } from "./SignOutButton";
 import { NotificationBell } from "./NotificationBell";
 import { PushNotificationSetup } from "./PushNotificationSetup";
+import { GlobalSlaWarningAlarms } from "./GlobalSlaWarningAlarms";
+import type { SlaWarningAlarmProps } from "./SlaWarningAlarm";
 
 export interface NavItem {
   label: string;
@@ -19,6 +21,8 @@ interface AppShellProps {
   unreadCount: number;
   /** VAPID *public* key for browser push; null disables the push prompt. */
   vapidPublicKey: string | null;
+  /** Active assignments for the global SLA warning audio alarm. */
+  slaAlarmAssignments: SlaWarningAlarmProps[];
   children: ReactNode;
 }
 
@@ -29,10 +33,12 @@ export function AppShell({
   notificationsHref,
   unreadCount,
   vapidPublicKey,
+  slaAlarmAssignments,
   children,
 }: AppShellProps) {
   return (
     <div className="min-h-screen lg:flex">
+      <GlobalSlaWarningAlarms assignments={slaAlarmAssignments} />
       <aside className="hidden w-56 shrink-0 flex-col border-r border-pitch-700 bg-pitch-900 px-4 py-6 lg:flex">
         <div className="mb-8 flex items-start justify-between gap-2 px-2">
           <div>

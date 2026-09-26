@@ -7,7 +7,7 @@ type AssignmentStatus = "Not Started" | "In Progress" | "Completed" | "Overdue";
 const STOP_ALARM_MESSAGE_TYPE = "sla-stop-alarm";
 const STOP_ALARM_CHANNEL = "sla-warning-alarm";
 
-interface SlaWarningAlarmProps {
+export interface SlaWarningAlarmProps {
   assignmentId: string;
   sla: string;
   status: AssignmentStatus;
