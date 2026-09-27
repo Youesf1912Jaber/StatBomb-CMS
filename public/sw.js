@@ -28,14 +28,16 @@ self.addEventListener("push", (event) => {
   const type = payload.type || "notification";
   const assignmentId = payload.assignmentId || null;
   const isSlaWarning = type === "sla_warning" || type === "sla_warning_alarm";
+  const tag =
+    isSlaWarning && assignmentId
+      ? "sla-warning:" + assignmentId
+      : (assignmentId || "general") + ":" + type;
 
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
-      // Collapse repeat pushes for the same assignment+type instead of
-      // stacking duplicates when the scanner retries.
-      tag: (assignmentId || "general") + ":" + type,
-      renotify: true,
+      tag,
+      renotify: !isSlaWarning,
       requireInteraction: isSlaWarning,
       data: { type: type, assignmentId: assignmentId },
       actions: isSlaWarning ? [{ action: "stop-alarm", title: "Stop Alarm" }] : [],

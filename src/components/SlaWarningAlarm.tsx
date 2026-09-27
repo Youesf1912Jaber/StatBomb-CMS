@@ -67,8 +67,8 @@ async function showSlaWarningNotification(props: {
 
   await registration.showNotification("SLA Warning", {
     body: buildWarningBody(props),
-    tag: `sla-warning-alarm:${props.assignmentId}:${props.sla}`,
-    renotify: true,
+    tag: `sla-warning:${props.assignmentId}`,
+    renotify: false,
     requireInteraction: true,
     data: {
       type: "sla_warning_alarm",
