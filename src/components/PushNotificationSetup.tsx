@@ -11,6 +11,8 @@ import { useCallback, useEffect, useState } from "react";
  */
 
 type PushState = "unsupported" | "loading" | "prompt" | "enabled" | "denied";
+const SERVICE_WORKER_URL = "/sw.js";
+const SERVICE_WORKER_SCOPE = "/";
 
 /** VAPID keys are base64url; the Push API wants a Uint8Array. */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -47,7 +49,10 @@ export function PushNotificationSetup({ vapidPublicKey }: { vapidPublicKey: stri
   const register = useCallback(async (): Promise<boolean> => {
     if (!vapidPublicKey) return false;
 
-    const registration = await navigator.serviceWorker.register("/sw.js");
+    const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL, {
+      scope: SERVICE_WORKER_SCOPE,
+      updateViaCache: "none",
+    });
     const existing = await registration.pushManager.getSubscription();
 
     // Re-post even an existing subscription: the row may have been pruned
@@ -112,7 +117,9 @@ export function PushNotificationSetup({ vapidPublicKey }: { vapidPublicKey: stri
     setBusy(true);
     setError(null);
     try {
-      const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+      const registration = await navigator.serviceWorker.getRegistration(
+        SERVICE_WORKER_SCOPE
+      );
       const subscription = await registration?.pushManager.getSubscription();
       const endpoint = subscription?.endpoint;
 
