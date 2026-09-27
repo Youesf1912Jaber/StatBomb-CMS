@@ -261,6 +261,8 @@ export interface PushDispatchResult {
   skipReason: PushSkipReason;
 }
 
+const PUSH_CLAIM_LEASE_SECONDS = 120;
+
 /**
  * Fans the SLA scanner's freshly-inserted notification rows out to Browser
  * Push. Called by /api/cron/sla-scan immediately after
@@ -270,10 +272,12 @@ export interface PushDispatchResult {
  * notification row for the affected collector *and* one per admin, so pushing
  * every unpushed row automatically reaches exactly the right people.
  *
- * Idempotency: rows are claimed by stamping `pushed_at`, so a row is pushed at
- * most once even if the cron double-fires, and a run that dies mid-way leaves
- * the remaining rows for the next tick — the same downtime-safe property the
- * SQL scanner has.
+ * Idempotency: rows are claimed via `claim_pending_push_notifications()`
+ * (FOR UPDATE SKIP LOCKED + push_claimed_at lease) before any send. Only the
+ * process that claimed a row may push it. A successful send stamps pushed_at
+ * and clears the lease. A failed send clears the lease and leaves pushed_at
+ * null so the next cron tick can retry. A crash expires the lease after
+ * PUSH_CLAIM_LEASE_SECONDS so a later run can reclaim the row.
  */
 export async function dispatchPendingPushNotifications(
   serviceClient: ServiceClient,
@@ -299,15 +303,13 @@ export async function dispatchPendingPushNotifications(
     return { ...empty, skipped: true, skipReason: "vapid_missing" };
   }
 
-  const { data: pending, error } = await serviceClient
-    .from("notifications")
-    .select("*")
-    .is("pushed_at", null)
-    .order("sent_at", { ascending: true })
-    .limit(limit);
+  const { data: pending, error } = await serviceClient.rpc("claim_pending_push_notifications", {
+    p_limit: limit,
+    p_lease_seconds: PUSH_CLAIM_LEASE_SECONDS,
+  });
 
   if (error) {
-    console.error("[push] failed to load pending notifications", {
+    console.error("[push] failed to claim pending notifications", {
       message: error.message,
     });
     return empty;
@@ -348,12 +350,25 @@ export async function dispatchPendingPushNotifications(
     subscriptionsRemoved += result.removed;
     failures += result.failed;
 
-    // Stamped regardless of outcome: a recipient with no subscription (or a
-    // permanently failing one) must not be retried forever. The in-app
-    // notification is already delivered either way.
+    if (result.failed > 0 && result.sent === 0) {
+      const { error: releaseError } = await serviceClient
+        .from("notifications")
+        .update({ push_claimed_at: null })
+        .eq("id", notification.id)
+        .is("pushed_at", null);
+
+      if (releaseError) {
+        console.error("[push] failed to release push claim", {
+          notificationId: notification.id,
+          message: releaseError.message,
+        });
+      }
+      continue;
+    }
+
     const { error: markError } = await serviceClient
       .from("notifications")
-      .update({ pushed_at: new Date().toISOString() })
+      .update({ pushed_at: new Date().toISOString(), push_claimed_at: null })
       .eq("id", notification.id);
 
     if (markError) {

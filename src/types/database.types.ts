@@ -111,6 +111,7 @@ export type NotificationRow = {
   sent_at: string;
   read_at: string | null;
   pushed_at: string | null;
+  push_claimed_at: string | null;
 };
 
 export type PushSubscriptionRow = {
@@ -281,6 +282,7 @@ export interface Database {
           sent_at?: string;
           read_at?: string | null;
           pushed_at?: string | null;
+          push_claimed_at?: string | null;
         };
         Update: Partial<NotificationRow>;
         Relationships: [];
@@ -406,6 +408,11 @@ export interface Database {
       evaluate_assignment_sla_states: {
         Args: Record<string, never>;
         Returns: { warnings_fired: number; overdue_fired: number }[];
+      };
+      // Service-role only (push fan-out claim/lease); not callable from the client.
+      claim_pending_push_notifications: {
+        Args: { p_limit?: number; p_lease_seconds?: number };
+        Returns: NotificationRow[];
       };
       reassign_assignment: {
         Args: {

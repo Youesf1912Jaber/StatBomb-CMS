@@ -30,64 +30,10 @@ function isStopAlarmMessage(data: unknown, assignmentId: string): boolean {
   return message.assignmentId === assignmentId;
 }
 
-function buildWarningBody(props: {
-  homeTeam: string;
-  awayTeam: string;
-  competition: string | null;
-  collectorName: string;
-  half: string;
-  task: string;
-}): string {
-  const lines = [`${props.homeTeam} vs ${props.awayTeam}`];
-  if (props.competition) {
-    lines.push(props.competition);
-  }
-  lines.push(`${props.half} — ${props.collectorName}`);
-  lines.push(`Task: ${props.task}`);
-  lines.push("SLA warning: 1 hour remaining.");
-  return lines.join("\n");
-}
-
-async function showSlaWarningNotification(props: {
-  assignmentId: string;
-  sla: string;
-  homeTeam: string;
-  awayTeam: string;
-  competition: string | null;
-  collectorName: string;
-  half: string;
-  task: string;
-}): Promise<void> {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  if (!("serviceWorker" in navigator)) return;
-
-  const registration =
-    (await navigator.serviceWorker.getRegistration("/sw.js")) ??
-    (await navigator.serviceWorker.ready);
-
-  await registration.showNotification("SLA Warning", {
-    body: buildWarningBody(props),
-    tag: `sla-warning:${props.assignmentId}`,
-    renotify: false,
-    requireInteraction: true,
-    data: {
-      type: "sla_warning_alarm",
-      assignmentId: props.assignmentId,
-    },
-    actions: [{ action: "stop-alarm", title: "Stop Alarm" }],
-  } as NotificationOptions);
-}
-
 export function SlaWarningAlarm({
   assignmentId,
   sla,
   status,
-  homeTeam,
-  awayTeam,
-  competition,
-  collectorName,
-  half,
-  task,
 }: SlaWarningAlarmProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -183,21 +129,7 @@ export function SlaWarningAlarm({
       if (playResult !== undefined) {
         playResult
           .then(() => {
-            const alreadyFired = fired;
             markFired();
-            if (alreadyFired) return;
-            void showSlaWarningNotification({
-              assignmentId,
-              sla,
-              homeTeam,
-              awayTeam,
-              competition,
-              collectorName,
-              half,
-              task,
-            }).catch(() => {
-              return;
-            });
           })
           .catch(() => {
             return;
@@ -243,17 +175,7 @@ export function SlaWarningAlarm({
       stopInterval();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [
-    assignmentId,
-    sla,
-    status,
-    homeTeam,
-    awayTeam,
-    competition,
-    collectorName,
-    half,
-    task,
-  ]);
+  }, [assignmentId, sla, status]);
 
   return null;
 }
