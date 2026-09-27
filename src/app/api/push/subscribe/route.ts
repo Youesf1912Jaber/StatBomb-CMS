@@ -15,6 +15,8 @@ export const dynamic = "force-dynamic";
 interface SubscribeBody {
   endpoint?: unknown;
   keys?: { p256dh?: unknown; auth?: unknown };
+  installationId?: unknown;
+  previousEndpoint?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -37,6 +39,7 @@ export async function POST(request: NextRequest) {
   const endpoint = body.endpoint;
   const p256dh = body.keys?.p256dh;
   const authKey = body.keys?.auth;
+  const previousEndpoint = body.previousEndpoint;
 
   if (
     typeof endpoint !== "string" ||
@@ -62,6 +65,21 @@ export async function POST(request: NextRequest) {
   if (error) {
     console.error("[push/subscribe] upsert failed", { message: error.message });
     return NextResponse.json({ error: "subscribe_failed" }, { status: 500 });
+  }
+
+  if (typeof previousEndpoint === "string" && previousEndpoint !== endpoint) {
+    const { error: deleteError } = await supabase
+      .from("push_subscriptions")
+      .delete()
+      .eq("profile_id", user.id)
+      .eq("endpoint", previousEndpoint);
+
+    if (deleteError) {
+      console.error("[push/subscribe] previous endpoint delete failed", {
+        message: deleteError.message,
+      });
+      return NextResponse.json({ error: "subscribe_failed" }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });

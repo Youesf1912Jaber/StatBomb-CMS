@@ -13,6 +13,8 @@ import { useCallback, useEffect, useState } from "react";
 type PushState = "unsupported" | "loading" | "prompt" | "enabled" | "denied";
 const SERVICE_WORKER_URL = "/sw.js";
 const SERVICE_WORKER_SCOPE = "/";
+const PUSH_INSTALLATION_ID_KEY = "push-installation-id";
+const PUSH_ENDPOINT_KEY_PREFIX = "push-endpoint";
 
 /** VAPID keys are base64url; the Push API wants a Uint8Array. */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -26,11 +28,44 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return output;
 }
 
-async function persistSubscription(subscription: PushSubscription): Promise<boolean> {
+function getBrowserInstallationId(): string {
+  const existing = window.localStorage.getItem(PUSH_INSTALLATION_ID_KEY);
+  if (existing) return existing;
+
+  const generated = window.crypto.randomUUID();
+  window.localStorage.setItem(PUSH_INSTALLATION_ID_KEY, generated);
+  return generated;
+}
+
+function endpointStorageKey(installationId: string): string {
+  return `${PUSH_ENDPOINT_KEY_PREFIX}:${installationId}`;
+}
+
+function getPreviousEndpoint(installationId: string): string | null {
+  return window.localStorage.getItem(endpointStorageKey(installationId));
+}
+
+function setPreviousEndpoint(installationId: string, endpoint: string): void {
+  window.localStorage.setItem(endpointStorageKey(installationId), endpoint);
+}
+
+function clearPreviousEndpoint(installationId: string): void {
+  window.localStorage.removeItem(endpointStorageKey(installationId));
+}
+
+async function persistSubscription(
+  subscription: PushSubscription,
+  installationId: string,
+  previousEndpoint: string | null
+): Promise<boolean> {
   const response = await fetch("/api/push/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(subscription.toJSON()),
+    body: JSON.stringify({
+      ...subscription.toJSON(),
+      installationId,
+      previousEndpoint,
+    }),
   });
   return response.ok;
 }
@@ -54,6 +89,7 @@ export function PushNotificationSetup({ vapidPublicKey }: { vapidPublicKey: stri
       updateViaCache: "none",
     });
     const existing = await registration.pushManager.getSubscription();
+    const installationId = getBrowserInstallationId();
 
     // Re-post even an existing subscription: the row may have been pruned
     // server-side after an expiry, and upsert makes this cheap.
@@ -64,7 +100,14 @@ export function PushNotificationSetup({ vapidPublicKey }: { vapidPublicKey: stri
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
       }));
 
-    return persistSubscription(subscription);
+    const previousEndpoint = getPreviousEndpoint(installationId);
+    const ok = await persistSubscription(subscription, installationId, previousEndpoint);
+
+    if (ok) {
+      setPreviousEndpoint(installationId, subscription.endpoint);
+    }
+
+    return ok;
   }, [vapidPublicKey]);
 
   // On mount: if permission was already granted, silently make sure the
@@ -117,6 +160,7 @@ export function PushNotificationSetup({ vapidPublicKey }: { vapidPublicKey: stri
     setBusy(true);
     setError(null);
     try {
+      const installationId = getBrowserInstallationId();
       const registration = await navigator.serviceWorker.getRegistration(
         SERVICE_WORKER_SCOPE
       );
@@ -134,6 +178,7 @@ export function PushNotificationSetup({ vapidPublicKey }: { vapidPublicKey: stri
         body: JSON.stringify({ endpoint }),
       });
 
+      clearPreviousEndpoint(installationId);
       setState("prompt");
     } catch {
       setError("Couldn't turn off push notifications. Please try again.");
