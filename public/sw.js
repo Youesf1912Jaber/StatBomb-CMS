@@ -12,10 +12,11 @@ function hasStopAlarmAction(notification) {
   return actions.some((action) => action.action === "stop-alarm");
 }
 
-function closeLegacySlaWarningNotifications() {
+function cleanupLegacySlaWarnings() {
   return self.registration.getNotifications().then((notifications) => {
     notifications.forEach((notification) => {
-      if (notification.title !== "SLA Warning") return;
+      const normalizedTitle = (notification.title || "").trim().toLowerCase();
+      if (normalizedTitle !== "sla warning") return;
       if (hasStopAlarmAction(notification)) return;
       notification.close();
     });
@@ -28,7 +29,7 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    Promise.all([self.clients.claim(), closeLegacySlaWarningNotifications()])
+    Promise.all([self.clients.claim(), cleanupLegacySlaWarnings()])
   );
 });
 
