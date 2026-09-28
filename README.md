@@ -55,9 +55,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=     # Project Settings → API → anon public ke
 environment where the SLA scanner runs** — `/api/cron/sla-scan` rejects every
 request when `CRON_SECRET` is unset. On Vercel, set both as project
 environment variables; Vercel Cron automatically sends `CRON_SECRET` as an
-`Authorization: Bearer …` header on each invocation. `VAPID_PUBLIC_KEY` /
-`VAPID_PRIVATE_KEY` remain placeholders for the Web Push sender (later
-Phase 3 step).
+`Authorization: Bearer …` header on each invocation.
 
 **Never** put the service-role key behind a `NEXT_PUBLIC_` prefix or import
 `createServiceRoleClient()` (in `src/lib/supabase/server.ts`) from any file
@@ -84,7 +82,19 @@ npm run build        # production build
 npm run start         # serve the production build (after build)
 ```
 
-## 4. What's implemented in Phase 1
+## 4. SLA alerts
+
+Authenticated admin and collector shells render SLA warnings in-app; no
+browser push, Service Worker, or notification permission is used. The shared
+global alert component evaluates role-visible assignments locally, shows a
+warning during the one-hour window preceding the SLA deadline, and refreshes
+on assignment realtime updates and once per minute. Each alert can be
+independently silenced for its assignment/SLA event without changing the
+assignment. Audio is enabled from the alert when browser autoplay protection
+requires a user interaction; multiple tabs use a short local-storage lease so
+only one tab plays alarms.
+
+## 5. What's implemented in Phase 1
 
 - `user_role` enum (`admin` | `collector`) and a `profiles` table, 1:1 with
   `auth.users`, auto-provisioned on signup via a trigger (defaults to
@@ -106,7 +116,7 @@ npm run start         # serve the production build (after build)
 - Empty Admin and Collector dashboard pages — placeholders only, per the
   final spec's phase ordering.
 
-## 5. Known limitations (expected at this phase)
+## 6. Known limitations (expected at this phase)
 
 - No matches, assignments, SLA tracking, notifications, reassignment, or
   sync pipeline yet — those are Phases 2–6.
@@ -120,7 +130,7 @@ npm run start         # serve the production build (after build)
   continuing to hand-edit it (command is in a comment at the top of the
   file).
 
-## 6. Deployment preparation
+## 7. Deployment preparation
 
 This is a standard Next.js App Router project — deployable to Vercel (or any
 Node host that supports Next 14 middleware) with no special build steps
@@ -133,8 +143,8 @@ beyond `npm run build`. Before deploying:
 3. Run the Phase 1 migration against the target Supabase project before the
    first deploy touches it.
 
-Service-role key, VAPID keys, and `CRON_SECRET` are not needed until Phases
-3 and 6 land — don't set them yet if you'd rather not provision them early.
+`SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` are needed only when the SLA
+scanner endpoint is deployed.
 
 Supabase GitHub deployment integration enabled.
 
