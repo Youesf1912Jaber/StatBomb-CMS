@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAdminDashboardAssignments } from "@/lib/assignments/queries";
 import { AssignmentTable } from "@/components/AssignmentTable";
 import { getCairoToday } from "@/lib/dates";
+import { AdminBulkCompleteButton } from "./AdminBulkCompleteButton";
 import { RefreshDistributionButton } from "./RefreshDistributionButton";
 
 export const runtime = "nodejs";
@@ -21,6 +22,9 @@ export default async function AdminDashboardPage() {
     (assignment) => assignment.shift_date === currentShiftDate
   );
   const allDistributedAssignments = assignments;
+  const bulkCompletionCount = allDistributedAssignments.filter(
+    (assignment) => assignment.status !== "Completed"
+  ).length;
 
   const collectorIds = [...new Set(assignments.map((a) => a.collector_id))];
   const collectorNames: Record<string, string> = {};
@@ -44,7 +48,10 @@ export default async function AdminDashboardPage() {
             is removed; In Progress work stays visible.
           </p>
         </div>
-        <RefreshDistributionButton />
+        <div className="flex flex-wrap gap-2">
+          <RefreshDistributionButton />
+          <AdminBulkCompleteButton eligibleCount={bulkCompletionCount} />
+        </div>
       </div>
 
       <section className="space-y-6">

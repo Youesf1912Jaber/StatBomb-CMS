@@ -455,6 +455,10 @@ export interface Database {
         Args: { p_assignment_id: string };
         Returns: AssignmentRow;
       };
+      admin_complete_current_distribution_assignments: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
     };
     Enums: {
       user_role: UserRole;
