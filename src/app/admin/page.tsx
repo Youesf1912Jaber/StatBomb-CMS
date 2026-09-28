@@ -7,6 +7,11 @@ import { RefreshDistributionButton } from "./RefreshDistributionButton";
 export const runtime = "nodejs";
 
 const CURRENT_SHIFT_STATUS_ORDER = ["Completed", "In Progress", "Overdue"] as const;
+const CURRENT_SHIFT_SECTION_LABELS = {
+  Completed: "Completed",
+  "In Progress": "In Progress",
+  Overdue: "Overdue / SLA Broken",
+} as const;
 
 export default async function AdminDashboardPage() {
   const supabase = createClient();
@@ -29,11 +34,6 @@ export default async function AdminDashboardPage() {
     }
   }
 
-  const counts = CURRENT_SHIFT_STATUS_ORDER.reduce<Record<string, number>>((acc, status) => {
-    acc[status] = currentShiftAssignments.filter((assignment) => assignment.status === status).length;
-    return acc;
-  }, {});
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -47,14 +47,36 @@ export default async function AdminDashboardPage() {
         <RefreshDistributionButton />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        {CURRENT_SHIFT_STATUS_ORDER.map((status) => (
-          <div key={status} className="rounded-card border border-pitch-700 bg-pitch-900 px-4 py-4">
-            <p className="text-2xl font-display text-chalk-50">{counts[status] ?? 0}</p>
-            <p className="mt-1 text-xs uppercase tracking-wide text-chalk-200">{status}</p>
-          </div>
-        ))}
-      </div>
+      <section className="space-y-6">
+        <div>
+          <h2 className="font-display text-lg text-chalk-50">Current Shift</h2>
+          <p className="mt-1 text-sm text-chalk-200">
+            Assignments scheduled for {currentShiftDate}.
+          </p>
+        </div>
+        {CURRENT_SHIFT_STATUS_ORDER.map((status) => {
+          const statusAssignments = currentShiftAssignments.filter(
+            (assignment) => assignment.status === status
+          );
+
+          return (
+            <section key={status}>
+              <h3 className="mb-2 font-display text-base text-chalk-50">
+                {CURRENT_SHIFT_SECTION_LABELS[status]}{" "}
+                <span className="text-sm text-chalk-200">({statusAssignments.length})</span>
+              </h3>
+              <AssignmentTable
+                assignments={statusAssignments}
+                detailsBasePath="/admin/assignments"
+                showCollector
+                collectorNames={collectorNames}
+                showFilters={false}
+                realtimeRefresh={false}
+              />
+            </section>
+          );
+        })}
+      </section>
 
       <section>
         <h2 className="font-display text-lg text-chalk-50">All Distributed Matches</h2>
