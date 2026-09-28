@@ -1,11 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database, UserRole } from "@/types/database.types";
+import { WORKSPACE_COOKIE, isWorkspaceMode } from "@/lib/auth/workspace-constants";
 
 const PUBLIC_PATHS = ["/login", "/auth/callback"];
+const SELECT_WORKSPACE_PATH = "/select-workspace";
 
-function roleHome(role: UserRole): string {
-  return role === "admin" ? "/admin" : "/collector";
+function roleHome(role: UserRole, workspace: string | undefined): string {
+  if (role === "admin") {
+    return isWorkspaceMode(workspace) ? (workspace === "admin" ? "/admin" : "/collector") : SELECT_WORKSPACE_PATH;
+  }
+  return "/collector";
 }
 
 export async function middleware(request: NextRequest) {
@@ -62,17 +67,25 @@ export async function middleware(request: NextRequest) {
   }
 
   const role: UserRole = profile.role;
-  const home = roleHome(role);
+  const workspace = request.cookies.get(WORKSPACE_COOKIE)?.value;
+  const home = roleHome(role, workspace);
 
   if (isPublicPath || pathname === "/") {
     return NextResponse.redirect(new URL(home, request.url));
+  }
+
+  if (pathname.startsWith(SELECT_WORKSPACE_PATH)) {
+    if (role !== "admin") {
+      return NextResponse.redirect(new URL(home, request.url));
+    }
+    return response;
   }
 
   if (pathname.startsWith("/admin") && role !== "admin") {
     return NextResponse.redirect(new URL(home, request.url));
   }
 
-  if (pathname.startsWith("/collector") && role !== "collector") {
+  if (pathname.startsWith("/collector") && role !== "collector" && role !== "admin") {
     return NextResponse.redirect(new URL(home, request.url));
   }
 

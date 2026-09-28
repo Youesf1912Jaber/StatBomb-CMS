@@ -10,6 +10,6 @@ export async function GET(request: NextRequest) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // Middleware sends the now-authenticated user to /admin or /collector.
+  // Middleware sends the now-authenticated user to /select-workspace or /collector.
   return NextResponse.redirect(`${origin}/`);
 }
