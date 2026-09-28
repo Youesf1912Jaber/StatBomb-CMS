@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchAllMatches } from "@/lib/match-master-preview";
-import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
-import { readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
+import { reconcileDistributionAssignments } from "@/lib/sync/reconcile-distribution-assignments";
 import { PreviewInputError } from "@/lib/sync/preview";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,21 +16,14 @@ export async function POST() {
   }
 
   try {
-    const [distributionRows, matches, assignmentsResult] = await Promise.all([
-      readDistributionRowsForPreview(),
-      fetchAllMatches(supabase),
-      supabase.from("assignments").select("*"),
-    ]);
-    if (assignmentsResult.error) throw assignmentsResult.error;
-    const reconciliation = await persistReconciledDistributionPresence(supabase, {
-      distributionRows,
-      assignments: assignmentsResult.data ?? [],
-      matches,
-    });
+    const reconciliation = await reconcileDistributionAssignments(supabase);
     return NextResponse.json({
       success: true,
-      present: reconciliation.presentAssignmentIds.length,
-      missing: reconciliation.missingAssignmentIds.length,
+      present: reconciliation.present,
+      missing: reconciliation.missing,
+      inserted: reconciliation.inserted,
+      updated: reconciliation.updated,
+      restored: reconciliation.restored,
     });
   } catch (error) {
     console.error("Distribution refresh failed", error);

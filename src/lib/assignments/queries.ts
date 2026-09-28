@@ -58,7 +58,8 @@ export async function getAdminDashboardAssignments(supabase: Client): Promise<As
   const { data, error } = await supabase
     .from("assignments")
     .select("*")
-    .eq("hidden_from_admin_dashboard", false);
+    .eq("hidden_from_admin_dashboard", false)
+    .eq("distribution_present", true);
   if (error) throw error;
   return attachMatches(supabase, data ?? []);
 }

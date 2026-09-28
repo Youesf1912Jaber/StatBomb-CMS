@@ -183,6 +183,7 @@ export function planDistributionAssignment(
   profiles: ProfileRow[],
   matches: MatchRow[],
   assignments: AssignmentRow[],
+  options: { allowExistingCollectorUpdate?: boolean } = {},
 ): DistributionAssignmentPlanResult {
   const externalId = normalizeMatchId(row.match_id);
   if (!externalId) return { ok: false, conflict: false, reason: "Distribution row has no valid Match ID." };
@@ -209,7 +210,7 @@ export function planDistributionAssignment(
   if (!sla) return { ok: false, conflict: false, reason: "Distribution SLA must be a valid date/time." };
 
   const existing = findAssignmentByLogicalKey(assignments, match.id, task, half);
-  if (existing && existing.collector_id !== collector.id) {
+  if (existing && existing.collector_id !== collector.id && !options.allowExistingCollectorUpdate) {
     return {
       ok: false,
       conflict: true,
