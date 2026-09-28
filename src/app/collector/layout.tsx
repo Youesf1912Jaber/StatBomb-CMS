@@ -19,7 +19,7 @@ export default async function CollectorLayout({
 }) {
   const profile = await getProfileOrRedirect();
 
-  if (profile.role !== "collector") {
+  if (profile.role !== "collector" && profile.role !== "admin") {
     redirect("/admin");
   }
 

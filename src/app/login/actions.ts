@@ -25,6 +25,6 @@ export async function signInWithPassword(
     return { error: "That email and password don't match." };
   }
 
-  // Middleware routes signed-in users to /admin or /collector based on role.
+  // Middleware routes signed-in users: admins to /select-workspace, collectors to /collector.
   redirect("/");
 }
