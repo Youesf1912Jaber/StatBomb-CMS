@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
-import { isOperationalAssignment } from "@/lib/assignments/distribution-presence";
+import {
+  isCurrentDistributionAssignment,
+  isOperationalAssignment,
+} from "@/lib/assignments/distribution-presence";
 import { getAssignmentsForCollector } from "@/lib/assignments/queries";
 import { getCairoToday, toCairoDateString } from "@/lib/dates";
 import { SlaCountdown } from "@/components/SlaCountdown";
@@ -68,6 +71,7 @@ export default async function CollectorDashboardPage() {
   const assignments = await getAssignmentsForCollector(supabase, profile.id);
   const today = getCairoToday();
   const currentAssignments = assignments.filter(isOperationalAssignment);
+  const currentDistribution = assignments.filter(isCurrentDistributionAssignment);
 
   // A) Today's Work — shift_date is the operational grouping, not match_date.
   const todaysWork = currentAssignments.filter((a) => a.shift_date === today);
@@ -108,6 +112,26 @@ export default async function CollectorDashboardPage() {
       <Section title="Upcoming Assignments" items={upcoming} emptyLabel="No upcoming assignments." />
       <Section title="Completed Today" items={completedToday} emptyLabel="Nothing completed yet today." />
       <Section title="SLA Warnings / Overdue" items={slaAttention} emptyLabel="Nothing overdue." />
+
+      <section>
+        <h2 className="font-display text-lg text-chalk-50">Current Distribution</h2>
+        <p className="mb-2 text-sm text-chalk-200">
+          {currentDistribution.length} assignment
+          {currentDistribution.length === 1 ? "" : "s"} currently distributed to you, including
+          previous shifts.
+        </p>
+        {currentDistribution.length === 0 ? (
+          <p className="rounded-card border border-dashed border-pitch-700 px-4 py-6 text-center text-sm text-chalk-200">
+            Nothing currently distributed to you.
+          </p>
+        ) : (
+          <AssignmentTable
+            assignments={currentDistribution}
+            detailsBasePath="/collector/assignments"
+            liveRefresh
+          />
+        )}
+      </section>
 
       <section>
         <h2 className="font-display text-lg text-chalk-50">All Assignments</h2>
