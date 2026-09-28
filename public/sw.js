@@ -69,21 +69,52 @@ function notifyClientsToStopAlarm(assignmentId) {
 
   const message = { type: "sla-stop-alarm", assignmentId: assignmentId };
 
-  try {
-    const channel = new BroadcastChannel("sla-warning-alarm");
-    channel.postMessage(message);
-    channel.close();
-  } catch {
-    // BroadcastChannel is optional; client.postMessage below is the fallback.
-  }
+  const getAppClients = () =>
+    self.clients.matchAll({ type: "window", includeUncontrolled: true });
 
-  return self.clients
-    .matchAll({ type: "window", includeUncontrolled: true })
-    .then((allClients) => {
-      allClients.forEach((client) => {
-        client.postMessage(message);
-      });
+  const broadcastFallback = () => {
+    try {
+      const channel = new BroadcastChannel("sla-warning-alarm");
+      channel.postMessage(message);
+      channel.close();
+    } catch {
+      // BroadcastChannel is optional when no window client can be targeted.
+    }
+  };
+
+  return (async () => {
+    let appClients = await getAppClients();
+
+    if (appClients.length === 0 && self.clients.openWindow) {
+      const openedClient = await self.clients.openWindow("/");
+      if (openedClient) {
+        appClients = [openedClient];
+      } else {
+        for (let attempt = 0; attempt < 3 && appClients.length === 0; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          appClients = await getAppClients();
+        }
+      }
+    }
+
+    if (appClients.length === 0) {
+      broadcastFallback();
+      return;
+    }
+
+    const clientToFocus = appClients[0];
+    if ("focus" in clientToFocus) {
+      try {
+        await clientToFocus.focus();
+      } catch {
+        // A closing client can reject focus; it can still receive the stop message.
+      }
+    }
+
+    appClients.forEach((client) => {
+      client.postMessage(message);
     });
+  })();
 }
 
 self.addEventListener("notificationclick", (event) => {
