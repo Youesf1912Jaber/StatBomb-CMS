@@ -15,6 +15,7 @@ import { SlaAlertCard } from "./SlaAlertCard";
 const AUDIO_OWNER_KEY = "sla-alert-audio-owner";
 const AUDIO_OWNER_TTL_MS = 15_000;
 const REFRESH_INTERVAL_MS = 60_000;
+const COLLECTOR_SOUND_ENABLED_KEY = "statbomb-alarm-sound-enabled";
 
 interface GlobalSlaAlertsProps {
   assignments: SlaAlertAssignment[];
@@ -59,12 +60,31 @@ export function GlobalSlaAlerts({
   );
   const [soundUnlocked, setSoundUnlocked] = useState(false);
   const [soundNeedsUnlock, setSoundNeedsUnlock] = useState(false);
+  const [collectorSoundEnabled, setCollectorSoundEnabled] = useState<boolean | null>(
+    role === "collector" ? null : true
+  );
+  const [collectorUnlockError, setCollectorUnlockError] = useState<string | null>(null);
   const audiosRef = useRef(new Map<string, HTMLAudioElement>());
   const tabIdRef = useRef<string>("");
 
   if (!tabIdRef.current && typeof window !== "undefined") {
     tabIdRef.current = createTabId();
   }
+
+  useEffect(() => {
+    if (role !== "collector") {
+      setCollectorSoundEnabled(true);
+      return;
+    }
+
+    try {
+      const enabled = window.localStorage.getItem(COLLECTOR_SOUND_ENABLED_KEY) === "true";
+      setCollectorSoundEnabled(enabled);
+      setSoundUnlocked(enabled);
+    } catch {
+      setCollectorSoundEnabled(false);
+    }
+  }, [role]);
 
   const refreshAssignments = useCallback(async () => {
     const supabase = createClient();
@@ -257,12 +277,28 @@ export function GlobalSlaAlerts({
       await unlock.play();
       unlock.pause();
       unlock.currentTime = 0;
+
+      if (role === "collector") {
+        try {
+          window.localStorage.setItem(COLLECTOR_SOUND_ENABLED_KEY, "true");
+        } catch {
+          setCollectorUnlockError("Please enable sound in your browser to continue.");
+          return;
+        }
+        setCollectorSoundEnabled(true);
+        setCollectorUnlockError(null);
+      }
+
       setSoundUnlocked(true);
       setSoundNeedsUnlock(false);
     } catch {
-      setSoundNeedsUnlock(true);
+      if (role === "collector") {
+        setCollectorUnlockError("Please enable sound in your browser to continue.");
+      } else {
+        setSoundNeedsUnlock(true);
+      }
     }
-  }, []);
+  }, [role]);
 
   const stopAlarm = useCallback(
     (assignment: SlaAlertAssignment) => {
@@ -278,33 +314,67 @@ export function GlobalSlaAlerts({
     [stopAudio]
   );
 
-  const showSoundControl = activeAlerts.length > 0 && (!soundUnlocked || soundNeedsUnlock);
+  const collectorSoundRequired = role === "collector" && collectorSoundEnabled !== true;
+  const showAdminSoundControl =
+    role === "admin" && activeAlerts.length > 0 && (!soundUnlocked || soundNeedsUnlock);
 
-  if (activeAlerts.length === 0 && !soundNeedsUnlock) return null;
+  if (!collectorSoundRequired && activeAlerts.length === 0 && !showAdminSoundControl) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-end gap-3 sm:left-auto sm:w-[28rem]">
-      {showSoundControl && (
-        <div className="pointer-events-auto w-full rounded-card border border-pitch-600 bg-pitch-900 p-3 shadow-xl">
-          <p className="text-sm text-chalk-100">
-            {soundNeedsUnlock
-              ? "Alarm sound needs your permission to play in this tab."
-              : "Enable alarm sound for this tab."}
-          </p>
-          <button
-            type="button"
-            onClick={() => void enableSound()}
-            className="mt-2 rounded-[8px] border border-clock-amber px-3 py-1.5 text-sm font-semibold text-clock-amber transition-colors hover:bg-clock-amber hover:text-ink"
+    <>
+      {collectorSoundRequired && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/90 px-4 backdrop-blur-sm">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="alarm-sound-required-title"
+            className="w-full max-w-md rounded-card border border-clock-amber bg-pitch-900 p-6 text-center shadow-2xl ring-1 ring-clock-amber/30"
           >
-            Enable Alarm Sound
-          </button>
+            <h2 id="alarm-sound-required-title" className="font-display text-2xl text-chalk-50">
+              Alarm Sound Required
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-chalk-200">
+              Alarm sound must be enabled to receive SLA alarms.
+            </p>
+            {collectorUnlockError && (
+              <p role="alert" className="mt-3 text-sm text-clock-red">
+                {collectorUnlockError}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => void enableSound()}
+              className="mt-6 w-full rounded-[8px] bg-clock-amber px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-[#e5b454] focus:outline-none focus:ring-2 focus:ring-chalk-50 focus:ring-offset-2 focus:ring-offset-pitch-900"
+            >
+              Enable Alarm Sound
+            </button>
+          </section>
         </div>
       )}
-      {activeAlerts.map((assignment) => (
-        <div key={warningEventId(assignment)} className="pointer-events-auto w-full">
-          <SlaAlertCard assignment={assignment} onStop={stopAlarm} />
-        </div>
-      ))}
-    </div>
+      <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-end gap-3 sm:left-auto sm:w-[28rem]">
+        {showAdminSoundControl && (
+          <div className="pointer-events-auto w-full rounded-card border border-pitch-600 bg-pitch-900 p-3 shadow-xl">
+            <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-clock-amber">
+              Alarm Sound Required
+            </p>
+            <p className="mt-1 text-sm text-chalk-100">
+              Enable alarm sound to hear active SLA warnings.
+            </p>
+            <button
+              type="button"
+              onClick={() => void enableSound()}
+              className="mt-2 rounded-[8px] border border-clock-amber px-3 py-1.5 text-sm font-semibold text-clock-amber transition-colors hover:bg-clock-amber hover:text-ink"
+            >
+              Enable Alarm Sound
+            </button>
+          </div>
+        )}
+        {activeAlerts.map((assignment) => (
+          <div key={warningEventId(assignment)} className="pointer-events-auto w-full">
+            <SlaAlertCard assignment={assignment} onStop={stopAlarm} />
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
