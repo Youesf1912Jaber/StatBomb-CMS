@@ -2,9 +2,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { SignOutButton } from "./SignOutButton";
 import { NotificationBell } from "./NotificationBell";
-import { PushNotificationSetup } from "./PushNotificationSetup";
-import { GlobalSlaWarningAlarms } from "./GlobalSlaWarningAlarms";
-import type { SlaWarningAlarmProps } from "./SlaWarningAlarm";
+import { GlobalSlaAlerts } from "./GlobalSlaAlerts";
+import type { SlaAlertAssignment } from "@/lib/assignments/sla-alarm";
 
 export interface NavItem {
   label: string;
@@ -19,10 +18,11 @@ interface AppShellProps {
   notificationsHref: string;
   /** Unread notification count for the bell badge. */
   unreadCount: number;
-  /** VAPID *public* key for browser push; null disables the push prompt. */
-  vapidPublicKey: string | null;
-  /** Active assignments for the global SLA warning audio alarm. */
-  slaAlarmAssignments: SlaWarningAlarmProps[];
+  /** Current authenticated user's role and ID scope SLA monitoring. */
+  role: "admin" | "collector";
+  profileId: string;
+  /** Active assignments visible through the existing role-specific queries. */
+  slaAlertAssignments: SlaAlertAssignment[];
   children: ReactNode;
 }
 
@@ -32,13 +32,19 @@ export function AppShell({
   navItems,
   notificationsHref,
   unreadCount,
-  vapidPublicKey,
-  slaAlarmAssignments,
+  role,
+  profileId,
+  slaAlertAssignments,
   children,
 }: AppShellProps) {
   return (
     <div className="min-h-screen lg:flex">
-      <GlobalSlaWarningAlarms assignments={slaAlarmAssignments} />
+      <GlobalSlaAlerts
+        assignments={slaAlertAssignments}
+        role={role}
+        profileId={profileId}
+        collectorName={userLabel}
+      />
       <aside className="hidden w-56 shrink-0 flex-col border-r border-pitch-700 bg-pitch-900 px-4 py-6 lg:flex">
         <div className="mb-8 flex items-start justify-between gap-2 px-2">
           <div>
@@ -61,9 +67,6 @@ export function AppShell({
           ))}
         </nav>
         <div className="border-t border-pitch-700 pt-4">
-          <div className="mb-3">
-            <PushNotificationSetup vapidPublicKey={vapidPublicKey} />
-          </div>
           <p className="truncate text-sm text-chalk-50">{userLabel}</p>
           <p className="mb-3 font-mono text-xs uppercase tracking-wide text-pitch-500">
             {roleLabel}
@@ -88,10 +91,6 @@ export function AppShell({
             <SignOutButton />
           </div>
         </header>
-
-        <div className="px-4 pt-4 lg:hidden">
-          <PushNotificationSetup vapidPublicKey={vapidPublicKey} />
-        </div>
 
         <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
       </div>

@@ -17,9 +17,11 @@ interface AssignmentTableProps {
   showCollector?: boolean;
   collectorNames?: Record<string, string>;
   liveRefresh?: boolean;
+  showFilters?: boolean;
+  realtimeRefresh?: boolean;
 }
 
-const STATUS_OPTIONS = ["All", "Not Started", "In Progress", "Completed"] as const;
+const STATUS_OPTIONS = ["All", "Not Started", "In Progress", "Completed", "Overdue"] as const;
 
 export function AssignmentTable({
   assignments,
@@ -27,26 +29,32 @@ export function AssignmentTable({
   showCollector = false,
   collectorNames = {},
   liveRefresh = false,
+  showFilters = true,
+  realtimeRefresh = true,
 }: AssignmentTableProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>("All");
 
   useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel("assignments-live-status")
-      .on("postgres_changes", { event: "*", schema: "public", table: "assignments" }, () => {
-        router.refresh();
-      })
-      .subscribe();
+    if (!realtimeRefresh && !liveRefresh) return;
 
-      const interval = liveRefresh ? window.setInterval(() => router.refresh(), 5000) : null;
-      return () => {
-        void supabase.removeChannel(channel);
-        if (interval !== null) window.clearInterval(interval);
-      };
-  }, [liveRefresh, router]);
+    const supabase = createClient();
+    const channel = realtimeRefresh
+      ? supabase
+          .channel("assignments-live-status")
+          .on("postgres_changes", { event: "*", schema: "public", table: "assignments" }, () => {
+            router.refresh();
+          })
+          .subscribe()
+      : null;
+
+    const interval = liveRefresh ? window.setInterval(() => router.refresh(), 5000) : null;
+    return () => {
+      if (channel) void supabase.removeChannel(channel);
+      if (interval !== null) window.clearInterval(interval);
+    };
+  }, [liveRefresh, realtimeRefresh, router]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -69,7 +77,7 @@ export function AssignmentTable({
 
   return (
     <div>
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+      {showFilters && <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           type="text"
           value={query}
@@ -88,7 +96,7 @@ export function AssignmentTable({
             </option>
           ))}
         </select>
-      </div>
+      </div>}
 
       {filtered.length === 0 ? (
         <p className="rounded-card border border-dashed border-pitch-700 px-6 py-10 text-center text-sm text-chalk-200">

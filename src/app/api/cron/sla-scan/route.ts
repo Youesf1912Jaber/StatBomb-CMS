@@ -1,7 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { dispatchPendingPushNotifications } from "@/lib/push/sender";
 
 /**
  * SLA scanner. Invoked by Vercel Cron (see vercel.json) roughly every 60
@@ -81,32 +80,11 @@ async function runScan(request: NextRequest) {
     // The function returns a single row of counters.
     const result = data?.[0] ?? { warnings_fired: 0, overdue_fired: 0 };
 
-    // Fan the rows the RPC just inserted out to Browser Push. Deliberately
-    // non-fatal: the in-app notifications are already committed, so a push
-    // problem must not turn a successful scan into a 500 (and any rows left
-    // unstamped are simply retried next tick).
-    let push = null;
-    try {
-      push = await dispatchPendingPushNotifications(supabase);
-    } catch (cause) {
-      console.error("[sla-scan] push fan-out failed", {
-        message: cause instanceof Error ? cause.message : String(cause),
-      });
-    }
-
     const durationMs = Date.now() - startedAt;
 
     console.info("[sla-scan] completed", {
       warningsFired: result.warnings_fired,
       overdueFired: result.overdue_fired,
-      notificationsConsidered: push?.notificationsConsidered ?? 0,
-      subscriptionsFound: push?.subscriptionsFound ?? 0,
-      recipientsWithoutSubscriptions: push?.recipientsWithoutSubscriptions ?? 0,
-      pushesSent: push?.pushesSent ?? 0,
-      pushSubscriptionsRemoved: push?.subscriptionsRemoved ?? 0,
-      pushFailures: push?.failures ?? 0,
-      pushSkipped: push?.skipped ?? true,
-      pushSkipReason: push?.skipReason ?? (push ? null : "fanout_failed"),
       durationMs,
     });
 
@@ -114,13 +92,6 @@ async function runScan(request: NextRequest) {
       ok: true,
       warningsFired: result.warnings_fired,
       overdueFired: result.overdue_fired,
-      notificationsConsidered: push?.notificationsConsidered ?? 0,
-      subscriptionsFound: push?.subscriptionsFound ?? 0,
-      recipientsWithoutSubscriptions: push?.recipientsWithoutSubscriptions ?? 0,
-      pushesSent: push?.pushesSent ?? 0,
-      pushFailures: push?.failures ?? 0,
-      pushSkipped: push?.skipped ?? true,
-      pushSkipReason: push?.skipReason ?? (push ? null : "fanout_failed"),
       durationMs,
     });
   } catch (cause) {

@@ -99,6 +99,28 @@ export async function adminMarkAssignmentComplete(assignmentId: string): Promise
   return OK;
 }
 
+export interface BulkCompleteAssignmentsResult extends AssignmentActionState {
+  completedCount: number;
+}
+
+export async function adminCompleteCurrentDistributionAssignments(): Promise<BulkCompleteAssignmentsResult> {
+  const profile = await getProfileOrRedirect();
+  if (profile.role !== "admin") {
+    return { error: "You're not authorized to do that.", errorCode: "NOT_AUTHORIZED", completedCount: 0 };
+  }
+
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("admin_complete_current_distribution_assignments");
+  if (error) {
+    const appError = translateSupabaseError(error);
+    return { error: appError.message, errorCode: appError.code, completedCount: 0 };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/collector");
+  return { ...OK, completedCount: data };
+}
+
 export type ReassignmentMode = "preserve" | "reset";
 
 export async function reassignAssignment(

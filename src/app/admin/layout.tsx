@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AppShell, type NavItem } from "@/components/AppShell";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { getAdminDashboardAssignments } from "@/lib/assignments/queries";
-import { toSlaWarningAlarmItems } from "@/lib/assignments/sla-alarm";
+import { toSlaAlertItems } from "@/lib/assignments/sla-alarm";
 import { createClient } from "@/lib/supabase/server";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
 
@@ -44,7 +44,7 @@ export default async function AdminLayout({
     }
   }
 
-  const slaAlarmAssignments = toSlaWarningAlarmItems(
+  const slaAlertAssignments = toSlaAlertItems(
     assignments,
     (collectorId) => collectorNames[collectorId] ?? "Unknown collector"
   );
@@ -56,8 +56,9 @@ export default async function AdminLayout({
       navItems={NAV_ITEMS}
       notificationsHref="/admin/notifications"
       unreadCount={unreadCount}
-      vapidPublicKey={process.env.VAPID_PUBLIC_KEY ?? null}
-      slaAlarmAssignments={slaAlarmAssignments}
+      role="admin"
+      profileId={profile.id}
+      slaAlertAssignments={slaAlertAssignments}
     >
       {children}
     </AppShell>
