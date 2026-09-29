@@ -173,6 +173,16 @@ function toSla(value: string | null, fallbackDate?: string | null): string | nul
   return parseDistributionSla(value, fallbackDate);
 }
 
+export function isAssignableCollectorTarget(
+  profile: Pick<ProfileRow, "role" | "deleted_at" | "suspended_at">,
+): boolean {
+  return (
+    (profile.role === "collector" || profile.role === "admin") &&
+    !profile.deleted_at &&
+    !profile.suspended_at
+  );
+}
+
 /**
  * Resolves one operational Distribution row to the immutable database IDs
  * used by create_assignment. Names are display-only; HR-Code is the sole
@@ -195,7 +205,7 @@ export function planDistributionAssignment(
     ? profiles.find((candidate) => normalizeDistributionCollectorHrCode(candidate.hr_code) === hrCode)
     : undefined;
   if (!collector) return { ok: false, conflict: false, reason: "HR-Code does not resolve to a Supabase profile." };
-  if (collector.role !== "collector" || collector.deleted_at || collector.suspended_at) {
+  if (!isAssignableCollectorTarget(collector)) {
     return { ok: false, conflict: false, reason: "HR-Code does not resolve to an active collector." };
   }
 

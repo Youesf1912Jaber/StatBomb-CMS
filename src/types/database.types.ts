@@ -363,6 +363,10 @@ export interface Database {
         Args: Record<string, never>;
         Returns: boolean;
       };
+      is_assignable_collector_target: {
+        Args: { p_profile_id: string };
+        Returns: boolean;
+      };
       start_assignment: {
         Args: { p_assignment_id: string };
         Returns: AssignmentRow;

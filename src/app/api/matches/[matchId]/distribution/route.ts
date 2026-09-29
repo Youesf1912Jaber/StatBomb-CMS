@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { createDistributionAssignments, normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId, pullTeamSheet, readDistributionRowsForMatch, readMatchesMasterSheet } from "@/lib/sync/google-sheets";
-import { planDistributionAssignment } from "@/lib/distribution-assignments";
+import { isAssignableCollectorTarget, planDistributionAssignment } from "@/lib/distribution-assignments";
 import { fetchAllMatches, findMatchByExternalId } from "@/lib/match-master-preview";
 import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
 import { findAssignmentByLogicalKey } from "@/lib/sync/reconcile";
@@ -99,7 +99,7 @@ export async function POST(
       const profileForHrCode = hrCode
         ? (profilesResult.data ?? []).find((candidate) => normalizeDistributionCollectorHrCode(candidate.hr_code) === hrCode)
         : undefined;
-      if (!profileForHrCode || profileForHrCode.role !== "collector" || profileForHrCode.deleted_at || profileForHrCode.suspended_at) {
+      if (!profileForHrCode || !isAssignableCollectorTarget(profileForHrCode)) {
         throw new PreviewInputError(`Collector ${collector.hr_code} is not an active Supabase collector.`);
       }
       const task = normalizeDistributionTask(assignment.task);

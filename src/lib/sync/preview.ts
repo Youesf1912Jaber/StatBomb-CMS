@@ -474,6 +474,13 @@ function findCollector(
   const name = asString(fields.collector_name)?.toLowerCase();
   if (!hrCode && (!name || name === "#n/a")) return { profile: null, unknown: true, admin: false };
   const matchingProfile = profiles.find((candidate) => Boolean(hrCode && candidate.hr_code?.toLowerCase() === hrCode));
+  const assignable = Boolean(
+    matchingProfile &&
+    (matchingProfile.role === "collector" || matchingProfile.role === "admin") &&
+    !matchingProfile.deleted_at &&
+    !matchingProfile.suspended_at
+  );
+  if (assignable && matchingProfile) return { profile: matchingProfile, unknown: false, admin: false };
   if (matchingProfile?.role === "admin") return { profile: null, unknown: false, admin: true };
   const profile = profiles.find((candidate) => Boolean(
     hrCode && candidate.hr_code?.toLowerCase() === hrCode && candidate.role === "collector"
