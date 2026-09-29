@@ -1,6 +1,13 @@
 "use client";
 
-export default function CollectorError({ reset }: { reset: () => void }) {
+export default function CollectorError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  console.error("[COLLECTOR_ERROR_BOUNDARY]", {
+    message: error?.message,
+    digest: error?.digest,
+    name: error?.name,
+    stack: error?.stack,
+  });
+
   return (
     <div className="mx-auto max-w-xl p-6">
       <div className="rounded-card border border-clock-red/40 bg-pitch-900 p-6">
