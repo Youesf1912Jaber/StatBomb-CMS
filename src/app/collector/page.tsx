@@ -24,7 +24,7 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
         Task: {a.task} &nbsp;·&nbsp; Half: {a.half}
       </p>
       <p className="mt-1 text-xs text-chalk-300">
-        {new Date(a.match.match_date).toLocaleDateString()} &nbsp;·&nbsp; {a.match.kickoff_time ? new Date(a.match.kickoff_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Kick-off —"}
+        {new Date(a.match.match_date).toLocaleDateString()} &nbsp;·&nbsp; {a.match.kickoff_time ? new Date(a.match.kickoff_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "[...]
       </p>
       <p className="mt-1 text-xs text-chalk-300">Status: {a.status}</p>
       <div className="mt-2">
@@ -129,6 +129,7 @@ export default async function CollectorDashboardPage() {
             assignments={currentDistribution}
             detailsBasePath="/collector/assignments"
             liveRefresh
+            realtimeRefresh={false}
           />
         )}
       </section>
