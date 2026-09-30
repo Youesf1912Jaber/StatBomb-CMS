@@ -978,7 +978,8 @@ export type DeductionSheetSourceRow = {
 
 async function findSheetByTitle(
   spreadsheetId: string,
-  title: string
+  title: string,
+  tabVariable = "GOOGLE_SHEETS_DEDUCTIONS_TAB"
 ): Promise<{ title: string; sheetId: number }> {
   const url = new URL(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}`);
   url.searchParams.set("fields", "sheets(properties(sheetId,title))");
@@ -988,7 +989,7 @@ async function findSheetByTitle(
     (item) => (item.properties?.title ?? "").trim().toLowerCase() === wanted
   );
   if (!sheet?.properties?.title || sheet.properties.sheetId === undefined) {
-    throw new PreviewInputError("The configured GOOGLE_SHEETS_DEDUCTIONS_TAB sheet tab was not found.");
+    throw new PreviewInputError(`The configured ${tabVariable} sheet tab was not found.`);
   }
   return { title: sheet.properties.title, sheetId: sheet.properties.sheetId };
 }
@@ -1089,6 +1090,119 @@ export async function readDeduction2026Sheet(): Promise<DeductionSheetSourceRow[
       mapped.comment,
       mapped.review_date,
       mapped.link,
+    ].some((value) => value !== "");
+    return hasValue ? [mapped] : [];
+  });
+}
+
+export type FfShotSheetSourceRow = {
+  source_row_number: number;
+  match_id: string;
+  app: string;
+  code: string;
+  collector_name: string;
+  squad: string;
+  side: string;
+  half: string;
+  timestamp: string;
+  player_id: string;
+  review_date: string;
+  comment: string;
+  link: string;
+  correct_collector: string;
+  changed: string;
+};
+
+async function resolveFfShotsSheet(
+  spreadsheetId: string
+): Promise<{ title: string; sheetId: number }> {
+  const configuredTitle = normalizedSheetName(process.env.GOOGLE_SHEETS_FF_SHOTS_TAB ?? "FF - Shots 2026");
+  if (!configuredTitle) {
+    throw new PreviewInputError("Google Sheets tab configuration is invalid.");
+  }
+  const gidRaw = process.env.GOOGLE_SHEETS_FF_SHOTS_GID?.trim();
+  if (gidRaw) {
+    return findConfiguredSheet(
+      spreadsheetId,
+      "GOOGLE_SHEETS_FF_SHOTS_GID",
+      "GOOGLE_SHEETS_FF_SHOTS_TAB",
+      gidRaw,
+      configuredTitle
+    );
+  }
+  return findSheetByTitle(spreadsheetId, configuredTitle, "GOOGLE_SHEETS_FF_SHOTS_TAB");
+}
+
+export async function readFfShots2026Sheet(): Promise<FfShotSheetSourceRow[]> {
+  const spreadsheetId = required("GOOGLE_SHEETS_SPREADSHEET_ID");
+  const sheet = await resolveFfShotsSheet(spreadsheetId);
+  const payload = await googleRequest<{ values?: unknown[][] }>(
+    `${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(`${sheet.title}!A:Z`)}`
+  );
+  const matrix = payload.values ?? [];
+  if (matrix.length === 0) {
+    return [];
+  }
+
+  const headers = (matrix[0] ?? []).map(normalizeDeductionHeader);
+  const indexFor = (...aliases: string[]) =>
+    headers.findIndex((header) => aliases.includes(header));
+  const indexes = {
+    matchId: indexFor("match id", "id", "matchid"),
+    app: indexFor("app"),
+    code: indexFor("code", "hr code", "hrcode", "collector hr code", "collector code"),
+    collectorName: indexFor("collector name", "collector", "name"),
+    squad: indexFor("squad"),
+    side: indexFor("side"),
+    half: indexFor("half"),
+    timestamp: indexFor("timestamp", "time", "event time"),
+    playerId: indexFor("player id", "playerid", "player"),
+    reviewDate: indexFor("review date"),
+    comment: indexFor("comment", "comments"),
+    link: indexFor("link", "url"),
+    correctCollector: indexFor("correct collector"),
+    changed: indexFor("changed", "changed?"),
+  };
+  if (indexes.matchId < 0 || indexes.code < 0) {
+    throw new PreviewInputError("The FF - Shots 2026 sheet is missing Match ID or Code headers.");
+  }
+
+  const cell = (row: unknown[], index: number): string =>
+    index >= 0 ? deductionCellText(row[index]) : "";
+
+  return matrix.slice(1).flatMap((row, index) => {
+    const mapped: FfShotSheetSourceRow = {
+      source_row_number: index + 2,
+      match_id: cell(row, indexes.matchId),
+      app: cell(row, indexes.app),
+      code: cell(row, indexes.code),
+      collector_name: cell(row, indexes.collectorName),
+      squad: cell(row, indexes.squad),
+      side: cell(row, indexes.side),
+      half: cell(row, indexes.half),
+      timestamp: cell(row, indexes.timestamp),
+      player_id: cell(row, indexes.playerId),
+      review_date: cell(row, indexes.reviewDate),
+      comment: cell(row, indexes.comment),
+      link: cell(row, indexes.link),
+      correct_collector: cell(row, indexes.correctCollector),
+      changed: cell(row, indexes.changed),
+    };
+    const hasValue = [
+      mapped.match_id,
+      mapped.app,
+      mapped.code,
+      mapped.collector_name,
+      mapped.squad,
+      mapped.side,
+      mapped.half,
+      mapped.timestamp,
+      mapped.player_id,
+      mapped.review_date,
+      mapped.comment,
+      mapped.link,
+      mapped.correct_collector,
+      mapped.changed,
     ].some((value) => value !== "");
     return hasValue ? [mapped] : [];
   });

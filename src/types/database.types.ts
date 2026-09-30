@@ -161,6 +161,36 @@ export type DeductionRow = {
   updated_at: string;
 };
 
+export type FfShotRow = {
+  id: string;
+  source_key: string;
+  content_fingerprint: string;
+  occurrence_ordinal: number;
+  match_external_id: string;
+  app: string | null;
+  hr_code: string;
+  collector_name: string | null;
+  collector_id: string | null;
+  squad: string | null;
+  side: string | null;
+  half: string | null;
+  event_timestamp: string | null;
+  event_timestamp_raw: string | null;
+  player_id: string | null;
+  review_date: string | null;
+  review_date_raw: string | null;
+  comment: string | null;
+  link: string | null;
+  correct_collector: string | null;
+  changed: string | null;
+  source_present: boolean;
+  last_seen_at: string;
+  first_synced_at: string;
+  last_synced_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MatchCollaboratorRow = {
   assignment_id: string;
   collector_id: string;
@@ -372,6 +402,40 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<DeductionRow>;
+        Relationships: [];
+      };
+      ff_shots: {
+        Row: FfShotRow;
+        Insert: {
+          id?: string;
+          source_key: string;
+          content_fingerprint: string;
+          occurrence_ordinal: number;
+          match_external_id?: string;
+          app?: string | null;
+          hr_code?: string;
+          collector_name?: string | null;
+          collector_id?: string | null;
+          squad?: string | null;
+          side?: string | null;
+          half?: string | null;
+          event_timestamp?: string | null;
+          event_timestamp_raw?: string | null;
+          player_id?: string | null;
+          review_date?: string | null;
+          review_date_raw?: string | null;
+          comment?: string | null;
+          link?: string | null;
+          correct_collector?: string | null;
+          changed?: string | null;
+          source_present?: boolean;
+          last_seen_at?: string;
+          first_synced_at?: string;
+          last_synced_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<FfShotRow>;
         Relationships: [];
       };
       sync_runs: {
