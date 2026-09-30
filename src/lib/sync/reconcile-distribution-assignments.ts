@@ -10,6 +10,24 @@ import type { AssignmentRow, Database, ProfileRow } from "@/types/database.types
 
 type Client = SupabaseClient<Database>;
 
+const ASSIGNMENTS_PAGE_SIZE = 1000;
+
+async function fetchAllAssignments(client: Client): Promise<AssignmentRow[]> {
+  const rows: AssignmentRow[] = [];
+  for (let from = 0; ; from += ASSIGNMENTS_PAGE_SIZE) {
+    const { data, error } = await client
+      .from("assignments")
+      .select("*")
+      .order("id", { ascending: true })
+      .range(from, from + ASSIGNMENTS_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < ASSIGNMENTS_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 export type DistributionAssignmentReconciliation = {
   inserted: number;
   updated: number;
@@ -193,16 +211,15 @@ async function createOrUpdateAssignment(
 export async function reconcileDistributionAssignments(
   supabase: Client,
 ): Promise<DistributionAssignmentReconciliation> {
-  const [distributionRows, profilesResult, matches, assignmentsResult] = await Promise.all([
+  const [distributionRows, profilesResult, matches, loadedAssignments] = await Promise.all([
     readDistributionRowsForPreview(),
     supabase.from("profiles").select("*"),
     fetchAllMatches(supabase),
-    supabase.from("assignments").select("*"),
+    fetchAllAssignments(supabase),
   ]);
   if (profilesResult.error) throw profilesResult.error;
-  if (assignmentsResult.error) throw assignmentsResult.error;
 
-  const assignments = [...(assignmentsResult.data ?? [])];
+  const assignments = [...loadedAssignments];
   const result: DistributionAssignmentReconciliation = {
     inserted: 0,
     updated: 0,
@@ -236,11 +253,10 @@ export async function reconcileDistributionAssignments(
     result[outcome] += 1;
   }
 
-  const currentAssignments = await supabase.from("assignments").select("*");
-  if (currentAssignments.error) throw currentAssignments.error;
+  const currentAssignments = await fetchAllAssignments(supabase);
   const presence = await persistReconciledDistributionPresence(supabase, {
     distributionRows,
-    assignments: currentAssignments.data ?? assignments,
+    assignments: currentAssignments,
     matches,
   });
 
