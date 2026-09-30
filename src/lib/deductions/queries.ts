@@ -12,7 +12,7 @@ export async function getAllDeductions(client: Client): Promise<DeductionRow[]> 
     const { data, error } = await client
       .from("deductions")
       .select("*")
-      .order("event_timestamp", { ascending: false, nullsFirst: false })
+      .order("review_date", { ascending: false, nullsFirst: false })
       .order("id", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
@@ -36,7 +36,7 @@ export async function getDeductionsForHrCode(
       .from("deductions")
       .select("*")
       .ilike("hr_code", normalized)
-      .order("event_timestamp", { ascending: false, nullsFirst: false })
+      .order("review_date", { ascending: false, nullsFirst: false })
       .order("id", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
