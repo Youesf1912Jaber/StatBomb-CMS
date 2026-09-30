@@ -1,4 +1,4 @@
-# StatBomb Collector Management
+# StatBomb Collector Management System
 
 
 Operations console for StatBomb match-data collectors: assignments, SLA
