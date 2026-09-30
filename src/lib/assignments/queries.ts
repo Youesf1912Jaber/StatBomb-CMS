@@ -4,6 +4,24 @@ import type { AssignmentWithMatch } from "./types";
 
 type Client = SupabaseClient<Database>;
 
+function queryErrorFields(error: unknown): { message: string; code: string; details: string; hint: string } {
+  const candidate = error && typeof error === "object" ? (error as Record<string, unknown>) : {};
+  return {
+    message: candidate.message == null ? "" : String(candidate.message),
+    code: candidate.code == null ? "" : String(candidate.code),
+    details: candidate.details == null ? "" : String(candidate.details),
+    hint: candidate.hint == null ? "" : String(candidate.hint),
+  };
+}
+
+function assignmentQueryCounts(assignments: Database["public"]["Tables"]["assignments"]["Row"][]) {
+  return {
+    assignmentCount: assignments.length,
+    uniqueMatchIds: new Set(assignments.map((assignment) => assignment.match_id)).size,
+    uniqueCollectorIds: new Set(assignments.map((assignment) => assignment.collector_id)).size,
+  };
+}
+
 /**
  * Nested `select("*, match:matches(*)")` typing doesn't infer well against
  * our hand-written Database type (empty `Relationships` — see
@@ -18,12 +36,30 @@ async function attachMatches(
   if (assignments.length === 0) return [];
 
   const matchIds = [...new Set(assignments.map((a) => a.match_id))];
+  const counts = assignmentQueryCounts(assignments);
+  console.error("Admin dashboard query start", {
+    query: "attachMatches matches query",
+    ...counts,
+  });
   const { data: matches, error } = await supabase
     .from("matches")
     .select("*")
     .in("id", matchIds);
 
-  if (error) throw error;
+  if (error) {
+    console.error("Admin dashboard query failed", {
+      query: "attachMatches matches query",
+      ...counts,
+      ...queryErrorFields(error),
+    });
+    throw error;
+  }
+
+  console.error("Admin dashboard query complete", {
+    query: "attachMatches matches query",
+    ...counts,
+    matchesReturned: (matches ?? []).length,
+  });
 
   const byId = new Map<string, MatchRow>((matches ?? []).map((m) => [m.id, m]));
 
@@ -55,13 +91,27 @@ export async function getAllAssignments(supabase: Client): Promise<AssignmentWit
 
 /** Admin Dashboard assignments. Hidden rows remain in the database and history. */
 export async function getAdminDashboardAssignments(supabase: Client): Promise<AssignmentWithMatch[]> {
+  console.error("Admin dashboard query start", {
+    query: "admin assignments query",
+  });
   const { data, error } = await supabase
     .from("assignments")
     .select("*")
     .eq("hidden_from_admin_dashboard", false)
     .eq("distribution_present", true);
-  if (error) throw error;
-  return attachMatches(supabase, data ?? []);
+  if (error) {
+    console.error("Admin dashboard query failed", {
+      query: "admin assignments query",
+      ...queryErrorFields(error),
+    });
+    throw error;
+  }
+  const assignments = data ?? [];
+  console.error("Admin dashboard query complete", {
+    query: "admin assignments query",
+    ...assignmentQueryCounts(assignments),
+  });
+  return attachMatches(supabase, assignments);
 }
 
 export async function getAssignmentById(
