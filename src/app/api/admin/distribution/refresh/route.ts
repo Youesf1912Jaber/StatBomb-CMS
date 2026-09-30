@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { reconcileDistributionAssignments } from "@/lib/sync/reconcile-distribution-assignments";
+import { DistributionRefreshRpcError, reconcileDistributionAssignments } from "@/lib/sync/reconcile-distribution-assignments";
 import { PreviewInputError } from "@/lib/sync/preview";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,7 +29,9 @@ export async function POST() {
     console.error("Distribution refresh failed", error);
     const message = error instanceof PreviewInputError
       ? error.safeMessage
-      : "Unable to refresh Distribution.";
+      : error instanceof DistributionRefreshRpcError
+        ? error.safeMessage
+        : "Unable to refresh Distribution.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

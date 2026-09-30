@@ -19,6 +19,101 @@ export type DistributionAssignmentReconciliation = {
   skipped: number;
 };
 
+type RpcErrorFields = {
+  message: string;
+  code: string;
+  details: string;
+  hint: string;
+};
+
+function fieldText(value: unknown): string {
+  if (value == null) return "";
+  return String(value);
+}
+
+function rpcErrorFields(error: unknown): RpcErrorFields {
+  const candidate = error && typeof error === "object" ? (error as Record<string, unknown>) : {};
+  return {
+    message: fieldText(candidate.message),
+    code: fieldText(candidate.code),
+    details: fieldText(candidate.details),
+    hint: fieldText(candidate.hint),
+  };
+}
+
+const SECRET_PATTERN =
+  /(?:postgres(?:ql)?:\/\/|mongodb(?:\+srv)?:\/\/)\S+|(?:bearer\s+)[a-z0-9._\-]+|(?:(?:api[_-]?key|secret|password|token|authorization|private[_-]?key)\s*[:=]\s*)\S+|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9._-]+|-----BEGIN [A-Z ]+-----[\s\S]*?-----END [A-Z ]+-----/gi;
+
+function sanitizeDiagnosticText(value: string): string {
+  return value.replace(SECRET_PATTERN, "[redacted]").replace(/\s+/g, " ").trim().slice(0, 400);
+}
+
+export class DistributionRefreshRpcError extends Error {
+  readonly raw_row_number: number;
+  readonly match_id: string;
+  readonly collector_hr_code: string | null;
+  readonly task: string | null;
+  readonly half: string | null;
+  readonly operation: string;
+  readonly rpcMessage: string;
+  readonly rpcCode: string;
+  readonly rpcDetails: string;
+  readonly rpcHint: string;
+  readonly originalError: unknown;
+  readonly safeMessage: string;
+
+  constructor(row: DistributionMatchRow, operation: string, error: unknown) {
+    const rpc = rpcErrorFields(error);
+    const safeMessage = [
+      "Unable to refresh Distribution.",
+      `row=${row.raw_row_number}`,
+      `match_id=${sanitizeDiagnosticText(row.match_id)}`,
+      `hr_code=${sanitizeDiagnosticText(row.collector_hr_code ?? "")}`,
+      `task=${sanitizeDiagnosticText(row.task ?? "")}`,
+      `half=${sanitizeDiagnosticText(row.half ?? "")}`,
+      `operation=${operation}`,
+      rpc.code ? `code=${sanitizeDiagnosticText(rpc.code)}` : "",
+      rpc.message ? `message=${sanitizeDiagnosticText(rpc.message)}` : "",
+      rpc.details ? `details=${sanitizeDiagnosticText(rpc.details)}` : "",
+      rpc.hint ? `hint=${sanitizeDiagnosticText(rpc.hint)}` : "",
+    ].filter(Boolean).join(" ");
+    super(safeMessage);
+    this.name = "DistributionRefreshRpcError";
+    this.raw_row_number = row.raw_row_number;
+    this.match_id = row.match_id;
+    this.collector_hr_code = row.collector_hr_code;
+    this.task = row.task;
+    this.half = row.half;
+    this.operation = operation;
+    this.rpcMessage = rpc.message;
+    this.rpcCode = rpc.code;
+    this.rpcDetails = rpc.details;
+    this.rpcHint = rpc.hint;
+    this.originalError = error;
+    this.safeMessage = safeMessage;
+    this.cause = error;
+  }
+}
+
+function throwRpcError(row: DistributionMatchRow, operation: string, error: unknown): never {
+  const rpc = rpcErrorFields(error);
+  const diagnostic = new DistributionRefreshRpcError(row, operation, error);
+  console.error("Distribution assignment RPC failed", {
+    raw_row_number: row.raw_row_number,
+    match_id: row.match_id,
+    collector_hr_code: row.collector_hr_code,
+    task: row.task,
+    half: row.half,
+    operation,
+    message: rpc.message,
+    code: rpc.code,
+    details: rpc.details,
+    hint: rpc.hint,
+    originalError: error,
+  });
+  throw diagnostic;
+}
+
 async function createOrUpdateAssignment(
   supabase: Client,
   row: DistributionMatchRow,
@@ -42,7 +137,7 @@ async function createOrUpdateAssignment(
       p_sla: plan.sla,
       p_shift_date: plan.shiftDate,
     });
-    if (error) throw error;
+    if (error) throwRpcError(row, "create_assignment", error);
     assignments.push(data);
     return "inserted";
   }
@@ -55,7 +150,7 @@ async function createOrUpdateAssignment(
       p_new_collector_id: plan.collector.id,
       p_mode: "preserve",
     });
-    if (error) throw error;
+    if (error) throwRpcError(row, "reassign_assignment", error);
     assignment = data;
     changed = true;
   }
@@ -68,7 +163,7 @@ async function createOrUpdateAssignment(
       p_sla: plan.sla,
       p_notes: assignment.notes,
     });
-    if (error) throw error;
+    if (error) throwRpcError(row, "update_assignment", error);
     assignment = data;
     changed = true;
   }
@@ -79,7 +174,7 @@ async function createOrUpdateAssignment(
       p_shift_date: plan.shiftDate,
       p_official_website_url: plan.match.official_website_url,
     });
-    if (error) throw error;
+    if (error) throwRpcError(row, "update_distribution_details", error);
     assignment = data;
     changed = true;
   }
