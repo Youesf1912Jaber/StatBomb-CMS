@@ -29,6 +29,8 @@ function assignmentQueryCounts(assignments: Database["public"]["Tables"]["assign
  * matches are fetched separately and joined in JS. Keeps the types honest
  * instead of casting through `any`.
  */
+const MATCH_ID_CHUNK_SIZE = 100;
+
 async function attachMatches(
   supabase: Client,
   assignments: Database["public"]["Tables"]["assignments"]["Row"][]
@@ -41,27 +43,34 @@ async function attachMatches(
     query: "attachMatches matches query",
     ...counts,
   });
-  const { data: matches, error } = await supabase
-    .from("matches")
-    .select("*")
-    .in("id", matchIds);
 
-  if (error) {
-    console.error("Admin dashboard query failed", {
-      query: "attachMatches matches query",
-      ...counts,
-      ...queryErrorFields(error),
-    });
-    throw error;
+  const matches: MatchRow[] = [];
+  for (let i = 0; i < matchIds.length; i += MATCH_ID_CHUNK_SIZE) {
+    const chunk = matchIds.slice(i, i + MATCH_ID_CHUNK_SIZE);
+    const { data, error } = await supabase
+      .from("matches")
+      .select("*")
+      .in("id", chunk);
+
+    if (error) {
+      console.error("Admin dashboard query failed", {
+        query: "attachMatches matches query",
+        ...counts,
+        ...queryErrorFields(error),
+      });
+      throw error;
+    }
+
+    matches.push(...(data ?? []));
   }
 
   console.error("Admin dashboard query complete", {
     query: "attachMatches matches query",
     ...counts,
-    matchesReturned: (matches ?? []).length,
+    matchesReturned: matches.length,
   });
 
-  const byId = new Map<string, MatchRow>((matches ?? []).map((m) => [m.id, m]));
+  const byId = new Map<string, MatchRow>(matches.map((m) => [m.id, m]));
 
   return assignments
     .filter((a) => byId.has(a.match_id))
