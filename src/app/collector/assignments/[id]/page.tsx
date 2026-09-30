@@ -65,6 +65,10 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-card border border-pitch-700 bg-pitch-900 p-5 text-sm sm:grid-cols-3">
         <div>
+          <dt className="text-chalk-200">Match ID</dt>
+          <dd className="mt-0.5 text-chalk-50">{assignment.match.external_id}</dd>
+        </div>
+        <div>
           <dt className="text-chalk-200">Task</dt>
           <dd className="mt-0.5 text-chalk-50">{assignment.task}</dd>
         </div>
