@@ -959,3 +959,137 @@ export async function readDistributionRowsForPreview(): Promise<DistributionMatc
     raw_row_number: index + 2,
   }));
 }
+
+export type DeductionSheetSourceRow = {
+  source_row_number: number;
+  match_id: string;
+  app: string;
+  code: string;
+  collector_name: string;
+  squad: string;
+  side: string;
+  half: string;
+  timestamp: string;
+  event: string;
+  comment: string;
+  review_date: string;
+  link: string;
+};
+
+async function findSheetByTitle(
+  spreadsheetId: string,
+  title: string
+): Promise<{ title: string; sheetId: number }> {
+  const url = new URL(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}`);
+  url.searchParams.set("fields", "sheets(properties(sheetId,title))");
+  const payload = await googleRequest<{ sheets?: SpreadsheetSheet[] }>(url.toString());
+  const wanted = title.trim().toLowerCase();
+  const sheet = (payload.sheets ?? []).find(
+    (item) => (item.properties?.title ?? "").trim().toLowerCase() === wanted
+  );
+  if (!sheet?.properties?.title || sheet.properties.sheetId === undefined) {
+    throw new PreviewInputError("The configured GOOGLE_SHEETS_DEDUCTIONS_TAB sheet tab was not found.");
+  }
+  return { title: sheet.properties.title, sheetId: sheet.properties.sheetId };
+}
+
+async function resolveDeductionSheet(
+  spreadsheetId: string
+): Promise<{ title: string; sheetId: number }> {
+  const configuredTitle = normalizedSheetName(process.env.GOOGLE_SHEETS_DEDUCTIONS_TAB ?? "Deduction2026");
+  if (!configuredTitle) {
+    throw new PreviewInputError("Google Sheets tab configuration is invalid.");
+  }
+  const gidRaw = process.env.GOOGLE_SHEETS_DEDUCTIONS_GID?.trim();
+  if (gidRaw) {
+    return findConfiguredSheet(
+      spreadsheetId,
+      "GOOGLE_SHEETS_DEDUCTIONS_GID",
+      "GOOGLE_SHEETS_DEDUCTIONS_TAB",
+      gidRaw,
+      configuredTitle
+    );
+  }
+  return findSheetByTitle(spreadsheetId, configuredTitle);
+}
+
+function normalizeDeductionHeader(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function deductionCellText(value: unknown): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+export async function readDeduction2026Sheet(): Promise<DeductionSheetSourceRow[]> {
+  const spreadsheetId = required("GOOGLE_SHEETS_SPREADSHEET_ID");
+  const sheet = await resolveDeductionSheet(spreadsheetId);
+  const payload = await googleRequest<{ values?: unknown[][] }>(
+    `${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(`${sheet.title}!A:Z`)}`
+  );
+  const matrix = payload.values ?? [];
+  if (matrix.length === 0) {
+    return [];
+  }
+
+  const headers = (matrix[0] ?? []).map(normalizeDeductionHeader);
+  const indexFor = (...aliases: string[]) =>
+    headers.findIndex((header) => aliases.includes(header));
+  const indexes = {
+    matchId: indexFor("match id", "id", "matchid"),
+    app: indexFor("app"),
+    code: indexFor("code", "hr code", "hrcode", "collector hr code", "collector code"),
+    collectorName: indexFor("collector name", "collector", "name"),
+    squad: indexFor("squad"),
+    side: indexFor("side"),
+    half: indexFor("half"),
+    timestamp: indexFor("timestamp", "time", "event time"),
+    event: indexFor("event"),
+    comment: indexFor("comment", "comments"),
+    reviewDate: indexFor("review date"),
+    link: indexFor("link", "url"),
+  };
+  if (indexes.matchId < 0 || indexes.code < 0) {
+    throw new PreviewInputError("The Deduction2026 sheet is missing Match ID or Code headers.");
+  }
+
+  const cell = (row: unknown[], index: number): string =>
+    index >= 0 ? deductionCellText(row[index]) : "";
+
+  return matrix.slice(1).flatMap((row, index) => {
+    const mapped: DeductionSheetSourceRow = {
+      source_row_number: index + 2,
+      match_id: cell(row, indexes.matchId),
+      app: cell(row, indexes.app),
+      code: cell(row, indexes.code),
+      collector_name: cell(row, indexes.collectorName),
+      squad: cell(row, indexes.squad),
+      side: cell(row, indexes.side),
+      half: cell(row, indexes.half),
+      timestamp: cell(row, indexes.timestamp),
+      event: cell(row, indexes.event),
+      comment: cell(row, indexes.comment),
+      review_date: cell(row, indexes.reviewDate),
+      link: cell(row, indexes.link),
+    };
+    const hasValue = [
+      mapped.match_id,
+      mapped.app,
+      mapped.code,
+      mapped.collector_name,
+      mapped.squad,
+      mapped.side,
+      mapped.half,
+      mapped.timestamp,
+      mapped.event,
+      mapped.comment,
+      mapped.review_date,
+      mapped.link,
+    ].some((value) => value !== "");
+    return hasValue ? [mapped] : [];
+  });
+}

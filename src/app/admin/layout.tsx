@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Distribution Preview", href: "/admin/distribution/preview" },
   { label: "Sync Preview", href: "/admin/sync" },
   { label: "Collectors", href: "/admin/collectors" },
+  { label: "Deductions", href: "/admin/deductions" },
   { label: "Activity Log", href: "/admin/activity-log" },
   { label: "Notifications", href: "/admin/notifications" },
 ];
