@@ -6,23 +6,23 @@ const config: Config = {
     extend: {
       colors: {
         pitch: {
-          950: "#04120C",
-          900: "#0A1F16",
-          800: "#0F2E1F",
-          700: "#154029",
-          600: "#1D5636",
-          500: "#276E45",
+          950: "rgb(var(--pitch-950) / <alpha-value>)",
+          900: "rgb(var(--pitch-900) / <alpha-value>)",
+          800: "rgb(var(--pitch-800) / <alpha-value>)",
+          700: "rgb(var(--pitch-700) / <alpha-value>)",
+          600: "rgb(var(--pitch-600) / <alpha-value>)",
+          500: "rgb(var(--pitch-500) / <alpha-value>)",
         },
         chalk: {
-          50: "#F6F8F5",
-          100: "#EAEFE7",
-          200: "#D3DCCE",
+          50: "rgb(var(--chalk-50) / <alpha-value>)",
+          100: "rgb(var(--chalk-100) / <alpha-value>)",
+          200: "rgb(var(--chalk-200) / <alpha-value>)",
         },
         clock: {
-          amber: "#D9A441",
-          red: "#C1462F",
+          amber: "rgb(var(--clock-amber) / <alpha-value>)",
+          red: "rgb(var(--clock-red) / <alpha-value>)",
         },
-        ink: "#0C1210",
+        ink: "rgb(var(--ink) / <alpha-value>)",
       },
       fontFamily: {
         display: ["var(--font-display)", "serif"],

@@ -6,24 +6,72 @@
   --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "IBM Plex Mono", Menlo, monospace;
+  --pitch-950: 4 18 12;
+  --pitch-900: 10 31 22;
+  --pitch-800: 15 46 31;
+  --pitch-700: 21 64 41;
+  --pitch-600: 29 86 54;
+  --pitch-500: 39 110 69;
+  --chalk-50: 246 248 245;
+  --chalk-100: 234 239 231;
+  --chalk-200: 211 220 206;
+  --clock-amber: 217 164 65;
+  --clock-red: 193 70 47;
+  --ink: 12 18 16;
+  --body-bg: 10 31 22;
+  --body-fg: 234 239 231;
 }
 
 html {
   color-scheme: dark;
 }
 
+html[data-theme="light"] {
+  color-scheme: light;
+  --pitch-950: 232 238 230;
+  --pitch-900: 247 249 246;
+  --pitch-800: 226 232 222;
+  --pitch-700: 197 208 192;
+  --pitch-600: 91 127 100;
+  --pitch-500: 39 110 69;
+  --chalk-50: 18 32 24;
+  --chalk-100: 28 44 34;
+  --chalk-200: 61 82 70;
+  --clock-amber: 196 138 30;
+  --clock-red: 193 70 47;
+  --ink: 12 18 16;
+  --body-bg: 232 238 230;
+  --body-fg: 18 32 24;
+}
+
 body {
-  background-color: #0a1f16;
-  color: #eaefe7;
+  background-color: rgb(var(--body-bg));
+  color: rgb(var(--body-fg));
+}
+
+.theme-toggle-sun {
+  display: block;
+}
+
+.theme-toggle-moon {
+  display: none;
+}
+
+html[data-theme="light"] .theme-toggle-sun {
+  display: none;
+}
+
+html[data-theme="light"] .theme-toggle-moon {
+  display: block;
 }
 
 ::selection {
-  background-color: #d9a441;
-  color: #0c1210;
+  background-color: rgb(var(--clock-amber));
+  color: rgb(var(--ink));
 }
 
 :focus-visible {
-  outline: 2px solid #d9a441;
+  outline: 2px solid rgb(var(--clock-amber));
   outline-offset: 2px;
 }
 

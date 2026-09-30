@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { SignOutButton } from "./SignOutButton";
 import { NotificationBell } from "./NotificationBell";
 import { GlobalSlaAlerts } from "./GlobalSlaAlerts";
+import { ThemeToggle } from "./ThemeToggle";
 import type { SlaAlertAssignment } from "@/lib/assignments/sla-alarm";
 
 export interface NavItem {
@@ -68,26 +69,28 @@ export function AppShell({
         </nav>
         <div className="border-t border-pitch-700 pt-4">
           <p className="truncate text-sm text-chalk-50">{userLabel}</p>
-          <p className="mb-3 font-mono text-xs uppercase tracking-wide text-pitch-500">
+          <p className="font-mono text-xs uppercase tracking-wide text-pitch-500">
             {roleLabel}
           </p>
-          <SignOutButton />
         </div>
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-pitch-700 bg-pitch-900 px-4 py-3 lg:hidden">
-          <div>
+        <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-pitch-700 bg-pitch-900 px-4 py-3 lg:justify-end">
+          <div className="min-w-0 lg:hidden">
             <p className="font-mono text-[10px] uppercase tracking-widest text-pitch-500">
               StatBomb
             </p>
             <p className="font-display text-base text-chalk-50">Console</p>
           </div>
-          <div className="flex items-center gap-3">
-            <NotificationBell href={notificationsHref} unreadCount={unreadCount} />
-            <span className="font-mono text-xs uppercase tracking-wide text-pitch-500">
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="lg:hidden">
+              <NotificationBell href={notificationsHref} unreadCount={unreadCount} />
+            </div>
+            <span className="hidden font-mono text-xs uppercase tracking-wide text-pitch-500 sm:inline lg:hidden">
               {roleLabel}
             </span>
+            <ThemeToggle />
             <SignOutButton />
           </div>
         </header>

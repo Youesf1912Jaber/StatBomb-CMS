@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Script from "next/script";
+import { themeInitScript } from "@/app/theme-init";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,8 +14,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="font-sans antialiased">{children}</body>
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <body className="font-sans antialiased">
+        <Script id="theme-init" strategy="beforeInteractive">
+          {themeInitScript}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }
