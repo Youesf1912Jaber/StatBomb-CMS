@@ -204,25 +204,42 @@ async function resolveBonusSheetTitle(spreadsheetId: string): Promise<string> {
 }
 
 /**
+ * Finds the first column index matching any of the given aliases.
+ * This is used to match header names in the Bonus sheet headers array.
+ * All comparisons are against normalized (lowercase, whitespace-trimmed) headers.
+ *
+ * @param headers - Array of normalized header strings
+ * @param aliases - One or more header name aliases to match against
+ * @returns The 0-based column index if found, or -1 if not found
+ */
+function findColumnIndex(headers: string[], ...aliases: string[]): number {
+  for (let i = 0; i < headers.length; i += 1) {
+    const header = headers[i];
+    if (header && aliases.includes(header)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
  * Attempts to resolve Bonus column indexes from a candidate header row.
  * Returns `null` (instead of throwing) when the required headers are not
  * present, so callers can keep scanning subsequent rows for the real header.
  */
 function tryResolveIndexes(headers: string[]): BonusColumnIndexes | null {
-  const indexFor = (...aliases: string[]) =>
-    headers.findIndex((header) => aliases.includes(header));
   const indexes: BonusColumnIndexes = {
-    hrCode: indexFor("hr code", "hrcode", "hr-code", "code", "collector code", "collector hr code"),
-    collector: indexFor("collector", "collector name", "name"),
-    reason: indexFor("reason"),
-    task: indexFor("task"),
-    matchId: indexFor("match id", "matchid", "id"),
-    homeTeam: indexFor("home team", "hometeam", "home"),
-    awayTeam: indexFor("away team", "awayteam", "away"),
-    date: indexFor("date", "bonus date"),
-    amount: indexFor("amount", "bonus amount"),
-    done: indexFor("done"),
-    resolution: indexFor("resolution", "resolution status", "review resolution"),
+    hrCode: findColumnIndex(headers, "hr code", "hrcode", "hr-code", "code", "collector code", "collector hr code"),
+    collector: findColumnIndex(headers, "collector", "collector name", "name"),
+    reason: findColumnIndex(headers, "reason"),
+    task: findColumnIndex(headers, "task"),
+    matchId: findColumnIndex(headers, "match id", "matchid", "id"),
+    homeTeam: findColumnIndex(headers, "home team", "hometeam", "home"),
+    awayTeam: findColumnIndex(headers, "away team", "awayteam", "away"),
+    date: findColumnIndex(headers, "date", "bonus date"),
+    amount: findColumnIndex(headers, "amount", "bonus amount"),
+    done: findColumnIndex(headers, "done"),
+    resolution: findColumnIndex(headers, "resolution", "resolution status", "review resolution"),
   };
   if (
     indexes.hrCode < 0 ||
@@ -256,15 +273,6 @@ function detectBonusHeaderRow(matrix: unknown[][]): DetectedBonusHeader {
     const headers = candidateRow.map(normalizeBonusHeader);
     const indexes = tryResolveIndexes(headers);
     if (indexes) {
-      // DIAGNOSTIC: Log header detection
-      console.log(`[BONUS_DIAG] Detected header row at matrix index ${rowIndex} (physical row ${rowIndex + 1})`);
-      console.log(`[BONUS_DIAG] Complete normalized headers array:`, JSON.stringify(headers));
-      console.log(`[BONUS_DIAG] indexes.amount = ${indexes.amount}`);
-      console.log(`[BONUS_DIAG] indexes.done = ${indexes.done}`);
-      console.log(`[BONUS_DIAG] indexes.resolution = ${indexes.resolution}`);
-      console.log(`[BONUS_DIAG] headers.length = ${headers.length}`);
-      console.log(`[BONUS_DIAG] headers[9] (physical column J) = "${headers[9] ?? 'undefined'}"`);
-      
       return { headerRowIndex: rowIndex, headers, indexes };
     }
   }
@@ -311,19 +319,6 @@ function mapBonusRecord(row: unknown[], rowNumber: number, indexes: BonusColumnI
   const cell = (column: number): string => (column >= 0 ? bonusCellText(row[column]) : "");
   const dateRaw = cell(indexes.date);
   const resolutionRaw = cell(indexes.resolution);
-  
-  // DIAGNOSTIC: Log raw row data for first few records
-  if (rowNumber <= 8) {
-    console.log(`[BONUS_DIAG] Mapping row ${rowNumber}:`);
-    console.log(`[BONUS_DIAG]   raw row = ${JSON.stringify(row)}`);
-    console.log(`[BONUS_DIAG]   row[9] (physical column J) = "${row[9] ?? 'undefined'}"`);
-    console.log(`[BONUS_DIAG]   row[indexes.amount] where indexes.amount=${indexes.amount} = "${row[indexes.amount] ?? 'undefined'}"`);
-    console.log(`[BONUS_DIAG]   cell(indexes.amount) = "${cell(indexes.amount)}"`);
-    console.log(`[BONUS_DIAG]   cell(indexes.amount) || null = ${JSON.stringify(cell(indexes.amount) || null)}`);
-  }
-  
-  const amount = cell(indexes.amount) || null;
-  
   return {
     row_number: rowNumber,
     hr_code: cell(indexes.hrCode).toUpperCase(),
@@ -335,7 +330,7 @@ function mapBonusRecord(row: unknown[], rowNumber: number, indexes: BonusColumnI
     away_team: cell(indexes.awayTeam),
     date_raw: dateRaw,
     date: parseBonusDate(dateRaw),
-    amount,
+    amount: cell(indexes.amount) || null,
     done: cell(indexes.done) || null,
     resolution_raw: resolutionRaw,
     resolution: normalizeBonusResolution(resolutionRaw),
