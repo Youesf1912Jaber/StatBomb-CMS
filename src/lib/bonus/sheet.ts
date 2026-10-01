@@ -107,9 +107,36 @@ function columnLetter(index: number): string {
   return label;
 }
 
+/**
+ * Formats a JavaScript Date object as YYYY-MM-DD for writing to the Bonus sheet.
+ * Uses the date in the server's local timezone (not UTC).
+ */
+export function formatBonusDateForSheet(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Parses a Bonus date value from the Google Sheet into ISO 8601 YYYY-MM-DD format.
+ *
+ * Handles multiple date formats:
+ * - ISO 8601: YYYY-MM-DD (e.g., 2026-09-15)
+ * - DMY format with /, -, or . separator: D/M/YYYY, DD/MM/YYYY (e.g., 15/9/2026, 9/15/2026)
+ * - Fallback to JavaScript Date.parse() for other locales
+ *
+ * Returns null for invalid or empty dates.
+ *
+ * **IMPORTANT:** When parsing DMY format, the first number is treated as the
+ * DAY and the second as the MONTH. This follows the DMY (day/month/year)
+ * convention. The parser validates that month is 1-12 and day is 1-31.
+ */
 export function parseBonusDate(raw: string): string | null {
   const text = bonusCellText(raw);
   if (!text) return null;
+
+  // Try ISO 8601 format first: YYYY-MM-DD
   const ymd = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (ymd) {
     const year = ymd[1];
@@ -119,6 +146,9 @@ export function parseBonusDate(raw: string): string | null {
       return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
     }
   }
+
+  // Try DMY format: D/M/YYYY or DD/MM/YYYY with /, -, or . separators
+  // The regex captures: day, month, year (in that order)
   const dmy = text.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/);
   if (dmy) {
     const day = Number(dmy[1]);
@@ -128,6 +158,8 @@ export function parseBonusDate(raw: string): string | null {
       return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
   }
+
+  // Fallback to JavaScript Date.parse() for other formats
   const parsed = Date.parse(text);
   if (Number.isNaN(parsed)) return null;
   return new Date(parsed).toISOString().slice(0, 10);
