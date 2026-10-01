@@ -244,6 +244,17 @@ function tryResolveIndexes(headers: string[]): BonusColumnIndexes | null {
     done: findColumnIndex(headers, "done"),
     resolution: findColumnIndex(headers, "resolution", "resolution status", "review resolution"),
   };
+
+  // DIAGNOSTIC: Investigate why Resolution writes may not be landing on the
+  // expected physical column O. If indexes.resolution is -1 even though a
+  // Resolution-like header exists at or near physical column O (0-based
+  // index 14), ensureResolutionColumn() will incorrectly create a brand new
+  // column instead of reusing the existing one.
+  console.log(`[BONUS_RESOLUTION_DIAG] headers.length=${headers.length}`);
+  console.log(`[BONUS_RESOLUTION_DIAG] indexes.resolution=${indexes.resolution}`);
+  console.log(`[BONUS_RESOLUTION_DIAG] headers[14] (physical column O)=${JSON.stringify(headers[14] ?? 'undefined')}`);
+  console.log(`[BONUS_RESOLUTION_DIAG] headers around O: [12]=${JSON.stringify(headers[12] ?? 'undefined')} [13]=${JSON.stringify(headers[13] ?? 'undefined')} [14]=${JSON.stringify(headers[14] ?? 'undefined')} [15]=${JSON.stringify(headers[15] ?? 'undefined')} [16]=${JSON.stringify(headers[16] ?? 'undefined')}`);
+
   if (
     indexes.hrCode < 0 ||
     indexes.reason < 0 ||
@@ -391,10 +402,17 @@ async function batchUpdateBonusCells(
   data: { range: string; majorDimension: "ROWS"; values: string[][] }[]
 ): Promise<void> {
   if (data.length === 0) return;
-  await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`, {
-    method: "POST",
-    body: JSON.stringify({ valueInputOption: "USER_ENTERED", data }),
-  });
+  console.log(`[BONUS_RESOLUTION_DIAG] batchUpdateBonusCells writing data=${JSON.stringify(data)}`);
+  try {
+    const response = await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`, {
+      method: "POST",
+      body: JSON.stringify({ valueInputOption: "USER_ENTERED", data }),
+    });
+    console.log(`[BONUS_RESOLUTION_DIAG] batchUpdateBonusCells response=${JSON.stringify(response)}`);
+  } catch (error) {
+    console.log(`[BONUS_RESOLUTION_DIAG] batchUpdateBonusCells ERROR=${error instanceof Error ? error.message : String(error)}`);
+    throw error;
+  }
 }
 
 function cellWrite(title: string, row: number, column: number, value: string) {
@@ -452,6 +470,7 @@ function matchesBonusIdentity(row: unknown[], indexes: BonusColumnIndexes, expec
 
 async function ensureResolutionColumn(loaded: LoadedBonusSheet): Promise<number> {
   const { spreadsheetId, title, matrix, indexes, headerRowNumber } = loaded;
+  console.log(`[BONUS_RESOLUTION_DIAG] ensureResolutionColumn: indexes.resolution=${indexes.resolution}`);
   if (indexes.resolution >= 0) return indexes.resolution;
 
   let width = 0;
@@ -459,6 +478,7 @@ async function ensureResolutionColumn(loaded: LoadedBonusSheet): Promise<number>
     if (row.length > width) width = row.length;
   }
   const column = Math.max(width, loaded.headers.length);
+  console.log(`[BONUS_RESOLUTION_DIAG] ensureResolutionColumn: NO existing Resolution column found; creating NEW column at index=${column} (letter=${columnLetter(column)}) on headerRowNumber=${headerRowNumber}`);
   await batchUpdateBonusCells(spreadsheetId, [cellWrite(title, headerRowNumber, column, "Resolution")]);
   return column;
 }
@@ -471,11 +491,14 @@ export async function updateBonusResolution(input: {
   const { spreadsheetId, title, matrix, indexes } = loaded;
   const resolutionColumn = await ensureResolutionColumn(loaded);
 
+  console.log(`[BONUS_RESOLUTION_DIAG] updateBonusResolution: physicalRowNumber=${input.expected.row_number}, resolutionColumn=${resolutionColumn} (letter=${columnLetter(resolutionColumn)}), targetA1=${title}!${columnLetter(resolutionColumn)}${input.expected.row_number}, valueToWrite=${JSON.stringify(input.resolution ?? "")}`);
+
   // `row_number` is the 1-based physical spreadsheet row, so index into the
   // matrix (0-based) by subtracting 1 — this is independent of where the
   // header row was detected.
   const row = matrix[input.expected.row_number - 1];
   if (!row || !matchesBonusIdentity(row, indexes, input.expected)) {
+    console.log(`[BONUS_RESOLUTION_DIAG] updateBonusResolution: identity match FAILED or row missing. row=${JSON.stringify(row ?? null)}`);
     throw new PreviewInputError(
       "This Bonus row changed in Google Sheets. Refresh the page and try again."
     );
