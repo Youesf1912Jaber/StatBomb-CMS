@@ -273,6 +273,11 @@ function detectBonusHeaderRow(matrix: unknown[][]): DetectedBonusHeader {
     const headers = candidateRow.map(normalizeBonusHeader);
     const indexes = tryResolveIndexes(headers);
     if (indexes) {
+      // DIAGNOSTIC: Log header detection for verification
+      console.log(`[BONUS_AMOUNT_DIAG] Detected header row at matrix index ${rowIndex}, physical row ${rowIndex + 1}`);
+      console.log(`[BONUS_AMOUNT_DIAG] Header array length: ${headers.length}`);
+      console.log(`[BONUS_AMOUNT_DIAG] indexes.amount=${indexes.amount}, indexes.done=${indexes.done}, indexes.resolution=${indexes.resolution}`);
+      console.log(`[BONUS_AMOUNT_DIAG] headers[9]="${headers[9] ?? 'undefined'}"`)
       return { headerRowIndex: rowIndex, headers, indexes };
     }
   }
@@ -284,12 +289,17 @@ function detectBonusHeaderRow(matrix: unknown[][]): DetectedBonusHeader {
 async function loadBonusSheet(): Promise<LoadedBonusSheet> {
   const spreadsheetId = requiredSpreadsheetId();
   const title = await resolveBonusSheetTitle(spreadsheetId);
+  console.log(`[BONUS_AMOUNT_DIAG] Requesting Google Sheets range: ${title}!${BONUS_RANGE} with valueRenderOption=FORMATTED_VALUE`);
   const payload = await googleRequest<{ values?: unknown[][] }>(
     `${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(
       `${title}!${BONUS_RANGE}`
     )}?valueRenderOption=FORMATTED_VALUE`
   );
   const matrix = payload.values ?? [];
+  console.log(`[BONUS_AMOUNT_DIAG] Google Sheets API returned ${matrix.length} rows`);
+  if (matrix.length > 0) {
+    console.log(`[BONUS_AMOUNT_DIAG] First row length: ${(matrix[0] as unknown[]).length}, last row length: ${(matrix[matrix.length - 1] as unknown[]).length}`);
+  }
   const { headerRowIndex, headers, indexes } = detectBonusHeaderRow(matrix);
   return {
     spreadsheetId,
@@ -319,6 +329,17 @@ function mapBonusRecord(row: unknown[], rowNumber: number, indexes: BonusColumnI
   const cell = (column: number): string => (column >= 0 ? bonusCellText(row[column]) : "");
   const dateRaw = cell(indexes.date);
   const resolutionRaw = cell(indexes.resolution);
+  
+  // DIAGNOSTIC: Log first data row to verify Amount reading
+  if (rowNumber === 7) {
+    console.log(`[BONUS_AMOUNT_DIAG] First data row (physical row ${rowNumber}):`);
+    console.log(`[BONUS_AMOUNT_DIAG]   row.length=${(row as unknown[]).length}`);
+    console.log(`[BONUS_AMOUNT_DIAG]   row[9]="${(row as unknown[])[9] ?? 'undefined'}"`);
+    console.log(`[BONUS_AMOUNT_DIAG]   row[indexes.amount] where indexes.amount=${indexes.amount}="${(row as unknown[])[indexes.amount] ?? 'undefined'}"`);
+    console.log(`[BONUS_AMOUNT_DIAG]   cell(indexes.amount)="${cell(indexes.amount)}"`);
+    console.log(`[BONUS_AMOUNT_DIAG]   cell(indexes.amount) || null="${cell(indexes.amount) || null}"`);
+  }
+  
   return {
     row_number: rowNumber,
     hr_code: cell(indexes.hrCode).toUpperCase(),
