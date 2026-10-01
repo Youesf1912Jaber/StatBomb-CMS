@@ -8,6 +8,7 @@ import { PreviewInputError } from "@/lib/sync/preview";
 import {
   appendBonusRow,
   updateBonusResolution,
+  formatBonusDateForSheet,
 } from "./sheet";
 import {
   isBonusReason,
@@ -41,6 +42,9 @@ function revalidateBonusPaths(assignmentId?: string) {
  * Collector Bonus submission. Identity (HR-Code, Collector) and match data are
  * resolved server-side from the authenticated profile and the RLS-scoped
  * assignment; nothing identity-related is trusted from the client.
+ *
+ * The Bonus `Date` field is set to the current server date at submission time,
+ * NOT the match date. This represents when the Collector submitted the Bonus.
  */
 export async function submitBonus(
   assignmentId: string,
@@ -71,6 +75,10 @@ export async function submitBonus(
   }
 
   try {
+    // Use the current server date at submission time, not the match date.
+    // The Bonus Date field represents when the Collector submitted the Bonus.
+    const submissionDate = formatBonusDateForSheet(new Date());
+
     await appendBonusRow({
       hr_code: profile.hr_code,
       collector: profile.full_name ?? profile.email,
@@ -79,7 +87,7 @@ export async function submitBonus(
       match_id: assignment.match.external_id,
       home_team: assignment.match.home_team,
       away_team: assignment.match.away_team,
-      date: assignment.match.match_date,
+      date: submissionDate,
     });
   } catch (error) {
     return failure(safeMessage(error, "Unable to submit the Bonus."));
