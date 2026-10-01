@@ -46,13 +46,6 @@ function isValidCivilDate(year: number, month: number, day: number): boolean {
   );
 }
 
-function resolveDayMonth(first: number, second: number): { day: number; month: number } | null {
-  if (first > 12 && second <= 12) return { day: first, month: second };
-  if (second > 12 && first <= 12) return { day: second, month: first };
-  if (first <= 12 && second <= 12) return { day: first, month: second };
-  return null;
-}
-
 function parseTimeParts(value: string): { hour: number; minute: number; second: number } | null {
   const match = value.trim().match(/^(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?(?:\s*([AaPp][Mm]))?$/);
   if (!match) return null;
@@ -134,9 +127,14 @@ function parseDistributionDateTime(value: string | null): ParsedCivilDateTime | 
     return { year: first, month: second, day: third, ...time };
   }
   if (thirdToken.length === 4) {
-    const resolved = resolveDayMonth(first, second);
-    if (!resolved) return null;
-    return { year: third, month: resolved.month, day: resolved.day, ...time };
+    // For Distribution SLA with 4-digit year at end, explicitly interpret as MM/DD/YYYY
+    // first token = MONTH, second token = DAY
+    const month = first;
+    const day = second;
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+      return null;
+    }
+    return { year: third, month, day, ...time };
   }
   return null;
 }
