@@ -213,11 +213,47 @@ async function resolveBonusSheetTitle(spreadsheetId: string): Promise<string> {
  * @returns The 0-based column index if found, or -1 if not found
  */
 function findColumnIndex(headers: string[], ...aliases: string[]): number {
+  const isAmountOrResolution =
+    (aliases.includes("amount") || aliases.includes("bonus amount")) ||
+    (aliases.includes("resolution") || aliases.includes("resolution status") || aliases.includes("review resolution"));
+
+  if (isAmountOrResolution) {
+    console.log(`[BONUS_RESOLVER_DIAG] ===== ENTRY =====`);
+    console.log(`[BONUS_RESOLVER_DIAG] headers.length=${headers.length}`);
+    console.log(`[BONUS_RESOLVER_DIAG] aliases=${JSON.stringify(aliases)}`);
+    if (headers[9] !== undefined) {
+      console.log(`[BONUS_RESOLVER_DIAG] headers[9]=${JSON.stringify(headers[9])}`);
+      console.log(`[BONUS_RESOLVER_DIAG] headers[9].length=${(headers[9] as unknown as string).length}`);
+    }
+  }
+
   for (let i = 0; i < headers.length; i += 1) {
     const header = headers[i];
+    if (isAmountOrResolution && i === 9) {
+      console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] header=${JSON.stringify(header)}`);
+      console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] aliases[0]=${JSON.stringify(aliases[0])}`);
+      if (header && aliases[0]) {
+        console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] header === aliases[0]: ${header === aliases[0]}`);
+        console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] header.length=${(header as unknown as string).length}, aliases[0].length=${(aliases[0] as unknown as string).length}`);
+      }
+      console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] header truthy=${!!header}`);
+      if (header) {
+        console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] aliases.includes(header)=${aliases.includes(header)}`);
+      }
+    }
+
     if (header && aliases.includes(header)) {
+      if (isAmountOrResolution) {
+        console.log(`[BONUS_RESOLVER_DIAG] MATCH FOUND at i=${i}, header=${JSON.stringify(header)}`);
+        console.log(`[BONUS_RESOLVER_DIAG] ===== RETURN ${i} =====`);
+      }
       return i;
     }
+  }
+
+  if (isAmountOrResolution) {
+    console.log(`[BONUS_RESOLVER_DIAG] NO MATCH FOUND after scanning all ${headers.length} headers`);
+    console.log(`[BONUS_RESOLVER_DIAG] ===== RETURN -1 =====`);
   }
   return -1;
 }
