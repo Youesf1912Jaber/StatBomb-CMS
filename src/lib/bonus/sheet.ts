@@ -107,9 +107,36 @@ function columnLetter(index: number): string {
   return label;
 }
 
+/**
+ * Formats a JavaScript Date object as YYYY-MM-DD for writing to the Bonus sheet.
+ * Uses the date in the server's local timezone (not UTC).
+ */
+export function formatBonusDateForSheet(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Parses a Bonus date value from the Google Sheet into ISO 8601 YYYY-MM-DD format.
+ *
+ * Handles multiple date formats:
+ * - ISO 8601: YYYY-MM-DD (e.g., 2026-09-15)
+ * - DMY format with /, -, or . separator: D/M/YYYY, DD/MM/YYYY (e.g., 15/9/2026, 9/15/2026)
+ * - Fallback to JavaScript Date.parse() for other locales
+ *
+ * Returns null for invalid or empty dates.
+ *
+ * **IMPORTANT:** When parsing DMY format, the first number is treated as the
+ * DAY and the second as the MONTH. This follows the DMY (day/month/year)
+ * convention. The parser validates that month is 1-12 and day is 1-31.
+ */
 export function parseBonusDate(raw: string): string | null {
   const text = bonusCellText(raw);
   if (!text) return null;
+
+  // Try ISO 8601 format first: YYYY-MM-DD
   const ymd = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (ymd) {
     const year = ymd[1];
@@ -119,6 +146,9 @@ export function parseBonusDate(raw: string): string | null {
       return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
     }
   }
+
+  // Try DMY format: D/M/YYYY or DD/MM/YYYY with /, -, or . separators
+  // The regex captures: day, month, year (in that order)
   const dmy = text.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/);
   if (dmy) {
     const day = Number(dmy[1]);
@@ -128,6 +158,8 @@ export function parseBonusDate(raw: string): string | null {
       return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
   }
+
+  // Fallback to JavaScript Date.parse() for other formats
   const parsed = Date.parse(text);
   if (Number.isNaN(parsed)) return null;
   return new Date(parsed).toISOString().slice(0, 10);
@@ -172,26 +204,57 @@ async function resolveBonusSheetTitle(spreadsheetId: string): Promise<string> {
 }
 
 /**
+ * Finds the first column index matching any of the given aliases.
+ * This is used to match header names in the Bonus sheet headers array.
+ * All comparisons are against normalized (lowercase, whitespace-trimmed) headers.
+ *
+ * @param headers - Array of normalized header strings
+ * @param aliases - One or more header name aliases to match against
+ * @returns The 0-based column index if found, or -1 if not found
+ */
+function findColumnIndex(headers: string[], ...aliases: string[]): number {
+  for (let i = 0; i < headers.length; i += 1) {
+    const header = headers[i];
+    if (header && aliases.includes(header)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
  * Attempts to resolve Bonus column indexes from a candidate header row.
  * Returns `null` (instead of throwing) when the required headers are not
  * present, so callers can keep scanning subsequent rows for the real header.
  */
 function tryResolveIndexes(headers: string[]): BonusColumnIndexes | null {
-  const indexFor = (...aliases: string[]) =>
-    headers.findIndex((header) => aliases.includes(header));
   const indexes: BonusColumnIndexes = {
-    hrCode: indexFor("hr code", "hrcode", "hr-code", "code", "collector code", "collector hr code"),
-    collector: indexFor("collector", "collector name", "name"),
-    reason: indexFor("reason"),
-    task: indexFor("task"),
-    matchId: indexFor("match id", "matchid", "id"),
-    homeTeam: indexFor("home team", "hometeam", "home"),
-    awayTeam: indexFor("away team", "awayteam", "away"),
-    date: indexFor("date", "bonus date"),
-    amount: indexFor("amount", "bonus amount"),
-    done: indexFor("done"),
-    resolution: indexFor("resolution", "resolution status", "review resolution"),
+    hrCode: findColumnIndex(headers, "hr code", "hrcode", "hr-code", "code", "collector code", "collector hr code"),
+    collector: findColumnIndex(headers, "collector", "collector name", "name"),
+    reason: findColumnIndex(headers, "reason"),
+    task: findColumnIndex(headers, "task"),
+    matchId: findColumnIndex(headers, "match id", "matchid", "id"),
+    homeTeam: findColumnIndex(headers, "home team", "hometeam", "home"),
+    awayTeam: findColumnIndex(headers, "away team", "awayteam", "away"),
+    date: findColumnIndex(headers, "date", "bonus date"),
+    // "amont" is a real header typo present in the production Bonus sheet
+    // (physical column J, row 6). Supported alongside the correctly spelled
+    // "amount" / "bonus amount" headers so either spelling resolves.
+    amount: findColumnIndex(headers, "amount", "bonus amount", "amont"),
+    done: findColumnIndex(headers, "done"),
+    resolution: findColumnIndex(headers, "resolution", "resolution status", "review resolution"),
   };
+
+  // DIAGNOSTIC: Investigate why Resolution writes may not be landing on the
+  // expected physical column O. If indexes.resolution is -1 even though a
+  // Resolution-like header exists at or near physical column O (0-based
+  // index 14), ensureResolutionColumn() will incorrectly create a brand new
+  // column instead of reusing the existing one.
+  console.log(`[BONUS_RESOLUTION_DIAG] headers.length=${headers.length}`);
+  console.log(`[BONUS_RESOLUTION_DIAG] indexes.resolution=${indexes.resolution}`);
+  console.log(`[BONUS_RESOLUTION_DIAG] headers[14] (physical column O)=${JSON.stringify(headers[14] ?? 'undefined')}`);
+  console.log(`[BONUS_RESOLUTION_DIAG] headers around O: [12]=${JSON.stringify(headers[12] ?? 'undefined')} [13]=${JSON.stringify(headers[13] ?? 'undefined')} [14]=${JSON.stringify(headers[14] ?? 'undefined')} [15]=${JSON.stringify(headers[15] ?? 'undefined')} [16]=${JSON.stringify(headers[16] ?? 'undefined')}`);
+
   if (
     indexes.hrCode < 0 ||
     indexes.reason < 0 ||
@@ -339,10 +402,17 @@ async function batchUpdateBonusCells(
   data: { range: string; majorDimension: "ROWS"; values: string[][] }[]
 ): Promise<void> {
   if (data.length === 0) return;
-  await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`, {
-    method: "POST",
-    body: JSON.stringify({ valueInputOption: "USER_ENTERED", data }),
-  });
+  console.log(`[BONUS_RESOLUTION_DIAG] batchUpdateBonusCells writing data=${JSON.stringify(data)}`);
+  try {
+    const response = await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`, {
+      method: "POST",
+      body: JSON.stringify({ valueInputOption: "USER_ENTERED", data }),
+    });
+    console.log(`[BONUS_RESOLUTION_DIAG] batchUpdateBonusCells response=${JSON.stringify(response)}`);
+  } catch (error) {
+    console.log(`[BONUS_RESOLUTION_DIAG] batchUpdateBonusCells ERROR=${error instanceof Error ? error.message : String(error)}`);
+    throw error;
+  }
 }
 
 function cellWrite(title: string, row: number, column: number, value: string) {
@@ -400,6 +470,7 @@ function matchesBonusIdentity(row: unknown[], indexes: BonusColumnIndexes, expec
 
 async function ensureResolutionColumn(loaded: LoadedBonusSheet): Promise<number> {
   const { spreadsheetId, title, matrix, indexes, headerRowNumber } = loaded;
+  console.log(`[BONUS_RESOLUTION_DIAG] ensureResolutionColumn: indexes.resolution=${indexes.resolution}`);
   if (indexes.resolution >= 0) return indexes.resolution;
 
   let width = 0;
@@ -407,6 +478,7 @@ async function ensureResolutionColumn(loaded: LoadedBonusSheet): Promise<number>
     if (row.length > width) width = row.length;
   }
   const column = Math.max(width, loaded.headers.length);
+  console.log(`[BONUS_RESOLUTION_DIAG] ensureResolutionColumn: NO existing Resolution column found; creating NEW column at index=${column} (letter=${columnLetter(column)}) on headerRowNumber=${headerRowNumber}`);
   await batchUpdateBonusCells(spreadsheetId, [cellWrite(title, headerRowNumber, column, "Resolution")]);
   return column;
 }
@@ -419,11 +491,14 @@ export async function updateBonusResolution(input: {
   const { spreadsheetId, title, matrix, indexes } = loaded;
   const resolutionColumn = await ensureResolutionColumn(loaded);
 
+  console.log(`[BONUS_RESOLUTION_DIAG] updateBonusResolution: physicalRowNumber=${input.expected.row_number}, resolutionColumn=${resolutionColumn} (letter=${columnLetter(resolutionColumn)}), targetA1=${title}!${columnLetter(resolutionColumn)}${input.expected.row_number}, valueToWrite=${JSON.stringify(input.resolution ?? "")}`);
+
   // `row_number` is the 1-based physical spreadsheet row, so index into the
   // matrix (0-based) by subtracting 1 — this is independent of where the
   // header row was detected.
   const row = matrix[input.expected.row_number - 1];
   if (!row || !matchesBonusIdentity(row, indexes, input.expected)) {
+    console.log(`[BONUS_RESOLUTION_DIAG] updateBonusResolution: identity match FAILED or row missing. row=${JSON.stringify(row ?? null)}`);
     throw new PreviewInputError(
       "This Bonus row changed in Google Sheets. Refresh the page and try again."
     );

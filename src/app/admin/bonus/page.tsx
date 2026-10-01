@@ -19,6 +19,42 @@ function displayDate(value: string | null, raw: string): string {
   return display(raw);
 }
 
+/**
+ * Applies the date range filter to Bonus records.
+ *
+ * The filter compares actual Bonus Date field values (which are in
+ * ISO 8601 YYYY-MM-DD format after parsing from Google Sheets).
+ *
+ * - Records with no date (record.date is null) do NOT pass the filter
+ *   when either `from` or `to` is specified.
+ * - Records with valid dates are compared as strings (ISO 8601 is
+ *   lexicographically sortable).
+ * - Both `from` and `to` dates are INCLUSIVE.
+ */
+function filterBonusByDateRange(
+  records: typeof import("@/lib/bonus/sheet").getAllBonusRecords extends () => Promise<infer T> ? T : never,
+  from: string,
+  to: string
+) {
+  if (!from && !to) return records;
+
+  return records.filter((record) => {
+    // If neither from nor to is set, include all records.
+    if (!from && !to) return true;
+
+    // If either filter is set but the record has no date, exclude it.
+    if (!record.date) return false;
+
+    // Check lower bound (inclusive).
+    if (from && record.date < from) return false;
+
+    // Check upper bound (inclusive).
+    if (to && record.date > to) return false;
+
+    return true;
+  });
+}
+
 export default async function AdminBonusPage({
   searchParams,
 }: {
@@ -33,13 +69,7 @@ export default async function AdminBonusPage({
   const to = typeof searchParams.to === "string" && ISO_DATE.test(searchParams.to) ? searchParams.to : "";
 
   const allRecords = await getAllBonusRecords();
-  const records = allRecords.filter((record) => {
-    if (!from && !to) return true;
-    if (!record.date) return false;
-    if (from && record.date < from) return false;
-    if (to && record.date > to) return false;
-    return true;
-  });
+  const records = filterBonusByDateRange(allRecords, from, to);
 
   return (
     <div className="space-y-6">
