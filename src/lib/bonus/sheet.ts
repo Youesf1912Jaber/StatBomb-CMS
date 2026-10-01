@@ -256,6 +256,15 @@ function detectBonusHeaderRow(matrix: unknown[][]): DetectedBonusHeader {
     const headers = candidateRow.map(normalizeBonusHeader);
     const indexes = tryResolveIndexes(headers);
     if (indexes) {
+      // DIAGNOSTIC: Log header detection
+      console.log(`[BONUS_DIAG] Detected header row at matrix index ${rowIndex} (physical row ${rowIndex + 1})`);
+      console.log(`[BONUS_DIAG] Complete normalized headers array:`, JSON.stringify(headers));
+      console.log(`[BONUS_DIAG] indexes.amount = ${indexes.amount}`);
+      console.log(`[BONUS_DIAG] indexes.done = ${indexes.done}`);
+      console.log(`[BONUS_DIAG] indexes.resolution = ${indexes.resolution}`);
+      console.log(`[BONUS_DIAG] headers.length = ${headers.length}`);
+      console.log(`[BONUS_DIAG] headers[9] (physical column J) = "${headers[9] ?? 'undefined'}"`);
+      
       return { headerRowIndex: rowIndex, headers, indexes };
     }
   }
@@ -302,6 +311,19 @@ function mapBonusRecord(row: unknown[], rowNumber: number, indexes: BonusColumnI
   const cell = (column: number): string => (column >= 0 ? bonusCellText(row[column]) : "");
   const dateRaw = cell(indexes.date);
   const resolutionRaw = cell(indexes.resolution);
+  
+  // DIAGNOSTIC: Log raw row data for first few records
+  if (rowNumber <= 8) {
+    console.log(`[BONUS_DIAG] Mapping row ${rowNumber}:`);
+    console.log(`[BONUS_DIAG]   raw row = ${JSON.stringify(row)}`);
+    console.log(`[BONUS_DIAG]   row[9] (physical column J) = "${row[9] ?? 'undefined'}"`);
+    console.log(`[BONUS_DIAG]   row[indexes.amount] where indexes.amount=${indexes.amount} = "${row[indexes.amount] ?? 'undefined'}"`);
+    console.log(`[BONUS_DIAG]   cell(indexes.amount) = "${cell(indexes.amount)}"`);
+    console.log(`[BONUS_DIAG]   cell(indexes.amount) || null = ${JSON.stringify(cell(indexes.amount) || null)}`);
+  }
+  
+  const amount = cell(indexes.amount) || null;
+  
   return {
     row_number: rowNumber,
     hr_code: cell(indexes.hrCode).toUpperCase(),
@@ -313,7 +335,7 @@ function mapBonusRecord(row: unknown[], rowNumber: number, indexes: BonusColumnI
     away_team: cell(indexes.awayTeam),
     date_raw: dateRaw,
     date: parseBonusDate(dateRaw),
-    amount: cell(indexes.amount) || null,
+    amount,
     done: cell(indexes.done) || null,
     resolution_raw: resolutionRaw,
     resolution: normalizeBonusResolution(resolutionRaw),
