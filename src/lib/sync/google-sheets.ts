@@ -83,7 +83,7 @@ async function serviceAccountToken(): Promise<string> {
 
 type SpreadsheetSheet = { properties?: { sheetId?: number; title?: string } };
 
-async function googleRequest<T>(url: string, init: RequestInit = {}): Promise<T> {
+export async function googleRequest<T>(url: string, init: RequestInit = {}): Promise<T> {
   const token = await serviceAccountToken();
   const response = await fetch(url, {
     ...init,

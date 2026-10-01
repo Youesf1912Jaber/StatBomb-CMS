@@ -5,6 +5,7 @@ import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } fro
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AssignmentWorkControls } from "@/components/AssignmentWorkControls";
 import { AssignmentTaskTracking } from "@/components/AssignmentTaskTracking";
+import { BonusSubmissionForm } from "@/components/BonusSubmissionForm";
 
 function formatTimestamp(value: string | null): string {
   if (!value) return "—";
@@ -119,6 +120,8 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
         startedAt={assignment.started_at}
         timers={taskTimers}
       />
+
+      <BonusSubmissionForm assignmentId={assignment.id} />
 
       <div>
         <h2 className="font-display text-lg text-chalk-50">Teammates</h2>
