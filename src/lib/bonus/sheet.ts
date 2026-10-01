@@ -213,47 +213,11 @@ async function resolveBonusSheetTitle(spreadsheetId: string): Promise<string> {
  * @returns The 0-based column index if found, or -1 if not found
  */
 function findColumnIndex(headers: string[], ...aliases: string[]): number {
-  const isAmountOrResolution =
-    (aliases.includes("amount") || aliases.includes("bonus amount")) ||
-    (aliases.includes("resolution") || aliases.includes("resolution status") || aliases.includes("review resolution"));
-
-  if (isAmountOrResolution) {
-    console.log(`[BONUS_RESOLVER_DIAG] ===== ENTRY =====`);
-    console.log(`[BONUS_RESOLVER_DIAG] headers.length=${headers.length}`);
-    console.log(`[BONUS_RESOLVER_DIAG] aliases=${JSON.stringify(aliases)}`);
-    if (headers[9] !== undefined) {
-      console.log(`[BONUS_RESOLVER_DIAG] headers[9]=${JSON.stringify(headers[9])}`);
-      console.log(`[BONUS_RESOLVER_DIAG] headers[9].length=${(headers[9] as unknown as string).length}`);
-    }
-  }
-
   for (let i = 0; i < headers.length; i += 1) {
     const header = headers[i];
-    if (isAmountOrResolution && i === 9) {
-      console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] header=${JSON.stringify(header)}`);
-      console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] aliases[0]=${JSON.stringify(aliases[0])}`);
-      if (header && aliases[0]) {
-        console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] header === aliases[0]: ${header === aliases[0]}`);
-        console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] header.length=${(header as unknown as string).length}, aliases[0].length=${(aliases[0] as unknown as string).length}`);
-      }
-      console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] header truthy=${!!header}`);
-      if (header) {
-        console.log(`[BONUS_RESOLVER_DIAG] [i=${i}] aliases.includes(header)=${aliases.includes(header)}`);
-      }
-    }
-
     if (header && aliases.includes(header)) {
-      if (isAmountOrResolution) {
-        console.log(`[BONUS_RESOLVER_DIAG] MATCH FOUND at i=${i}, header=${JSON.stringify(header)}`);
-        console.log(`[BONUS_RESOLVER_DIAG] ===== RETURN ${i} =====`);
-      }
       return i;
     }
-  }
-
-  if (isAmountOrResolution) {
-    console.log(`[BONUS_RESOLVER_DIAG] NO MATCH FOUND after scanning all ${headers.length} headers`);
-    console.log(`[BONUS_RESOLVER_DIAG] ===== RETURN -1 =====`);
   }
   return -1;
 }
@@ -273,7 +237,10 @@ function tryResolveIndexes(headers: string[]): BonusColumnIndexes | null {
     homeTeam: findColumnIndex(headers, "home team", "hometeam", "home"),
     awayTeam: findColumnIndex(headers, "away team", "awayteam", "away"),
     date: findColumnIndex(headers, "date", "bonus date"),
-    amount: findColumnIndex(headers, "amount", "bonus amount"),
+    // "amont" is a real header typo present in the production Bonus sheet
+    // (physical column J, row 6). Supported alongside the correctly spelled
+    // "amount" / "bonus amount" headers so either spelling resolves.
+    amount: findColumnIndex(headers, "amount", "bonus amount", "amont"),
     done: findColumnIndex(headers, "done"),
     resolution: findColumnIndex(headers, "resolution", "resolution status", "review resolution"),
   };
@@ -309,11 +276,6 @@ function detectBonusHeaderRow(matrix: unknown[][]): DetectedBonusHeader {
     const headers = candidateRow.map(normalizeBonusHeader);
     const indexes = tryResolveIndexes(headers);
     if (indexes) {
-      // DIAGNOSTIC: Log header detection for verification
-      console.log(`[BONUS_AMOUNT_DIAG] Detected header row at matrix index ${rowIndex}, physical row ${rowIndex + 1}`);
-      console.log(`[BONUS_AMOUNT_DIAG] Header array length: ${headers.length}`);
-      console.log(`[BONUS_AMOUNT_DIAG] indexes.amount=${indexes.amount}, indexes.done=${indexes.done}, indexes.resolution=${indexes.resolution}`);
-      console.log(`[BONUS_AMOUNT_DIAG] headers[9]="${headers[9] ?? 'undefined'}"`)
       return { headerRowIndex: rowIndex, headers, indexes };
     }
   }
@@ -325,17 +287,12 @@ function detectBonusHeaderRow(matrix: unknown[][]): DetectedBonusHeader {
 async function loadBonusSheet(): Promise<LoadedBonusSheet> {
   const spreadsheetId = requiredSpreadsheetId();
   const title = await resolveBonusSheetTitle(spreadsheetId);
-  console.log(`[BONUS_AMOUNT_DIAG] Requesting Google Sheets range: ${title}!${BONUS_RANGE} with valueRenderOption=FORMATTED_VALUE`);
   const payload = await googleRequest<{ values?: unknown[][] }>(
     `${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(
       `${title}!${BONUS_RANGE}`
     )}?valueRenderOption=FORMATTED_VALUE`
   );
   const matrix = payload.values ?? [];
-  console.log(`[BONUS_AMOUNT_DIAG] Google Sheets API returned ${matrix.length} rows`);
-  if (matrix.length > 0) {
-    console.log(`[BONUS_AMOUNT_DIAG] First row length: ${(matrix[0] as unknown[]).length}, last row length: ${(matrix[matrix.length - 1] as unknown[]).length}`);
-  }
   const { headerRowIndex, headers, indexes } = detectBonusHeaderRow(matrix);
   return {
     spreadsheetId,
@@ -365,17 +322,6 @@ function mapBonusRecord(row: unknown[], rowNumber: number, indexes: BonusColumnI
   const cell = (column: number): string => (column >= 0 ? bonusCellText(row[column]) : "");
   const dateRaw = cell(indexes.date);
   const resolutionRaw = cell(indexes.resolution);
-  
-  // DIAGNOSTIC: Log first data row to verify Amount reading
-  if (rowNumber === 7) {
-    console.log(`[BONUS_AMOUNT_DIAG] First data row (physical row ${rowNumber}):`);
-    console.log(`[BONUS_AMOUNT_DIAG]   row.length=${(row as unknown[]).length}`);
-    console.log(`[BONUS_AMOUNT_DIAG]   row[9]="${(row as unknown[])[9] ?? 'undefined'}"`);
-    console.log(`[BONUS_AMOUNT_DIAG]   row[indexes.amount] where indexes.amount=${indexes.amount}="${(row as unknown[])[indexes.amount] ?? 'undefined'}"`);
-    console.log(`[BONUS_AMOUNT_DIAG]   cell(indexes.amount)="${cell(indexes.amount)}"`);
-    console.log(`[BONUS_AMOUNT_DIAG]   cell(indexes.amount) || null="${cell(indexes.amount) || null}"`);
-  }
-  
   return {
     row_number: rowNumber,
     hr_code: cell(indexes.hrCode).toUpperCase(),
