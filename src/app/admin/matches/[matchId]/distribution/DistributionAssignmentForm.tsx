@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DISTRIBUTION_TASK_OPTIONS } from "@/lib/distribution-options";
 import type { TeamSheetCollector } from "@/lib/sync/google-sheets";
+import { TaskInputModal } from "./TaskInputModal";
 
 type DistributionAssignmentFormProps = {
   matchId: string;
@@ -19,6 +20,7 @@ type PendingAssignment = {
 };
 
 const HALF_OPTIONS = ["Half 1", "Half 2", "Half 3", "Half 4", "Full Match"];
+const ADD_NEW_TASK_SENTINEL = "__ADD_NEW_TASK__";
 
 export function DistributionAssignmentForm({ matchId, collectors }: DistributionAssignmentFormProps) {
   const router = useRouter();
@@ -31,6 +33,14 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showTaskInput, setShowTaskInput] = useState(false);
+
+  // Collect all available tasks: predefined + custom from pending
+  const customTasks = pending
+    .map((p) => p.task)
+    .filter((t) => !DISTRIBUTION_TASK_OPTIONS.includes(t as any));
+  const uniqueCustomTasks = [...new Set(customTasks)];
+  const availableTasks = [...DISTRIBUTION_TASK_OPTIONS, ...uniqueCustomTasks];
 
   function resetEntry() {
     setCollectorHrCode("");
@@ -65,6 +75,20 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
     setError(null);
     setSuccess(null);
     setOpen(false);
+  }
+
+  function handleAddTask(newTask: string) {
+    setTask(newTask);
+    setShowTaskInput(false);
+  }
+
+  function handleTaskSelectChange(value: string) {
+    if (value === ADD_NEW_TASK_SENTINEL) {
+      setShowTaskInput(true);
+      setTask("");
+    } else {
+      setTask(value);
+    }
   }
 
   async function confirm() {
@@ -108,50 +132,64 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
   }
 
   return (
-    <section className="space-y-4 rounded-card border border-pitch-700 bg-pitch-900 p-5">
-      <div>
-        <p className="font-display text-lg text-chalk-50">Add Assignments for Match {matchId}</p>
-        <p className="mt-1 text-sm text-chalk-200">Assignments are written only after Confirm.</p>
-      </div>
-      {error && <p role="alert" className="rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">{error}</p>}
-      <div className="grid gap-4 sm:grid-cols-4">
-        <label className="text-sm text-chalk-200">Collector
-          <select required value={collectorHrCode} onChange={(event) => setCollectorHrCode(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50">
-            <option value="">Select a collector</option>
-            {collectors.map((collector) => <option key={collector.hr_code} value={collector.hr_code}>{collector.full_name} ({collector.hr_code})</option>)}
-          </select>
-        </label>
-        <label className="text-sm text-chalk-200">Task
-          <select required value={task} onChange={(event) => setTask(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50">
-            <option value="">Select a task</option>
-            {DISTRIBUTION_TASK_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
-        </label>
-        <label className="text-sm text-chalk-200">Half
-          <select required value={half} onChange={(event) => setHalf(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50">
-            {HALF_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
-        </label>
-        <label className="text-sm text-chalk-200">Shift Date
-          <input type="date" value={shiftDate} onChange={(event) => setShiftDate(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50" />
-        </label>
-      </div>
-      <button type="button" onClick={addCollector} disabled={submitting} className="rounded-[8px] border border-pitch-700 px-3 py-2 text-sm text-chalk-50 hover:border-clock-amber">Add Collector</button>
-      <div>
-        <p className="mb-2 text-sm text-chalk-200">Pending Assignments ({pending.length})</p>
-        {pending.length > 0 && <div className="overflow-x-auto rounded-[8px] border border-pitch-700">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-pitch-950 text-xs uppercase text-pitch-500"><tr><th className="px-3 py-2">Collector</th><th className="px-3 py-2">Task</th><th className="px-3 py-2">Half</th><th className="px-3 py-2">Shift Date</th><th className="px-3 py-2">Action</th></tr></thead>
-            <tbody className="divide-y divide-pitch-800">
-              {pending.map((item, index) => <tr key={`${item.collectorHrCode}-${item.task}-${item.half}-${index}`}><td className="px-3 py-2">{item.collectorName} ({item.collectorHrCode})</td><td className="px-3 py-2">{item.task}</td><td className="px-3 py-2">{item.half}</td><td className="px-3 py-2">{item.shiftDate ?? "—"}</td><td className="px-3 py-2"><button type="button" onClick={() => setPending((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="text-xs text-red-200 underline">Remove</button></td></tr>)}
-            </tbody>
-          </table>
-        </div>}
-      </div>
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={cancel} disabled={submitting} className="rounded-[8px] border border-pitch-700 px-4 py-2 text-sm text-chalk-50">Cancel</button>
-        <button type="button" onClick={confirm} disabled={submitting} className="rounded-[8px] bg-clock-amber px-4 py-2 text-sm font-medium text-pitch-950 disabled:opacity-50">{submitting ? "Confirming…" : "Confirm"}</button>
-      </div>
-    </section>
+    <>
+      <section className="space-y-4 rounded-card border border-pitch-700 bg-pitch-900 p-5">
+        <div>
+          <p className="font-display text-lg text-chalk-50">Add Assignments for Match {matchId}</p>
+          <p className="mt-1 text-sm text-chalk-200">Assignments are written only after Confirm.</p>
+        </div>
+        {error && <p role="alert" className="rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">{error}</p>}
+        <div className="grid gap-4 sm:grid-cols-4">
+          <label className="text-sm text-chalk-200">Collector
+            <select required value={collectorHrCode} onChange={(event) => setCollectorHrCode(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50">
+              <option value="">Select a collector</option>
+              {collectors.map((collector) => <option key={collector.hr_code} value={collector.hr_code}>{collector.full_name} ({collector.hr_code})</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-chalk-200">Task
+            <select required value={task} onChange={(event) => handleTaskSelectChange(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50">
+              <option value="">Select a task</option>
+              {DISTRIBUTION_TASK_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              {uniqueCustomTasks.map((option) => <option key={option} value={option}>{option}</option>)}
+              <option value={ADD_NEW_TASK_SENTINEL}>+ Add New Task</option>
+            </select>
+          </label>
+          <label className="text-sm text-chalk-200">Half
+            <select required value={half} onChange={(event) => setHalf(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50">
+              {HALF_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </label>
+          <label className="text-sm text-chalk-200">Shift Date
+            <input type="date" value={shiftDate} onChange={(event) => setShiftDate(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50" />
+          </label>
+        </div>
+        <button type="button" onClick={addCollector} disabled={submitting} className="rounded-[8px] border border-pitch-700 px-3 py-2 text-sm text-chalk-50 hover:border-clock-amber">Add Collector</button>
+        <div>
+          <p className="mb-2 text-sm text-chalk-200">Pending Assignments ({pending.length})</p>
+          {pending.length > 0 && <div className="overflow-x-auto rounded-[8px] border border-pitch-700">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-pitch-950 text-xs uppercase text-pitch-500"><tr><th className="px-3 py-2">Collector</th><th className="px-3 py-2">Task</th><th className="px-3 py-2">Half</th><th className="px-3 py-2">Shift Date</th><th className="px-3 py-2">Action</th></tr></thead>
+              <tbody className="divide-y divide-pitch-800">
+                {pending.map((item, index) => <tr key={`${item.collectorHrCode}-${item.task}-${item.half}-${index}`}><td className="px-3 py-2">{item.collectorName} ({item.collectorHrCode})</td><td className="px-3 py-2">{item.task}</td><td className="px-3 py-2">{item.half}</td><td className="px-3 py-2">{item.shiftDate ?? "—"}</td><td className="px-3 py-2"><button type="button" onClick={() => setPending((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="text-xs text-red-200 underline">Remove</button></td></tr>)}
+              </tbody>
+            </table>
+          </div>}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={cancel} disabled={submitting} className="rounded-[8px] border border-pitch-700 px-4 py-2 text-sm text-chalk-50">Cancel</button>
+          <button type="button" onClick={confirm} disabled={submitting} className="rounded-[8px] bg-clock-amber px-4 py-2 text-sm font-medium text-pitch-950 disabled:opacity-50">{submitting ? "Confirming…" : "Confirm"}</button>
+        </div>
+      </section>
+      {showTaskInput && (
+        <TaskInputModal
+          existingTasks={availableTasks}
+          onAdd={handleAddTask}
+          onCancel={() => {
+            setShowTaskInput(false);
+            setTask("");
+          }}
+        />
+      )}
+    </>
   );
 }
