@@ -7,6 +7,12 @@ import type { BonusTask, BonusReason, BonusResolution } from "./options";
 const GOOGLE_SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 const BONUS_RANGE = "A:AZ";
 
+// How many of the leading rows we are willing to scan looking for the
+// header row. The real Bonus sheet currently has headers on row 6 (preceded
+// by blank/content rows), but this is intentionally generous so the sheet
+// can be reorganized later without breaking the app again.
+const MAX_HEADER_SCAN_ROWS = 50;
+
 export type BonusRecord = {
   row_number: number;
   hr_code: string;
@@ -63,6 +69,10 @@ type BonusColumnIndexes = {
 type LoadedBonusSheet = {
   spreadsheetId: string;
   title: string;
+  /** 0-based index within `matrix` of the detected header row. */
+  headerRowIndex: number;
+  /** 1-based physical spreadsheet row number of the detected header row. */
+  headerRowNumber: number;
   matrix: unknown[][];
   headers: string[];
   indexes: BonusColumnIndexes;
@@ -161,7 +171,12 @@ async function resolveBonusSheetTitle(spreadsheetId: string): Promise<string> {
   return sheet.properties.title;
 }
 
-function resolveIndexes(headers: string[]): BonusColumnIndexes {
+/**
+ * Attempts to resolve Bonus column indexes from a candidate header row.
+ * Returns `null` (instead of throwing) when the required headers are not
+ * present, so callers can keep scanning subsequent rows for the real header.
+ */
+function tryResolveIndexes(headers: string[]): BonusColumnIndexes | null {
   const indexFor = (...aliases: string[]) =>
     headers.findIndex((header) => aliases.includes(header));
   const indexes: BonusColumnIndexes = {
@@ -184,11 +199,37 @@ function resolveIndexes(headers: string[]): BonusColumnIndexes {
     indexes.matchId < 0 ||
     indexes.date < 0
   ) {
-    throw new PreviewInputError(
-      "The Bonus sheet is missing required HR-Code, Reason, Task, Match ID, or Date headers."
-    );
+    return null;
   }
   return indexes;
+}
+
+type DetectedBonusHeader = {
+  headerRowIndex: number;
+  headers: string[];
+  indexes: BonusColumnIndexes;
+};
+
+/**
+ * Scans the leading rows of the Bonus sheet matrix to find the actual header
+ * row. The real Bonus sheet does not necessarily have its headers on row 1 —
+ * rows above the header may contain unrelated content or be blank. This scans
+ * rows (bounded by MAX_HEADER_SCAN_ROWS) until one contains all of the
+ * required Bonus headers (HR-Code, Reason, Task, Match ID, Date).
+ */
+function detectBonusHeaderRow(matrix: unknown[][]): DetectedBonusHeader {
+  const scanLimit = Math.min(matrix.length, MAX_HEADER_SCAN_ROWS);
+  for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
+    const candidateRow = matrix[rowIndex] ?? [];
+    const headers = candidateRow.map(normalizeBonusHeader);
+    const indexes = tryResolveIndexes(headers);
+    if (indexes) {
+      return { headerRowIndex: rowIndex, headers, indexes };
+    }
+  }
+  throw new PreviewInputError(
+    "The Bonus sheet is missing required HR-Code, Reason, Task, Match ID, or Date headers."
+  );
 }
 
 async function loadBonusSheet(): Promise<LoadedBonusSheet> {
@@ -200,8 +241,16 @@ async function loadBonusSheet(): Promise<LoadedBonusSheet> {
     )}?valueRenderOption=FORMATTED_VALUE`
   );
   const matrix = payload.values ?? [];
-  const headers = (matrix[0] ?? []).map(normalizeBonusHeader);
-  return { spreadsheetId, title, matrix, headers, indexes: resolveIndexes(headers) };
+  const { headerRowIndex, headers, indexes } = detectBonusHeaderRow(matrix);
+  return {
+    spreadsheetId,
+    title,
+    headerRowIndex,
+    headerRowNumber: headerRowIndex + 1,
+    matrix,
+    headers,
+    indexes,
+  };
 }
 
 function rowHasBonusContent(row: unknown[], indexes: BonusColumnIndexes): boolean {
@@ -251,10 +300,12 @@ function compareBonusDateDesc(a: BonusRecord, b: BonusRecord): number {
 }
 
 export async function getAllBonusRecords(): Promise<BonusRecord[]> {
-  const { matrix, indexes } = await loadBonusSheet();
+  const { matrix, indexes, headerRowIndex } = await loadBonusSheet();
   return matrix
-    .slice(1)
-    .map((row, index) => mapBonusRecord(row, index + 2, indexes))
+    .slice(headerRowIndex + 1)
+    // Physical spreadsheet rows are 1-based; the first data row sits
+    // immediately after the detected header row.
+    .map((row, index) => mapBonusRecord(row, headerRowIndex + 2 + index, indexes))
     .filter((record): record is BonusRecord => record !== null)
     .sort(compareBonusDateDesc);
 }
@@ -268,9 +319,13 @@ export async function getBonusRecordsForHrCode(
   return records.filter((record) => record.hr_code === normalized);
 }
 
-function findFirstEmptyRow(matrix: unknown[][], indexes: BonusColumnIndexes): number {
-  let lastContentRow = 1;
-  for (let index = 1; index < matrix.length; index += 1) {
+function findFirstEmptyRow(
+  matrix: unknown[][],
+  indexes: BonusColumnIndexes,
+  headerRowIndex: number
+): number {
+  let lastContentRow = headerRowIndex + 1;
+  for (let index = headerRowIndex + 1; index < matrix.length; index += 1) {
     const row = matrix[index] ?? [];
     if (rowHasBonusContent(row, indexes)) {
       lastContentRow = index + 1;
@@ -296,8 +351,8 @@ function cellWrite(title: string, row: number, column: number, value: string) {
 }
 
 export async function appendBonusRow(fields: BonusSubmissionFields): Promise<void> {
-  const { spreadsheetId, title, matrix, indexes } = await loadBonusSheet();
-  const targetRow = findFirstEmptyRow(matrix, indexes);
+  const { spreadsheetId, title, matrix, indexes, headerRowIndex } = await loadBonusSheet();
+  const targetRow = findFirstEmptyRow(matrix, indexes, headerRowIndex);
 
   const writes = [
     cellWrite(title, targetRow, indexes.hrCode, fields.hr_code),
@@ -344,7 +399,7 @@ function matchesBonusIdentity(row: unknown[], indexes: BonusColumnIndexes, expec
 }
 
 async function ensureResolutionColumn(loaded: LoadedBonusSheet): Promise<number> {
-  const { spreadsheetId, title, matrix, indexes } = loaded;
+  const { spreadsheetId, title, matrix, indexes, headerRowNumber } = loaded;
   if (indexes.resolution >= 0) return indexes.resolution;
 
   let width = 0;
@@ -352,7 +407,7 @@ async function ensureResolutionColumn(loaded: LoadedBonusSheet): Promise<number>
     if (row.length > width) width = row.length;
   }
   const column = Math.max(width, loaded.headers.length);
-  await batchUpdateBonusCells(spreadsheetId, [cellWrite(title, 1, column, "Resolution")]);
+  await batchUpdateBonusCells(spreadsheetId, [cellWrite(title, headerRowNumber, column, "Resolution")]);
   return column;
 }
 
@@ -364,6 +419,9 @@ export async function updateBonusResolution(input: {
   const { spreadsheetId, title, matrix, indexes } = loaded;
   const resolutionColumn = await ensureResolutionColumn(loaded);
 
+  // `row_number` is the 1-based physical spreadsheet row, so index into the
+  // matrix (0-based) by subtracting 1 — this is independent of where the
+  // header row was detected.
   const row = matrix[input.expected.row_number - 1];
   if (!row || !matchesBonusIdentity(row, indexes, input.expected)) {
     throw new PreviewInputError(
