@@ -209,6 +209,50 @@ export async function requireExpectedAdmin(): Promise<
   return { ok: true };
 }
 
+export async function requireExpectedCollector(): Promise<
+  { ok: true; hr_code: string | null } | { ok: false; response: NextResponse }
+> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Authentication required." }, { status: 401 }),
+    };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, hr_code")
+    .eq("id", user.id)
+    .single();
+  if (profile?.role !== "collector" && profile?.role !== "admin") {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Collector access required." }, { status: 403 }),
+    };
+  }
+  return { ok: true, hr_code: profile.hr_code ?? null };
+}
+
+export function filterWeeksForHrCode(
+  weeks: ExpectedWeekBlock[],
+  hrCode: string | null | undefined
+): ExpectedWeekBlock[] {
+  const normalized = String(hrCode ?? "").trim().toUpperCase();
+  if (!normalized) return [];
+  return weeks
+    .map((week) => ({
+      ...week,
+      collectors: week.collectors.filter(
+        (row) => row.hr_code.value.trim().toUpperCase() === normalized
+      ),
+    }))
+    .filter((week) => week.collectors.length > 0);
+}
+
 export async function loadExpectedWeeks(): Promise<ExpectedSheetData> {
   const data = await readExpectedSheet();
   return {
