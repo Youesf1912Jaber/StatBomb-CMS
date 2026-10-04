@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { EXPECTED_DAILY_VALUES } from "@/lib/expected/options";
 import {
   displayExpectedDate,
   displayExpectedShift,
   displayExpectedValue,
   EXPECTED_SUMMARY_LABELS,
   type ExpectedWeekView,
+  type ExpectedWeekViewCollector,
 } from "@/lib/expected/view";
 
 type WeekResponse = {
@@ -52,23 +54,31 @@ function weekdayDates(week: ExpectedWeekView): Array<string | null> {
   return [null, null, null, null, null, null, week.end_date];
 }
 
+function collectorDayValue(collector: ExpectedWeekViewCollector, day: (typeof DAY_SHORT)[number][0]): string {
+  return collector[day];
+}
+
 export function ExpectedWeekClient({ weekId }: { weekId: string }) {
   const [week, setWeek] = useState<ExpectedWeekView | null>(null);
   const [loading, setLoading] = useState(true);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  const loadWeek = useCallback(async () => {
+    const response = await fetch(`/api/admin/expected/weeks/${encodeURIComponent(weekId)}`, { cache: "no-store" });
+    const payload = (await response.json()) as WeekResponse;
+    if (!response.ok || !payload.week) {
+      throw new Error(payload.error ?? "Unable to read the Expected week.");
+    }
+    setWeek(payload.week);
+  }, [weekId]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/admin/expected/weeks/${encodeURIComponent(weekId)}`, { cache: "no-store" })
-      .then(async (response) => {
-        const payload = (await response.json()) as WeekResponse;
-        if (!response.ok || !payload.week) {
-          throw new Error(payload.error ?? "Unable to read the Expected week.");
-        }
-        if (!cancelled) setWeek(payload.week);
-      })
+    loadWeek()
       .catch((reason: unknown) => {
         if (!cancelled) {
           setError(reason instanceof Error ? reason.message : "Unable to read the Expected week.");
@@ -81,7 +91,39 @@ export function ExpectedWeekClient({ weekId }: { weekId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [weekId]);
+  }, [loadWeek]);
+
+  async function saveDailyValue(collector: ExpectedWeekViewCollector, day: (typeof DAY_SHORT)[number][0], value: string) {
+    const current = collectorDayValue(collector, day);
+    if (value === current || savingKey) return;
+    const key = `${collector.row_number}-${day}`;
+    setSavingKey(key);
+    setError(null);
+    setSaveMessage(null);
+    try {
+      const response = await fetch(`/api/admin/expected/weeks/${encodeURIComponent(weekId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          hr_code: collector.hr_code,
+          day,
+          value,
+          row_number: collector.row_number,
+        }),
+      });
+      const payload = (await response.json()) as WeekResponse;
+      if (!response.ok || !payload.week) {
+        throw new Error(payload.error ?? "Unable to save the Expected value.");
+      }
+      setWeek(payload.week);
+      setSaveMessage("Saved. Weekly summary refreshed from Google Sheets.");
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : "Unable to save the Expected value.");
+    } finally {
+      setSavingKey(null);
+    }
+  }
 
   const dates = week ? weekdayDates(week) : [];
 
@@ -102,6 +144,7 @@ export function ExpectedWeekClient({ weekId }: { weekId: string }) {
       </div>
 
       {loading && <p className="text-sm text-chalk-200">Reading Expected week…</p>}
+      {saveMessage && <p className="text-sm text-chalk-200">{saveMessage}</p>}
       {error && (
         <p role="alert" className="rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">
           {error}
@@ -160,13 +203,29 @@ export function ExpectedWeekClient({ weekId }: { weekId: string }) {
                         <td className="whitespace-nowrap px-3 py-3 font-mono">{displayExpectedValue(collector.hr_code)}</td>
                         <td className="whitespace-nowrap px-3 py-3">{displayExpectedValue(collector.collector)}</td>
                         <td className="whitespace-nowrap px-3 py-3">{displayExpectedValue(collector.type)}</td>
-                        <td className="whitespace-nowrap px-3 py-3">{displayExpectedValue(collector.sunday)}</td>
-                        <td className="whitespace-nowrap px-3 py-3">{displayExpectedValue(collector.monday)}</td>
-                        <td className="whitespace-nowrap px-3 py-3">{displayExpectedValue(collector.tuesday)}</td>
-                        <td className="whitespace-nowrap px-3 py-3">{displayExpectedValue(collector.wednesday)}</td>
-                        <td className="whitespace-nowrap px-3 py-3">{displayExpectedValue(collector.thursday)}</td>
-                        <td className="whitespace-nowrap px-3 py-3">{displayExpectedValue(collector.friday)}</td>
-                        <td className="whitespace-nowrap px-3 py-3">{displayExpectedValue(collector.saturday)}</td>
+                        {DAY_SHORT.map(([day]) => {
+                          const current = collectorDayValue(collector, day);
+                          const key = `${collector.row_number}-${day}`;
+                          const known = (EXPECTED_DAILY_VALUES as readonly string[]).includes(current);
+                          return (
+                            <td key={day} className="whitespace-nowrap px-3 py-3">
+                              <select
+                                value={known ? current : current}
+                                disabled={savingKey !== null}
+                                onChange={(event) => void saveDailyValue(collector, day, event.target.value)}
+                                className="rounded-[8px] border border-pitch-700 bg-pitch-800 px-2 py-1 text-sm text-chalk-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                aria-label={`${collector.hr_code} ${day}`}
+                              >
+                                {!known && current && <option value={current}>{current}</option>}
+                                {!current && <option value="">Select</option>}
+                                {EXPECTED_DAILY_VALUES.map((option) => (
+                                  <option key={option} value={option}>{option}</option>
+                                ))}
+                              </select>
+                              {savingKey === key && <span className="ml-2 text-xs text-chalk-200">Saving…</span>}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>

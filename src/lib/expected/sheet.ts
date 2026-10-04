@@ -2,8 +2,10 @@ import "server-only";
 
 import { googleRequest } from "@/lib/sync/google-sheets";
 import { PreviewInputError } from "@/lib/sync/preview";
+import { columnLetter } from "./parse";
 import { parseExpectedWeeklyBlocks } from "./parse";
-import type { ExpectedSheetData } from "./types";
+import { isExpectedDailyValue, isExpectedWeekday } from "./options";
+import type { ExpectedSheetData, ExpectedWeekBlock, ExpectedWeekday } from "./types";
 
 export type {
   ExpectedCollectorRow,
@@ -18,6 +20,7 @@ export type {
 } from "./types";
 
 export { parseExpectedWeeklyBlocks } from "./parse";
+export { EXPECTED_DAILY_VALUES, isExpectedDailyValue, isExpectedWeekday } from "./options";
 
 const GOOGLE_SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 const EXPECTED_RANGE = "A:AZ";
@@ -88,4 +91,72 @@ export async function readExpectedSheet(): Promise<ExpectedSheetData> {
     pulled_at: new Date().toISOString(),
     weeks: parseExpectedWeeklyBlocks(matrix),
   };
+}
+
+export type ExpectedDailyUpdateInput = {
+  weekId: string;
+  hrCode: string;
+  day: string;
+  value: string;
+  rowNumber?: number;
+};
+
+function normalizeHrCode(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function findWeekById(weeks: ExpectedWeekBlock[], weekId: string): ExpectedWeekBlock | null {
+  return weeks.find((week) => {
+    const start = week.week_start_date ?? "undated";
+    return `${start}-r${week.header_row}` === weekId;
+  }) ?? null;
+}
+
+export async function updateExpectedDailyValue(
+  input: ExpectedDailyUpdateInput
+): Promise<ExpectedSheetData> {
+  const weekId = input.weekId.trim();
+  const hrCode = normalizeHrCode(input.hrCode);
+  const day = input.day.trim().toLowerCase();
+  const value = input.value.trim();
+
+  if (!weekId) throw new PreviewInputError("Week id is required.");
+  if (!hrCode) throw new PreviewInputError("HR-Code is required.");
+  if (!isExpectedWeekday(day)) throw new PreviewInputError("A valid weekday is required.");
+  if (!isExpectedDailyValue(value)) throw new PreviewInputError("That daily value is not allowed.");
+
+  const before = await readExpectedSheet();
+  const week = findWeekById(before.weeks, weekId);
+  if (!week) throw new PreviewInputError("Expected week was not found.");
+
+  const matches = week.collectors.filter((row) => normalizeHrCode(row.hr_code.value) === hrCode);
+  const collector = input.rowNumber
+    ? matches.find((row) => row.row_number === input.rowNumber) ?? null
+    : matches[0] ?? null;
+  if (!collector) {
+    throw new PreviewInputError("This collector row changed in Google Sheets. Refresh and try again.");
+  }
+  if (collector.row_number < week.start_row || collector.row_number > week.end_row) {
+    throw new PreviewInputError("The collector row is outside this Expected week.");
+  }
+
+  const target = collector.days[day as ExpectedWeekday];
+  if (target.row !== collector.row_number || target.column < 0 || !target.column_letter) {
+    throw new PreviewInputError("The Expected day cell could not be resolved.");
+  }
+
+  const range = `${before.sheet_name}!${target.column_letter}${target.row}`;
+  await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(before.spreadsheet_id)}/values:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      valueInputOption: "USER_ENTERED",
+      data: [{ range, majorDimension: "ROWS", values: [[value]] }],
+    }),
+  });
+
+  return readExpectedSheet();
+}
+
+export function expectedA1(column: number, row: number): string {
+  return `${columnLetter(column)}${row}`;
 }
