@@ -1,10 +1,69 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { requireExpectedAdmin, expectedErrorResponse } from "@/lib/expected/api";
-import { readExpectedSheet } from "@/lib/expected/sheet";
+import { requireExpectedAdmin } from "@/lib/expected/api";
+import { googleRequest } from "@/lib/sync/google-sheets";
+import { parseExpectedWeeklyBlocks } from "@/lib/expected/parse";
+import { PreviewInputError } from "@/lib/sync/preview";
 
 export const runtime = "nodejs";
+
+const GOOGLE_SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
+const EXPECTED_RANGE = "A:AZ";
+
+function requiredSpreadsheetId(): string {
+  const value = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
+  if (!value) throw new PreviewInputError("Google Sheets integration is not configured.");
+  return value;
+}
+
+function configuredTabTitle(): string {
+  return (process.env.GOOGLE_SHEETS_EXPECTED_TAB ?? "Expected").trim() || "Expected";
+}
+
+type SpreadsheetSheet = { properties?: { sheetId?: number; title?: string } };
+
+async function listSheets(spreadsheetId: string): Promise<SpreadsheetSheet[]> {
+  const url = new URL(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}`);
+  url.searchParams.set("fields", "sheets(properties(sheetId,title))");
+  const payload = await googleRequest<{ sheets?: SpreadsheetSheet[] }>(url.toString());
+  return payload.sheets ?? [];
+}
+
+async function resolveExpectedSheetForDebug(
+  spreadsheetId: string
+): Promise<{ title: string; sheetId: number }> {
+  const sheets = await listSheets(spreadsheetId);
+  const configuredTitle = configuredTabTitle();
+  const gidRaw = process.env.GOOGLE_SHEETS_EXPECTED_GID?.trim();
+
+  if (gidRaw) {
+    const gid = Number(gidRaw);
+    if (!Number.isSafeInteger(gid) || gid < 0) {
+      throw new PreviewInputError("Google Sheets tab configuration is invalid.");
+    }
+    const sheet = sheets.find((item) => item.properties?.sheetId === gid);
+    const title = sheet?.properties?.title;
+    if (!title || sheet?.properties?.sheetId === undefined) {
+      throw new PreviewInputError("The configured GOOGLE_SHEETS_EXPECTED_GID sheet tab was not found.");
+    }
+    if (configuredTitle.toLowerCase() !== title.trim().toLowerCase()) {
+      throw new PreviewInputError(
+        "The configured GOOGLE_SHEETS_EXPECTED_TAB sheet tab does not match its GID."
+      );
+    }
+    return { title, sheetId: sheet.properties.sheetId };
+  }
+
+  const wanted = configuredTitle.toLowerCase();
+  const sheet = sheets.find(
+    (item) => (item.properties?.title ?? "").trim().toLowerCase() === wanted
+  );
+  if (!sheet?.properties?.title || sheet.properties.sheetId === undefined) {
+    throw new PreviewInputError("The configured GOOGLE_SHEETS_EXPECTED_TAB sheet tab was not found.");
+  }
+  return { title: sheet.properties.title, sheetId: sheet.properties.sheetId };
+}
 
 type DebugResponse = {
   ok: true;
@@ -19,9 +78,11 @@ type DebugResponse = {
     gid: number;
   };
   googleRead: {
-    rowCount: number;
-    columnCount: number;
+    rawRowCount: number;
+    maxColumns: number;
     firstRows: unknown[][];
+    requestedRange: string;
+    requestedUrl: string;
   };
   parser: {
     totalWeeks: number;
@@ -36,20 +97,21 @@ type DebugResponse = {
 
 type DebugErrorResponse = {
   ok: false;
-  stage: "resolveExpectedSheet" | "readExpectedSheet" | "parseExpectedSheet";
+  stage: "resolveExpectedSheet" | "readExpectedSheet" | "googleRequest" | "parseExpectedSheet";
   error: string;
   context?: {
     requestedSheetTitle?: string;
     requestedRange?: string;
+    requestedUrl?: string;
     rowsReceived?: number;
   };
 };
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse<DebugResponse | DebugErrorResponse>> {
   const access = await requireExpectedAdmin();
   if (!access.ok) return access.response;
+
   try {
-    // Check environment configuration
     const spreadsheetIdConfigured = !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
     const expectedTabConfigured = !!process.env.GOOGLE_SHEETS_EXPECTED_TAB?.trim();
     const expectedGidConfigured = !!process.env.GOOGLE_SHEETS_EXPECTED_GID?.trim();
@@ -57,10 +119,78 @@ export async function GET(): Promise<NextResponse> {
       !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() &&
       !!process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim();
 
-    // Read the Expected sheet using production path
-    const sheet = await readExpectedSheet();
+    const spreadsheetId = requiredSpreadsheetId();
+    let resolvedSheet: { title: string; sheetId: number };
+    try {
+      resolvedSheet = await resolveExpectedSheetForDebug(spreadsheetId);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return NextResponse.json(
+        {
+          ok: false,
+          stage: "resolveExpectedSheet",
+          error: errorMessage,
+          context: {
+            requestedSheetTitle: configuredTabTitle(),
+          },
+        } as DebugErrorResponse,
+        { status: 500 }
+      );
+    }
 
-    // Format diagnostic response
+    const requestedRange = `${resolvedSheet.title}!${EXPECTED_RANGE}`;
+    const requestedUrl = `${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(
+      requestedRange
+    )}?valueRenderOption=FORMATTED_VALUE`;
+
+    let rawMatrix: unknown[][] = [];
+    try {
+      const payload = await googleRequest<{ values?: unknown[][] }>(requestedUrl);
+      rawMatrix = payload.values ?? [];
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return NextResponse.json(
+        {
+          ok: false,
+          stage: "googleRequest",
+          error: errorMessage,
+          context: {
+            requestedSheetTitle: resolvedSheet.title,
+            requestedRange,
+            requestedUrl: requestedUrl.slice(0, 160),
+          },
+        } as DebugErrorResponse,
+        { status: 500 }
+      );
+    }
+
+    const rawRowCount = rawMatrix.length;
+    let maxColumns = 0;
+    for (const row of rawMatrix) {
+      if (Array.isArray(row) && row.length > maxColumns) maxColumns = row.length;
+    }
+    const firstRows = rawMatrix.slice(0, 15);
+
+    let parserResult;
+    try {
+      parserResult = parseExpectedWeeklyBlocks(rawMatrix);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return NextResponse.json(
+        {
+          ok: false,
+          stage: "parseExpectedSheet",
+          error: errorMessage,
+          context: {
+            requestedSheetTitle: resolvedSheet.title,
+            requestedRange,
+            rowsReceived: rawRowCount,
+          },
+        } as DebugErrorResponse,
+        { status: 500 }
+      );
+    }
+
     const response: DebugResponse = {
       ok: true,
       env: {
@@ -70,17 +200,19 @@ export async function GET(): Promise<NextResponse> {
         googleCredentialsConfigured,
       },
       resolvedSheet: {
-        title: sheet.sheet_name,
-        gid: sheet.sheet_id,
+        title: resolvedSheet.title,
+        gid: resolvedSheet.sheetId,
       },
       googleRead: {
-        rowCount: 0, // Will be calculated below
-        columnCount: 0,
-        firstRows: [],
+        rawRowCount,
+        maxColumns,
+        firstRows,
+        requestedRange,
+        requestedUrl: requestedUrl.slice(0, 160),
       },
       parser: {
-        totalWeeks: sheet.weeks.length,
-        weeks: sheet.weeks.slice(0, 10).map((week) => ({
+        totalWeeks: parserResult.length,
+        weeks: parserResult.slice(0, 10).map((week) => ({
           startDate: week.week_start_date,
           endDate: week.week_end_date,
           shift: week.shift_name,
@@ -89,69 +221,16 @@ export async function GET(): Promise<NextResponse> {
       },
     };
 
-    // Note: We cannot directly access the raw Google Sheets matrix from readExpectedSheet()
-    // because it's already been parsed. However, we can infer row count from the parser result.
-    // The parser processes the entire matrix, so if weeks exist, data was received.
-    // For diagnostic purposes, we report what the parser saw.
-    if (sheet.weeks.length > 0) {
-      const lastWeek = sheet.weeks[sheet.weeks.length - 1];
-      response.googleRead.rowCount = lastWeek?.end_row ?? 0;
-      response.googleRead.columnCount = 26; // A:Z is typical
-    }
-
-    // Add first 5 rows of raw data from first parsed week if available
-    if (sheet.weeks.length > 0) {
-      const firstWeek = sheet.weeks[0];
-      if (firstWeek) {
-        response.googleRead.firstRows.push(
-          [
-            `Week: ${firstWeek.week_start_date} → ${firstWeek.week_end_date}`,
-            `Shift: ${firstWeek.shift_name}`,
-            `Header Row: ${firstWeek.header_row}`,
-            `Collectors: ${firstWeek.collectors.length}`,
-          ],
-          firstWeek.collectors.slice(0, 4).map((c) => [
-            c.hr_code.value,
-            c.collector.value,
-            c.type.value,
-          ])
-        );
-      }
-    }
-
     return NextResponse.json(response);
   } catch (error) {
-    console.error("[DEBUG] Expected sheet read failed:", error);
-
-    // Determine the stage where it failed
-    let stage: "resolveExpectedSheet" | "readExpectedSheet" | "parseExpectedSheet" =
-      "readExpectedSheet";
-    let sanitizedMessage = "An error occurred while reading the Expected sheet.";
-
-    if (error instanceof Error) {
-      const msg = error.message;
-      if (
-        msg.includes("not configured") ||
-        msg.includes("sheet tab was not found") ||
-        msg.includes("does not match")
-      ) {
-        stage = "resolveExpectedSheet";
-        sanitizedMessage = msg;
-      } else {
-        sanitizedMessage = msg;
-      }
-    }
-
-    const errorResponse: DebugErrorResponse = {
-      ok: false,
-      stage,
-      error: sanitizedMessage,
-      context: {
-        requestedSheetTitle: process.env.GOOGLE_SHEETS_EXPECTED_TAB ?? "Expected",
-        requestedRange: "A:AZ",
-      },
-    };
-
-    return NextResponse.json(errorResponse, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      {
+        ok: false,
+        stage: "readExpectedSheet",
+        error: errorMessage,
+      } as DebugErrorResponse,
+      { status: 500 }
+    );
   }
 }
