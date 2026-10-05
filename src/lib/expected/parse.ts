@@ -284,8 +284,33 @@ function readDayDatesFromRow(
   return dayDates;
 }
 
-function dayDateCount(dayDates: Partial<Record<ExpectedWeekday, ExpectedSheetCell>>): number {
-  return WEEKDAYS.reduce((count, day) => count + (dayDates[day] ? 1 : 0), 0);
+function addDaysIso(iso: string, days: number): string | null {
+  const parts = iso.split("-").map(Number);
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
+  if (!year || !month || !day) return null;
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function completeWeekDates(
+  dayDates: Partial<Record<ExpectedWeekday, ExpectedSheetCell>>
+): { sunday: ExpectedSheetCell; saturday: ExpectedSheetCell; startDate: string; endDate: string } | null {
+  const sunday = dayDates.sunday;
+  const saturday = dayDates.saturday;
+  if (!sunday?.value || !saturday?.value) return null;
+  if (weekdayOfIso(sunday.value) !== "sunday") return null;
+  if (weekdayOfIso(saturday.value) !== "saturday") return null;
+  for (let offset = 0; offset < WEEKDAYS.length; offset += 1) {
+    const day = WEEKDAYS[offset];
+    if (!day) return null;
+    const cell = dayDates[day];
+    const expected = addDaysIso(sunday.value, offset);
+    if (!cell?.value || !expected || cell.value !== expected) return null;
+    if (weekdayOfIso(cell.value) !== day) return null;
+  }
+  return { sunday, saturday, startDate: sunday.value, endDate: saturday.value };
 }
 
 function findColumnIndex(headers: string[], ...aliases: string[]): number {
@@ -558,23 +583,24 @@ function parseMetadata(
 } {
   let dayDates = readDayDatesFromRow(matrix, headerIndex, columns, fallbackYear);
   let dateRowIndex = headerIndex;
-  if (dayDateCount(dayDates) < 2) {
+  let complete = completeWeekDates(dayDates);
+  if (!complete) {
     for (let rowIndex = headerIndex - 1; rowIndex >= startIndex; rowIndex -= 1) {
       const candidate = readDayDatesFromRow(matrix, rowIndex, columns, fallbackYear);
-      if (dayDateCount(candidate) > dayDateCount(dayDates)) {
+      const candidateComplete = completeWeekDates(candidate);
+      if (candidateComplete) {
         dayDates = candidate;
         dateRowIndex = rowIndex;
+        complete = candidateComplete;
+        break;
       }
-      if (dayDateCount(dayDates) >= 7) break;
     }
   }
 
-  const sundayCell = dayDates.sunday ?? null;
-  const saturdayCell = dayDates.saturday ?? null;
-  let startDate = sundayCell?.value ?? null;
-  let endDate = saturdayCell?.value ?? null;
-  if (startDate && !endDate) endDate = toSaturday(startDate);
-  if (endDate && !startDate) startDate = toSunday(endDate);
+  const sundayCell = complete?.sunday ?? null;
+  const saturdayCell = complete?.saturday ?? null;
+  const startDate = complete?.startDate ?? null;
+  const endDate = complete?.endDate ?? null;
 
   let shiftName: ExpectedSheetCell | null = null;
   let shiftTime: ExpectedSheetCell | null = null;
@@ -695,6 +721,9 @@ export function parseExpectedWeeklyBlocks(matrix: unknown[][]): ExpectedWeekBloc
       }
     }
 
+    previousEnd = endIndex;
+    if (!metadata.week_start_date || !metadata.week_end_date || collectors.length === 0) continue;
+
     weeks.push({
       header_row: headerIndex + 1,
       start_row: startIndex + 1,
@@ -711,7 +740,6 @@ export function parseExpectedWeeklyBlocks(matrix: unknown[][]): ExpectedWeekBloc
       collectors,
       summary: parseSummary(matrix, headerIndex, endIndex, columns.summary_start),
     });
-    previousEnd = endIndex;
   }
 
   return weeks.sort(compareWeeks);
