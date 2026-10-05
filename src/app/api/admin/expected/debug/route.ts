@@ -107,8 +107,7 @@ type DebugErrorResponse = {
   };
 };
 
-export async function GET(): Promise<NextResponse> { 
-  const access = await requireExpectedAdmin();  
+export async function GET(): Promise<NextResponse> {
   const access = await requireExpectedAdmin();
   if (!access.ok) return access.response;
 
