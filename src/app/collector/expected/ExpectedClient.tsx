@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ExpectedWorkShiftsTable } from "@/components/ExpectedWorkShiftsTable";
 import {
+  displayExpectedDailyShift,
   displayExpectedDate,
   displayExpectedShift,
   displayExpectedValue,
@@ -122,6 +124,8 @@ export function CollectorExpectedClient() {
         </p>
       )}
 
+      {!loading && !error && weeks.length > 0 && <ExpectedWorkShiftsTable />}
+
       <div className="space-y-6">
         {weeks.map((week) => {
           const dates = weekdayDates(week);
@@ -145,6 +149,13 @@ export function CollectorExpectedClient() {
                     </tr>
                   </thead>
                   <tbody>
+                    <tr className="bg-pitch-800/60 text-xs font-medium text-clock-amber">
+                      {DAY_HEADERS.map(([key]) => (
+                        <td key={key} className="whitespace-nowrap px-3 py-2">
+                          {displayExpectedDailyShift(week, key)}
+                        </td>
+                      ))}
+                    </tr>
                     <tr className="text-chalk-50">
                       {dates.map((date, index) => (
                         <td key={DAY_HEADERS[index]?.[0] ?? index} className="whitespace-nowrap px-3 py-3">

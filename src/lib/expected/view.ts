@@ -38,12 +38,23 @@ export type ExpectedWeekViewSummaryKey =
   | "actual_shifts_end_of_week"
   | "diff";
 
+export type ExpectedWeekViewDailyShifts = {
+  sunday: string | null;
+  monday: string | null;
+  tuesday: string | null;
+  wednesday: string | null;
+  thursday: string | null;
+  friday: string | null;
+  saturday: string | null;
+};
+
 export type ExpectedWeekView = {
   week_id: string;
   start_date: string | null;
   end_date: string | null;
   shift: string | null;
   shift_time: string | null;
+  daily_shifts?: ExpectedWeekViewDailyShifts;
   header_row: number;
   start_row: number;
   end_row: number;
@@ -85,11 +96,27 @@ export function displayExpectedDate(iso: string | null | undefined): string {
   return `${day}/${month}/${year}`;
 }
 
+export const EXPECTED_WORK_SHIFTS = [
+  { name: "Overnight 1", start: "10:00 PM", end: "6:00 AM" },
+  { name: "Overnight 2", start: "1:00 AM", end: "9:00 AM" },
+  { name: "Morning 1", start: "6:00 AM", end: "2:00 PM" },
+  { name: "Morning 2", start: "10:00 AM", end: "6:00 PM" },
+  { name: "Night 1", start: "3:00 PM", end: "11:00 PM" },
+  { name: "Night 2", start: "7:00 PM", end: "3:00 AM" },
+] as const;
+
 export function displayExpectedShift(week: Pick<ExpectedWeekView, "shift" | "shift_time">): string {
   const shift = displayExpectedValue(week.shift);
   if (shift === "—") return displayExpectedValue(week.shift_time);
   if (week.shift_time?.trim()) return `${shift} · ${week.shift_time.trim()}`;
   return shift;
+}
+
+export function displayExpectedDailyShift(
+  week: Pick<ExpectedWeekView, "daily_shifts">,
+  day: keyof ExpectedWeekViewDailyShifts
+): string {
+  return displayExpectedValue(week.daily_shifts?.[day]);
 }
 
 export function sortExpectedWeeksNewestFirst(weeks: ExpectedWeekView[]): ExpectedWeekView[] {

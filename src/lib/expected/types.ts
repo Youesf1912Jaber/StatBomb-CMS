@@ -74,6 +74,7 @@ export type ExpectedWeekBlock = {
   shift_name_cell: ExpectedSheetCell | null;
   shift_time: string | null;
   shift_time_cell: ExpectedSheetCell | null;
+  daily_shifts: Record<ExpectedWeekday, string | null>;
   columns: ExpectedColumnMap;
   collectors: ExpectedCollectorRow[];
   summary: ExpectedWeekSummary;

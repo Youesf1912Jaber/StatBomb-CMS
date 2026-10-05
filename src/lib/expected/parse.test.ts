@@ -275,5 +275,60 @@ describe("parseExpectedWeeklyBlocks", () => {
     assert.ok(week);
     assert.equal(week.shift_name, null);
     assert.equal(week.collectors[0]?.collector.value, "No Shift Collector");
+    assert.deepEqual(week.daily_shifts, {
+      sunday: null,
+      monday: null,
+      tuesday: null,
+      wednesday: null,
+      thursday: null,
+      friday: null,
+      saturday: null,
+    });
+  });
+
+  it("reads per-day shifts including mid-week changes", () => {
+    const mixed = parseExpectedWeeklyBlocks([
+      ["", "", "", "Overnight 2", "Overnight 2", "Overnight 2", "Overnight 2", "Overnight 2", "Overnight 2", "Overnight 1"],
+      adjacentHeader(),
+      adjacentDates("2026-09-06"),
+      adjacentCollector("A-325", "Ahmed Ghanem", "Full", ["1", "1", "1", "1", "1", "1", "0.5"]),
+      ["Count-M1", "", "", "1", "1", "1", "1", "1", "1", "1"],
+      ["Sum-M1", "", "", "1", "1", "1", "1", "1", "1", "0.5"],
+      ["Actual-M1", "", "", "1", "1", "1", "1", "1", "1", "0.5"],
+    ]);
+    assert.equal(mixed.length, 1);
+    assert.equal(mixed[0]?.week_start_date, "2026-09-06");
+    assert.equal(mixed[0]?.week_end_date, "2026-09-12");
+    assert.deepEqual(mixed[0]?.daily_shifts, {
+      sunday: "Overnight 2",
+      monday: "Overnight 2",
+      tuesday: "Overnight 2",
+      wednesday: "Overnight 2",
+      thursday: "Overnight 2",
+      friday: "Overnight 2",
+      saturday: "Overnight 1",
+    });
+  });
+
+  it("fills merged weekday shift cells forward across empty day columns", () => {
+    const merged = parseExpectedWeeklyBlocks([
+      ["", "", "", "Overnight 2", "", "", "", "", "", "Overnight 1"],
+      adjacentHeader(),
+      adjacentDates("2026-08-23"),
+      adjacentCollector("D-900", "No Shift Collector", "Full", ["1", "1", "1", "1", "1", "1", "1"]),
+      ["Count-M1", "", "", "1", "1", "1", "1", "1", "1", "1"],
+      ["Sum-M1", "", "", "1", "1", "1", "1", "1", "1", "1"],
+      ["Actual-M1", "", "", "1", "1", "1", "1", "1", "1", "1"],
+    ]);
+    assert.equal(merged.length, 1);
+    assert.deepEqual(merged[0]?.daily_shifts, {
+      sunday: "Overnight 2",
+      monday: "Overnight 2",
+      tuesday: "Overnight 2",
+      wednesday: "Overnight 2",
+      thursday: "Overnight 2",
+      friday: "Overnight 2",
+      saturday: "Overnight 1",
+    });
   });
 });

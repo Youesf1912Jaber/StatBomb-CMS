@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { EXPECTED_DAILY_VALUES } from "@/lib/expected/options";
+import { ExpectedWorkShiftsTable } from "@/components/ExpectedWorkShiftsTable";
 import {
+  displayExpectedDailyShift,
   displayExpectedDate,
   displayExpectedShift,
   displayExpectedValue,
@@ -153,6 +155,8 @@ export function ExpectedWeekClient({ weekId }: { weekId: string }) {
 
       {week && (
         <>
+          <ExpectedWorkShiftsTable />
+
           <section className="rounded-card border border-pitch-700 bg-pitch-900 p-5">
             <p className="font-mono text-[11px] uppercase tracking-wide text-pitch-500">Shift</p>
             <p className="mt-1 font-display text-lg text-chalk-50">{displayExpectedShift(week)}</p>
@@ -166,6 +170,13 @@ export function ExpectedWeekClient({ weekId }: { weekId: string }) {
                   </tr>
                 </thead>
                 <tbody>
+                  <tr className="bg-pitch-800/60 text-xs font-medium text-clock-amber">
+                    {DAY_HEADERS.map(([key]) => (
+                      <td key={key} className="whitespace-nowrap px-3 py-2">
+                        {displayExpectedDailyShift(week, key)}
+                      </td>
+                    ))}
+                  </tr>
                   <tr className="bg-pitch-900 text-chalk-50">
                     {dates.map((date, index) => (
                       <td key={DAY_HEADERS[index]?.[0] ?? index} className="whitespace-nowrap px-3 py-3">

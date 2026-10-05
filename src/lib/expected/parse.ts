@@ -267,6 +267,70 @@ function matchShiftLabel(raw: string): { name: string; time: string | null } | n
   return { name: `${label} ${number}`, time: extractTime(text) };
 }
 
+function emptyDailyShifts(value: string | null = null): Record<ExpectedWeekday, string | null> {
+  return {
+    sunday: value,
+    monday: value,
+    tuesday: value,
+    wednesday: value,
+    thursday: value,
+    friday: value,
+    saturday: value,
+  };
+}
+
+function readDailyShiftsFromRow(
+  matrix: unknown[][],
+  rowIndex: number,
+  columns: ExpectedColumnMap
+): { hits: number; shifts: Record<ExpectedWeekday, string | null> } {
+  const shifts = emptyDailyShifts(null);
+  let hits = 0;
+  const row = matrix[rowIndex] ?? [];
+  for (const day of WEEKDAYS) {
+    const matched = matchShiftLabel(cellText(row[columns.days[day]]));
+    if (!matched) continue;
+    shifts[day] = matched.name;
+    hits += 1;
+  }
+  return { hits, shifts };
+}
+
+function fillForwardDailyShifts(
+  shifts: Record<ExpectedWeekday, string | null>
+): Record<ExpectedWeekday, string | null> {
+  const filled = emptyDailyShifts(null);
+  let last: string | null = null;
+  for (const day of WEEKDAYS) {
+    if (shifts[day]) last = shifts[day];
+    filled[day] = shifts[day] ?? last;
+  }
+  return filled;
+}
+
+function resolveDailyShifts(
+  matrix: unknown[][],
+  startIndex: number,
+  dateRowIndex: number,
+  columns: ExpectedColumnMap,
+  weekShiftName: string | null
+): Record<ExpectedWeekday, string | null> {
+  let best: Record<ExpectedWeekday, string | null> | null = null;
+  let bestHits = 0;
+  for (let rowIndex = dateRowIndex - 1; rowIndex >= startIndex; rowIndex -= 1) {
+    const row = matrix[rowIndex] ?? [];
+    if (isHeaderRow(row) || isEmptyRow(row) || isWeekFooterRow(row, columns)) continue;
+    const { hits, shifts } = readDailyShiftsFromRow(matrix, rowIndex, columns);
+    if (hits > bestHits) {
+      best = shifts;
+      bestHits = hits;
+      if (hits >= WEEKDAYS.length) break;
+    }
+  }
+  if (best && bestHits > 0) return fillForwardDailyShifts(best);
+  return emptyDailyShifts(weekShiftName);
+}
+
 function readDayDatesFromRow(
   matrix: unknown[][],
   rowIndex: number,
@@ -611,6 +675,7 @@ function parseMetadata(
   week_end_cell: ExpectedSheetCell | null;
   week_start_date: string | null;
   week_end_date: string | null;
+  daily_shifts: Record<ExpectedWeekday, string | null>;
 } {
   let dayDates = readDayDatesFromRow(matrix, headerIndex, columns, fallbackYear);
   let dateRowIndex = headerIndex;
@@ -663,8 +728,9 @@ function parseMetadata(
     if (shiftName) break;
   }
 
+  const shiftNameValue = shiftName?.value ?? null;
   return {
-    shift_name: shiftName?.value ?? null,
+    shift_name: shiftNameValue,
     shift_name_cell: shiftName,
     shift_time: shiftTime?.value ?? null,
     shift_time_cell: shiftTime,
@@ -672,6 +738,7 @@ function parseMetadata(
     week_end_cell: saturdayCell,
     week_start_date: startDate,
     week_end_date: endDate,
+    daily_shifts: resolveDailyShifts(matrix, startIndex, dateRowIndex, columns, shiftNameValue),
   };
 }
 
@@ -790,6 +857,7 @@ export function parseExpectedWeeklyBlocks(matrix: unknown[][]): ExpectedWeekBloc
       shift_name_cell: metadata.shift_name_cell,
       shift_time: metadata.shift_time,
       shift_time_cell: metadata.shift_time_cell,
+      daily_shifts: metadata.daily_shifts,
       columns,
       collectors,
       summary: parseSummary(matrix, headerIndex, endIndex, columns.summary_start),

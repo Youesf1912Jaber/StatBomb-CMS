@@ -11,6 +11,7 @@ import type {
   ExpectedSummaryEntry,
   ExpectedSummaryKey,
   ExpectedWeekBlock,
+  ExpectedWeekday,
   ExpectedWeekSummary,
 } from "./types";
 
@@ -61,6 +62,7 @@ export type ExpectedApiWeek = {
   end_date: string | null;
   shift: string | null;
   shift_time: string | null;
+  daily_shifts: Record<ExpectedWeekday, string | null>;
   header_row: number;
   start_row: number;
   end_row: number;
@@ -171,6 +173,7 @@ export function serializeExpectedWeek(week: ExpectedWeekBlock): ExpectedApiWeek 
     end_date: week.week_end_date,
     shift: week.shift_name,
     shift_time: week.shift_time,
+    daily_shifts: week.daily_shifts,
     header_row: week.header_row,
     start_row: week.start_row,
     end_row: week.end_row,
