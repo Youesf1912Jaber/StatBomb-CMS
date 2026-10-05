@@ -315,97 +315,139 @@ async function syncWeekCollectors(
 }
 
 export async function syncExpectedWeeks(client: Client): Promise<ExpectedSyncResult> {
-  console.log("[DIAG] syncExpectedWeeks starting - checking env vars");
-  console.log("[DIAG] GOOGLE_SHEETS_EXPECTED_TAB:", process.env.GOOGLE_SHEETS_EXPECTED_TAB ? "set" : "NOT SET");
-  console.log("[DIAG] GOOGLE_SHEETS_EXPECTED_GID:", process.env.GOOGLE_SHEETS_EXPECTED_GID ? "set" : "NOT SET");
+  // ===== ENVIRONMENT VALIDATION =====
+  console.log("[EXPECTED_SYNC] START - Checking environment");
+  const hasSpreadsheetId = !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
+  const hasTabName = !!process.env.GOOGLE_SHEETS_EXPECTED_TAB?.trim();
+  const hasGid = !!process.env.GOOGLE_SHEETS_EXPECTED_GID?.trim();
+  console.log(
+    `[EXPECTED_SYNC] ENV: spreadsheet=${hasSpreadsheetId}, tab=${hasTabName}, gid=${hasGid}`
+  );
 
-  const [sheet, existingWeeks, existingCollectors] = await Promise.all([
-    readExpectedSheet(),
-    fetchAllWeeks(client),
-    fetchAllCollectors(client),
-  ]);
-
-  console.log("[DIAG] readExpectedSheet completed");
-  console.log("[DIAG] Parser result - week count:", sheet.weeks.length);
-  if (sheet.weeks.length > 0) {
-    const firstWeek = sheet.weeks[0];
-    const lastWeek = sheet.weeks[sheet.weeks.length - 1];
-    console.log("[DIAG] First parsed week:", firstWeek?.week_start_date, "→", firstWeek?.week_end_date);
-    console.log("[DIAG] Last parsed week:", lastWeek?.week_start_date, "→", lastWeek?.week_end_date);
-  }
-
-  const now = new Date().toISOString();
-  const existingByKey = new Map(existingWeeks.map((row) => [row.week_key, row]));
-  const collectorsByWeekId = new Map<string, ExpectedWeekCollectorRow[]>();
-  for (const row of existingCollectors) {
-    const list = collectorsByWeekId.get(row.week_id) ?? [];
-    list.push(row);
-    collectorsByWeekId.set(row.week_id, list);
-  }
-
-  console.log("[DIAG] Supabase existing weeks count:", existingWeeks.length);
-
-  let inserted = 0;
-  let updated = 0;
-  let unchanged = 0;
-  let collectorRows = 0;
-  const seenKeys = new Set<string>();
-  const unchangedIds: string[] = [];
-
-  for (const week of sheet.weeks) {
-    const payload = toWeekPayload(week);
-    if (!payload) continue;
-    seenKeys.add(payload.week_key);
-    const existing = existingByKey.get(payload.week_key);
-    let weekId: string;
-    if (existing) {
-      weekId = existing.id;
-      if (weekUnchanged(existing, payload)) {
-        unchangedIds.push(existing.id);
-        unchanged += 1;
-      } else {
-        await updateWeek(client, existing.id, payload, now);
-        updated += 1;
-      }
-    } else {
-      weekId = await insertWeek(client, payload, now);
-      inserted += 1;
-    }
-    collectorRows += await syncWeekCollectors(
-      client,
-      weekId,
-      week.collectors,
-      collectorsByWeekId.get(weekId) ?? []
+  // ===== READ SHEET =====
+  let sheetInfo = { title: "", sheetId: -1 };
+  let matrixRowCount = 0;
+  try {
+    console.log("[EXPECTED_SYNC] Calling readExpectedSheet()");
+    const sheet = await readExpectedSheet();
+    sheetInfo = { title: sheet.sheet_name, sheetId: sheet.sheet_id };
+    matrixRowCount = sheet.weeks.length > 0 ? sheet.weeks[0]?.end_row ?? 0 : 0;
+    console.log(
+      `[EXPECTED_SYNC] Sheet resolved: title="${sheet.sheet_name}", gid=${sheet.sheet_id}`
     );
+    console.log(`[EXPECTED_SYNC] Parser input row count: ${matrixRowCount}`);
+    console.log(`[EXPECTED_SYNC] Parser output: ${sheet.weeks.length} weeks detected`);
+
+    if (sheet.weeks.length > 0) {
+      const samples = sheet.weeks.slice(0, 3);
+      for (let i = 0; i < samples.length; i++) {
+        const w = samples[i];
+        console.log(
+          `[EXPECTED_SYNC] Week ${i + 1}: ${w?.week_start_date ?? "?"} → ${w?.week_end_date ?? "?"}, shift="${w?.shift_name ?? "?"}", collectors=${w?.collectors.length ?? 0}`
+        );
+      }
+    }
+
+    // ===== FETCH EXISTING DATA =====
+    console.log("[EXPECTED_SYNC] Fetching existing weeks from Supabase");
+    const [existingWeeks, existingCollectors] = await Promise.all([
+      fetchAllWeeks(client),
+      fetchAllCollectors(client),
+    ]);
+    console.log(
+      `[EXPECTED_SYNC] Supabase state: ${existingWeeks.length} existing weeks, ${existingCollectors.length} existing collectors`
+    );
+
+    // ===== SYNC LOGIC =====
+    const now = new Date().toISOString();
+    const existingByKey = new Map(existingWeeks.map((row) => [row.week_key, row]));
+    const collectorsByWeekId = new Map<string, ExpectedWeekCollectorRow[]>();
+    for (const row of existingCollectors) {
+      const list = collectorsByWeekId.get(row.week_id) ?? [];
+      list.push(row);
+      collectorsByWeekId.set(row.week_id, list);
+    }
+
+    let inserted = 0;
+    let updated = 0;
+    let unchanged = 0;
+    let collectorRows = 0;
+    const seenKeys = new Set<string>();
+    const unchangedIds: string[] = [];
+
+    for (const week of sheet.weeks) {
+      const payload = toWeekPayload(week);
+      if (!payload) continue;
+      seenKeys.add(payload.week_key);
+      const existing = existingByKey.get(payload.week_key);
+      let weekId: string;
+      if (existing) {
+        weekId = existing.id;
+        if (weekUnchanged(existing, payload)) {
+          unchangedIds.push(existing.id);
+          unchanged += 1;
+        } else {
+          await updateWeek(client, existing.id, payload, now);
+          updated += 1;
+        }
+      } else {
+        weekId = await insertWeek(client, payload, now);
+        inserted += 1;
+      }
+      collectorRows += await syncWeekCollectors(
+        client,
+        weekId,
+        week.collectors,
+        collectorsByWeekId.get(weekId) ?? []
+      );
+    }
+
+    console.log(
+      `[EXPECTED_SYNC] Upsert summary: inserted=${inserted}, updated=${updated}, unchanged=${unchanged}, collectors=${collectorRows}`
+    );
+
+    if (unchangedIds.length > 0) await touchWeeks(client, unchangedIds, now);
+
+    const missingIds = existingWeeks
+      .filter((row) => row.source_present && !seenKeys.has(row.week_key))
+      .map((row) => row.id);
+    if (missingIds.length > 0) {
+      await markMissingWeeks(client, missingIds, now);
+      console.log(`[EXPECTED_SYNC] Marked ${missingIds.length} weeks as missing`);
+    }
+
+    // ===== VERIFY FINAL STATE =====
+    console.log("[EXPECTED_SYNC] Verifying final Supabase state");
+    const { data: finalPresent, error: queryError } = await client
+      .from("expected_weeks")
+      .select("id, week_start_date")
+      .eq("source_present", true)
+      .limit(5);
+
+    if (queryError) {
+      console.log(
+        `[EXPECTED_SYNC] ERROR querying final state: code=${queryError.code}, msg=${queryError.message}`
+      );
+    } else {
+      console.log(`[EXPECTED_SYNC] Final source_present=true count: ${finalPresent?.length ?? 0}`);
+      if ((finalPresent?.length ?? 0) > 0) {
+        console.log(
+          `[EXPECTED_SYNC] Sample rows: ${finalPresent?.map((r) => r.week_start_date).join(", ")}`
+        );
+      }
+    }
+
+    console.log("[EXPECTED_SYNC] COMPLETE");
+    return {
+      inserted,
+      updated,
+      unchanged,
+      missing: missingIds.length,
+      collectorRows,
+    };
+  } catch (error) {
+    console.log("[EXPECTED_SYNC] EXCEPTION:", error instanceof Error ? error.message : String(error));
+    console.log("[EXPECTED_SYNC] Sheet that was being resolved:", sheetInfo.title, `(gid=${sheetInfo.sheetId})`);
+    throw error;
   }
-
-  console.log("[DIAG] Sync counts - inserted:", inserted, "updated:", updated, "unchanged:", unchanged);
-
-  if (unchangedIds.length > 0) await touchWeeks(client, unchangedIds, now);
-
-  const missingIds = existingWeeks
-    .filter((row) => row.source_present && !seenKeys.has(row.week_key))
-    .map((row) => row.id);
-  if (missingIds.length > 0) await markMissingWeeks(client, missingIds, now);
-
-  console.log("[DIAG] Sync result - missing marked false:", missingIds.length, "collector rows:", collectorRows);
-
-  const { data: sourcePresent, error: queryError } = await client
-    .from("expected_weeks")
-    .select("id")
-    .eq("source_present", true);
-  
-  if (queryError) {
-    console.log("[DIAG] Supabase query error:", queryError.code, queryError.message);
-  } else {
-    console.log("[DIAG] Supabase final source_present=true count:", sourcePresent?.length ?? 0);
-  }
-
-  return {
-    inserted,
-    updated,
-    unchanged,
-    missing: missingIds.length,
-    collectorRows,
-  };
 }
