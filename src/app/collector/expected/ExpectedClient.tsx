@@ -5,7 +5,6 @@ import {
   displayExpectedDate,
   displayExpectedShift,
   displayExpectedValue,
-  EXPECTED_SUMMARY_LABELS,
   sortExpectedWeeksNewestFirst,
   type ExpectedWeekView,
   type ExpectedWeekViewCollector,
@@ -202,24 +201,6 @@ export function CollectorExpectedClient() {
                   </dl>
                 </>
               )}
-
-              <div className="space-y-3">
-                <h3 className="font-display text-base text-chalk-50">Weekly summary</h3>
-                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {EXPECTED_SUMMARY_LABELS.map(([key, label]) => (
-                    <div key={key} className="rounded-card border border-pitch-700 px-4 py-3">
-                      <dt className="text-xs uppercase tracking-wide text-pitch-500">{label}</dt>
-                      <dd className="mt-1 text-sm text-chalk-50">{displayExpectedValue(week.summary[key]?.value)}</dd>
-                    </div>
-                  ))}
-                  {week.summary.extras.map((entry) => (
-                    <div key={`${entry.key}-${entry.label.row}-${entry.label.column}`} className="rounded-card border border-pitch-700 px-4 py-3">
-                      <dt className="text-xs uppercase tracking-wide text-pitch-500">{displayExpectedValue(entry.label.value)}</dt>
-                      <dd className="mt-1 text-sm text-chalk-50">{displayExpectedValue(entry.value.value)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
             </section>
           );
         })}
