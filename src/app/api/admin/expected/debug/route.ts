@@ -45,10 +45,9 @@ type DebugErrorResponse = {
   };
 };
 
-export async function GET(): Promise<NextResponse<DebugResponse | DebugErrorResponse>> {
+export async function GET(): Promise<NextResponse> {
   const access = await requireExpectedAdmin();
   if (!access.ok) return access.response;
-
   try {
     // Check environment configuration
     const spreadsheetIdConfigured = !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
