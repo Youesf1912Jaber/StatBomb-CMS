@@ -315,11 +315,25 @@ async function syncWeekCollectors(
 }
 
 export async function syncExpectedWeeks(client: Client): Promise<ExpectedSyncResult> {
+  console.log("[DIAG] syncExpectedWeeks starting - checking env vars");
+  console.log("[DIAG] GOOGLE_SHEETS_EXPECTED_TAB:", process.env.GOOGLE_SHEETS_EXPECTED_TAB ? "set" : "NOT SET");
+  console.log("[DIAG] GOOGLE_SHEETS_EXPECTED_GID:", process.env.GOOGLE_SHEETS_EXPECTED_GID ? "set" : "NOT SET");
+
   const [sheet, existingWeeks, existingCollectors] = await Promise.all([
     readExpectedSheet(),
     fetchAllWeeks(client),
     fetchAllCollectors(client),
   ]);
+
+  console.log("[DIAG] readExpectedSheet completed");
+  console.log("[DIAG] Parser result - week count:", sheet.weeks.length);
+  if (sheet.weeks.length > 0) {
+    const firstWeek = sheet.weeks[0];
+    const lastWeek = sheet.weeks[sheet.weeks.length - 1];
+    console.log("[DIAG] First parsed week:", firstWeek?.week_start_date, "→", firstWeek?.week_end_date);
+    console.log("[DIAG] Last parsed week:", lastWeek?.week_start_date, "→", lastWeek?.week_end_date);
+  }
+
   const now = new Date().toISOString();
   const existingByKey = new Map(existingWeeks.map((row) => [row.week_key, row]));
   const collectorsByWeekId = new Map<string, ExpectedWeekCollectorRow[]>();
@@ -328,6 +342,8 @@ export async function syncExpectedWeeks(client: Client): Promise<ExpectedSyncRes
     list.push(row);
     collectorsByWeekId.set(row.week_id, list);
   }
+
+  console.log("[DIAG] Supabase existing weeks count:", existingWeeks.length);
 
   let inserted = 0;
   let updated = 0;
@@ -363,12 +379,27 @@ export async function syncExpectedWeeks(client: Client): Promise<ExpectedSyncRes
     );
   }
 
+  console.log("[DIAG] Sync counts - inserted:", inserted, "updated:", updated, "unchanged:", unchanged);
+
   if (unchangedIds.length > 0) await touchWeeks(client, unchangedIds, now);
 
   const missingIds = existingWeeks
     .filter((row) => row.source_present && !seenKeys.has(row.week_key))
     .map((row) => row.id);
   if (missingIds.length > 0) await markMissingWeeks(client, missingIds, now);
+
+  console.log("[DIAG] Sync result - missing marked false:", missingIds.length, "collector rows:", collectorRows);
+
+  const { data: sourcePresent, error: queryError } = await client
+    .from("expected_weeks")
+    .select("id")
+    .eq("source_present", true);
+  
+  if (queryError) {
+    console.log("[DIAG] Supabase query error:", queryError.code, queryError.message);
+  } else {
+    console.log("[DIAG] Supabase final source_present=true count:", sourcePresent?.length ?? 0);
+  }
 
   return {
     inserted,
