@@ -255,6 +255,39 @@ function extractTime(text: string): string | null {
   return single?.[0] ? cellText(single[0]) : null;
 }
 
+function matchShiftLabel(raw: string): { name: string; time: string | null } | null {
+  const text = cellText(raw);
+  if (!text) return null;
+  if (/^all$/i.test(text)) return { name: "All", time: extractTime(text) };
+  const match = text.match(/^(morning|overnight|night)\s*([12])\b/i);
+  const kind = match?.[1];
+  const number = match?.[2];
+  if (!kind || !number) return null;
+  const label = kind.toLowerCase() === "morning" ? "Morning" : kind.toLowerCase() === "overnight" ? "Overnight" : "Night";
+  return { name: `${label} ${number}`, time: extractTime(text) };
+}
+
+function readDayDatesFromRow(
+  matrix: unknown[][],
+  rowIndex: number,
+  columns: ExpectedColumnMap,
+  fallbackYear?: number
+): Partial<Record<ExpectedWeekday, ExpectedSheetCell>> {
+  const row = matrix[rowIndex] ?? [];
+  const dayDates: Partial<Record<ExpectedWeekday, ExpectedSheetCell>> = {};
+  for (const day of WEEKDAYS) {
+    const column = columns.days[day];
+    const cell = makeCell(rowIndex, column, row[column]);
+    const date = parseSheetDate(cell.value, fallbackYear);
+    if (date) dayDates[day] = { ...cell, value: date };
+  }
+  return dayDates;
+}
+
+function dayDateCount(dayDates: Partial<Record<ExpectedWeekday, ExpectedSheetCell>>): number {
+  return WEEKDAYS.reduce((count, day) => count + (dayDates[day] ? 1 : 0), 0);
+}
+
 function findColumnIndex(headers: string[], ...aliases: string[]): number {
   for (let index = 0; index < headers.length; index += 1) {
     const header = headers[index];
@@ -523,94 +556,50 @@ function parseMetadata(
   week_start_date: string | null;
   week_end_date: string | null;
 } {
-  const meta = {
-    shiftName: null as ExpectedSheetCell | null,
-    shiftTime: null as ExpectedSheetCell | null,
-    startCell: null as ExpectedSheetCell | null,
-    endCell: null as ExpectedSheetCell | null,
-    startDate: null as string | null,
-    endDate: null as string | null,
-  };
-
-  const consider = (cell: ExpectedSheetCell) => {
-    if (!cell.value) return;
-    const dates = extractDatesFromText(cell.value, fallbackYear);
-    if (dates.length >= 1 && !meta.startDate) {
-      meta.startCell = cell;
-      const firstDate = dates[0];
-      const secondDate = dates[1];
-      if (firstDate) meta.startDate = toSunday(firstDate);
-      if (secondDate) meta.endDate = toSaturday(toSunday(secondDate));
-      else if (meta.startDate) meta.endDate = toSaturday(meta.startDate);
-    }
-    const time = extractTime(cell.value);
-    if (time && !meta.shiftTime) {
-      meta.shiftTime = { ...cell, value: time };
-    }
-    const leftover = cellText(
-      cell.value
-        .replace(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}/g, " ")
-        .replace(/\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*(?:[-–—]|to)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?/gi, " ")
-        .replace(/\b(?:week|from|to|until|through|shift)\b/gi, " ")
-    );
-    if (leftover && leftover.length <= 40 && !looksLikeTime(leftover) && !parseSheetDate(leftover, fallbackYear) && !meta.shiftName) {
-      if (!/^(hr code|collector|type|sun|sunday|mon|monday)$/i.test(leftover)) {
-        meta.shiftName = { ...cell, value: leftover };
+  let dayDates = readDayDatesFromRow(matrix, headerIndex, columns, fallbackYear);
+  let dateRowIndex = headerIndex;
+  if (dayDateCount(dayDates) < 2) {
+    for (let rowIndex = headerIndex - 1; rowIndex >= startIndex; rowIndex -= 1) {
+      const candidate = readDayDatesFromRow(matrix, rowIndex, columns, fallbackYear);
+      if (dayDateCount(candidate) > dayDateCount(dayDates)) {
+        dayDates = candidate;
+        dateRowIndex = rowIndex;
       }
+      if (dayDateCount(dayDates) >= 7) break;
     }
-  };
+  }
 
-  for (let rowIndex = startIndex; rowIndex < headerIndex; rowIndex += 1) {
+  const sundayCell = dayDates.sunday ?? null;
+  const saturdayCell = dayDates.saturday ?? null;
+  let startDate = sundayCell?.value ?? null;
+  let endDate = saturdayCell?.value ?? null;
+  if (startDate && !endDate) endDate = toSaturday(startDate);
+  if (endDate && !startDate) startDate = toSunday(endDate);
+
+  let shiftName: ExpectedSheetCell | null = null;
+  let shiftTime: ExpectedSheetCell | null = null;
+  for (let rowIndex = dateRowIndex - 1; rowIndex >= startIndex; rowIndex -= 1) {
     const row = matrix[rowIndex] ?? [];
     const limit = Math.min(row.length, columns.summary_start);
     for (let column = 0; column < limit; column += 1) {
-      consider(makeCell(rowIndex, column, row[column]));
+      const cell = makeCell(rowIndex, column, row[column]);
+      const matched = matchShiftLabel(cell.value);
+      if (!matched) continue;
+      if (!shiftName) shiftName = { ...cell, value: matched.name };
+      if (matched.time && !shiftTime) shiftTime = { ...cell, value: matched.time };
     }
+    if (shiftName) break;
   }
-
-  const headerRow = matrix[headerIndex] ?? [];
-  const above = matrix[headerIndex - 1] ?? [];
-  const dayDates: Partial<Record<ExpectedWeekday, ExpectedSheetCell>> = {};
-  for (const day of WEEKDAYS) {
-    const column = columns.days[day];
-    const headerCell = makeCell(headerIndex, column, headerRow[column]);
-    const headerDate = parseSheetDate(headerCell.value, fallbackYear);
-    if (headerDate) {
-      dayDates[day] = { ...headerCell, value: headerDate };
-      continue;
-    }
-    if (headerIndex > 0) {
-      const aboveCell = makeCell(headerIndex - 1, column, above[column]);
-      const aboveDate = parseSheetDate(aboveCell.value, fallbackYear);
-      if (aboveDate) dayDates[day] = { ...aboveCell, value: aboveDate };
-    }
-  }
-
-  const sundayCell = dayDates.sunday;
-  const saturdayCell = dayDates.saturday;
-  if (sundayCell) {
-    meta.startDate = sundayCell.value;
-    meta.startCell = sundayCell;
-  }
-  if (saturdayCell) {
-    meta.endDate = saturdayCell.value;
-    meta.endCell = saturdayCell;
-  } else if (meta.startDate) {
-    meta.endDate = toSaturday(meta.startDate);
-  }
-
-  if (meta.startDate && !meta.endDate) meta.endDate = toSaturday(meta.startDate);
-  if (meta.endDate && !meta.startDate) meta.startDate = toSunday(meta.endDate);
 
   return {
-    shift_name: meta.shiftName?.value ?? null,
-    shift_name_cell: meta.shiftName,
-    shift_time: meta.shiftTime?.value ?? null,
-    shift_time_cell: meta.shiftTime,
-    week_start_cell: meta.startCell,
-    week_end_cell: meta.endCell,
-    week_start_date: meta.startDate,
-    week_end_date: meta.endDate,
+    shift_name: shiftName?.value ?? null,
+    shift_name_cell: shiftName,
+    shift_time: shiftTime?.value ?? null,
+    shift_time_cell: shiftTime,
+    week_start_cell: sundayCell,
+    week_end_cell: saturdayCell,
+    week_start_date: startDate,
+    week_end_date: endDate,
   };
 }
 
