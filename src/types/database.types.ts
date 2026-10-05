@@ -229,6 +229,43 @@ export type ExpectedWeekCollectorRow = {
   updated_at: string;
 };
 
+export type OverTargetSource = "app" | "google_sheet";
+export type OverTargetSheetSyncStatus = "pending" | "synced" | "failed" | "imported";
+
+export type OverTargetRow = {
+  id: string;
+  assignment_id: string | null;
+  match_id: string | null;
+  match_external_id: string;
+  week_date: string | null;
+  week_date_raw: string | null;
+  hr_code: string;
+  collector_id: string | null;
+  collector_name: string | null;
+  team: string | null;
+  count_value: number | null;
+  count_raw: string | null;
+  done: boolean | null;
+  done_raw: string | null;
+  source: OverTargetSource;
+  source_key: string;
+  content_fingerprint: string;
+  occurrence_ordinal: number;
+  sheet_row_number: number | null;
+  sheet_tab: string | null;
+  sheet_gid: number | null;
+  sheet_sync_status: OverTargetSheetSyncStatus;
+  sheet_synced_at: string | null;
+  last_sheet_error: string | null;
+  source_present: boolean;
+  last_seen_at: string;
+  first_synced_at: string;
+  last_synced_at: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MatchCollaboratorRow = {
   assignment_id: string;
   collector_id: string;
@@ -520,6 +557,44 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<ExpectedWeekCollectorRow>;
+        Relationships: [];
+      };
+      over_target: {
+        Row: OverTargetRow;
+        Insert: {
+          id?: string;
+          assignment_id?: string | null;
+          match_id?: string | null;
+          match_external_id: string;
+          week_date?: string | null;
+          week_date_raw?: string | null;
+          hr_code?: string;
+          collector_id?: string | null;
+          collector_name?: string | null;
+          team?: string | null;
+          count_value?: number | null;
+          count_raw?: string | null;
+          done?: boolean | null;
+          done_raw?: string | null;
+          source: OverTargetSource;
+          source_key: string;
+          content_fingerprint: string;
+          occurrence_ordinal?: number;
+          sheet_row_number?: number | null;
+          sheet_tab?: string | null;
+          sheet_gid?: number | null;
+          sheet_sync_status: OverTargetSheetSyncStatus;
+          sheet_synced_at?: string | null;
+          last_sheet_error?: string | null;
+          source_present?: boolean;
+          last_seen_at?: string;
+          first_synced_at?: string;
+          last_synced_at?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<OverTargetRow>;
         Relationships: [];
       };
       sync_runs: {
