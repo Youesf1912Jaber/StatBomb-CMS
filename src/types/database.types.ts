@@ -191,6 +191,44 @@ export type FfShotRow = {
   updated_at: string;
 };
 
+export type ExpectedWeekRow = {
+  id: string;
+  week_key: string;
+  week_start_date: string;
+  week_end_date: string;
+  shift_name: string | null;
+  shift_start_time: string | null;
+  shift_end_time: string | null;
+  sheet_header_row: number;
+  sheet_start_row: number;
+  sheet_end_row: number;
+  source_present: boolean;
+  last_seen_at: string;
+  first_synced_at: string;
+  last_synced_at: string;
+  summary: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ExpectedWeekCollectorRow = {
+  id: string;
+  week_id: string;
+  hr_code: string;
+  collector_name: string | null;
+  collector_type: string | null;
+  sunday: string | null;
+  monday: string | null;
+  tuesday: string | null;
+  wednesday: string | null;
+  thursday: string | null;
+  friday: string | null;
+  saturday: string | null;
+  sheet_row_number: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MatchCollaboratorRow = {
   assignment_id: string;
   collector_id: string;
@@ -436,6 +474,52 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<FfShotRow>;
+        Relationships: [];
+      };
+      expected_weeks: {
+        Row: ExpectedWeekRow;
+        Insert: {
+          id?: string;
+          week_key: string;
+          week_start_date: string;
+          week_end_date: string;
+          shift_name?: string | null;
+          shift_start_time?: string | null;
+          shift_end_time?: string | null;
+          sheet_header_row: number;
+          sheet_start_row: number;
+          sheet_end_row: number;
+          source_present?: boolean;
+          last_seen_at?: string;
+          first_synced_at?: string;
+          last_synced_at?: string;
+          summary?: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<ExpectedWeekRow>;
+        Relationships: [];
+      };
+      expected_week_collectors: {
+        Row: ExpectedWeekCollectorRow;
+        Insert: {
+          id?: string;
+          week_id: string;
+          hr_code: string;
+          collector_name?: string | null;
+          collector_type?: string | null;
+          sunday?: string | null;
+          monday?: string | null;
+          tuesday?: string | null;
+          wednesday?: string | null;
+          thursday?: string | null;
+          friday?: string | null;
+          saturday?: string | null;
+          sheet_row_number: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<ExpectedWeekCollectorRow>;
         Relationships: [];
       };
       sync_runs: {
