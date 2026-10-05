@@ -8,6 +8,13 @@ import { findAssignmentByLogicalKey } from "@/lib/sync/reconcile";
 import { PreviewInputError } from "@/lib/sync/preview";
 import { createClient } from "@/lib/supabase/server";
 import type { AssignmentRow } from "@/types/database.types";
+import { createOverTargetRecord } from "@/lib/over-target/create";
+import {
+  attachOverTargetsToAssignments,
+  parseDistributionOverTargetFields,
+  resolveOverTargetDistributionWeek,
+  type ParsedDistributionOverTarget,
+} from "@/lib/over-target/assignment-integration";
 
 export const runtime = "nodejs";
 
@@ -63,7 +70,14 @@ export async function POST(
     }
 
     const body = await request.json() as {
-      assignments?: Array<{ collectorHrCode?: string; task?: string; half?: string; shiftDate?: string | null }>;
+      assignments?: Array<{
+        collectorHrCode?: string;
+        task?: string;
+        half?: string;
+        shiftDate?: string | null;
+        overTarget?: boolean;
+        overTargetCount?: number | null;
+      }>;
     };
     if (!Array.isArray(body.assignments) || body.assignments.length === 0) {
       return NextResponse.json({ success: false, error: "Add at least one assignment before confirming." }, { status: 422 });
@@ -90,6 +104,7 @@ export async function POST(
       throw new PreviewInputError("The selected Match Master record is not available in Supabase.");
     }
     const logicalKeys = new Set<string>();
+    const overTargetFlags: ParsedDistributionOverTarget[] = [];
     const assignments = body.assignments.map((assignment) => {
       const collector = roster.find((candidate) => candidate.hr_code?.trim().toUpperCase() === assignment.collectorHrCode?.trim().toUpperCase());
       if (!collector || !collector.hr_code || !collector.full_name || !assignment.task || !assignment.half) {
@@ -119,6 +134,14 @@ export async function POST(
       if (existing?.distribution_present) {
         throw new PreviewInputError("This Match + Task + Half assignment already exists.");
       }
+      const overTargetParsed = parseDistributionOverTargetFields({
+        overTarget: assignment.overTarget,
+        overTargetCount: assignment.overTargetCount,
+      });
+      if (!overTargetParsed.ok) {
+        throw new PreviewInputError(overTargetParsed.error);
+      }
+      overTargetFlags.push(overTargetParsed.value);
       return {
         matchId: normalizedMatchId,
         collectorHrCode: collector.hr_code,
@@ -182,6 +205,19 @@ export async function POST(
       matchId: databaseMatch.id,
     });
 
+    const attached = await attachOverTargetsToAssignments(
+      persisted.map((assignment, index) => ({
+        assignmentId: assignment.id,
+        overTarget: overTargetFlags[index]?.overTarget === true,
+        overTargetCount: overTargetFlags[index]?.overTargetCount ?? null,
+      })),
+      {
+        weekDate: resolveOverTargetDistributionWeek(),
+        createdBy: profile.id,
+        create: (input) => createOverTargetRecord(supabase, input),
+      },
+    );
+
     return NextResponse.json({
       success: true,
       matchId: normalizedMatchId,
@@ -195,6 +231,18 @@ export async function POST(
         half: assignment.half,
         status: assignment.status,
       })),
+      overTarget: attached.records.map((record) => ({
+        id: record.id,
+        assignment_id: record.assignment_id,
+        count_value: record.count_value,
+        week_date: record.week_date,
+        week_date_raw: record.week_date_raw,
+        done: record.done,
+        sheet_sync_status: record.sheet_sync_status,
+        last_sheet_error: record.last_sheet_error,
+      })),
+      warnings: attached.warnings,
+      overTargetSheetFailed: attached.sheetFailed,
     });
   } catch (error) {
     const message = distributionSaved
