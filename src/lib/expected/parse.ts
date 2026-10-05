@@ -420,13 +420,43 @@ function collectorKey(value: string): string {
   return normalizeHeader(value);
 }
 
+function isWeekFooterLabel(value: string): boolean {
+  const normalized = normalizeHeader(value);
+  return (
+    normalized === "count m1" ||
+    normalized === "countm1" ||
+    normalized === "sum m1" ||
+    normalized === "summ1" ||
+    normalized === "actual m1" ||
+    normalized === "actualm1"
+  );
+}
+
+function isWeekFooterRow(row: unknown[], columns: ExpectedColumnMap): boolean {
+  const indexes = [
+    columns.hr_code,
+    columns.collector,
+    columns.type,
+    ...WEEKDAYS.map((day) => columns.days[day]),
+    columns.count_m1,
+    columns.sum_m1,
+    columns.actual_m1,
+  ];
+  return indexes.some((index) => index >= 0 && isWeekFooterLabel(cellText(row[index])));
+}
+
 function looksLikeCollectorRow(row: unknown[], columns: ExpectedColumnMap): boolean {
   if (isHeaderRow(row)) return false;
+  if (isWeekFooterRow(row, columns)) return false;
   const hrCode = cellText(row[columns.hr_code]);
   const collector = cellText(row[columns.collector]);
   const type = cellText(row[columns.type]);
   const key = collectorKey(collector);
   if (!hrCode && (key === "total" || key === "sum" || key === "count")) return false;
+  if (isWeekFooterLabel(hrCode) || isWeekFooterLabel(collector) || isWeekFooterLabel(type)) return false;
+  if (matchShiftLabel(hrCode) || matchShiftLabel(collector) || matchShiftLabel(type)) return false;
+  const datedDays = WEEKDAYS.filter((day) => parseSheetDate(cellText(row[columns.days[day]])));
+  if (datedDays.length >= 5 && !hrCode) return false;
   if (hrCode) return true;
   if (collector && type) return true;
   if (collector && WEEKDAYS.some((day) => cellText(row[columns.days[day]]) !== "")) return true;
@@ -569,6 +599,7 @@ function parseMetadata(
   matrix: unknown[][],
   startIndex: number,
   headerIndex: number,
+  endIndex: number,
   columns: ExpectedColumnMap,
   fallbackYear?: number
 ): {
@@ -586,6 +617,21 @@ function parseMetadata(
   let complete = completeWeekDates(dayDates);
   if (!complete) {
     for (let rowIndex = headerIndex - 1; rowIndex >= startIndex; rowIndex -= 1) {
+      const candidate = readDayDatesFromRow(matrix, rowIndex, columns, fallbackYear);
+      const candidateComplete = completeWeekDates(candidate);
+      if (candidateComplete) {
+        dayDates = candidate;
+        dateRowIndex = rowIndex;
+        complete = candidateComplete;
+        break;
+      }
+    }
+  }
+  if (!complete) {
+    const belowLimit = Math.min(endIndex, headerIndex + 8);
+    for (let rowIndex = headerIndex + 1; rowIndex <= belowLimit; rowIndex += 1) {
+      const row = matrix[rowIndex] ?? [];
+      if (isHeaderRow(row) || isWeekFooterRow(row, columns)) break;
       const candidate = readDayDatesFromRow(matrix, rowIndex, columns, fallbackYear);
       const candidateComplete = completeWeekDates(candidate);
       if (candidateComplete) {
@@ -663,16 +709,24 @@ function findBlockEnd(
   let end = headerIndex;
   let emptyRun = 0;
   let seenCollector = false;
+  let seenFooter = false;
   const limit = Math.min(nextHeaderIndex, matrix.length);
   for (let rowIndex = headerIndex + 1; rowIndex < limit; rowIndex += 1) {
     const row = matrix[rowIndex] ?? [];
     if (isHeaderRow(row)) break;
     if (isEmptyRow(row)) {
       emptyRun += 1;
-      if (emptyRun >= 2) break;
+      if ((seenCollector || seenFooter) && emptyRun >= 2) break;
       continue;
     }
     emptyRun = 0;
+    const footer = isWeekFooterRow(row, columns);
+    if (footer) {
+      seenFooter = true;
+      end = rowIndex;
+      continue;
+    }
+    if (seenFooter) break;
     const collector = looksLikeCollectorRow(row, columns);
     const summary = rowHasSummaryLabel(row, columns.summary_start);
     if (collector || summary || (!seenCollector && rowHasLeftContent(row, columns))) {
@@ -706,13 +760,13 @@ export function parseExpectedWeeklyBlocks(matrix: unknown[][]): ExpectedWeekBloc
     const headerIndex = headerIndexes[headerPos];
     if (headerIndex === undefined) continue;
     const nextHeaderIndex = headerIndexes[headerPos + 1] ?? matrix.length;
-    const yearHint = firstYearInRows(matrix, Math.max(0, headerIndex - 5), Math.min(matrix.length - 1, headerIndex + 3));
+    const yearHint = firstYearInRows(matrix, Math.max(0, headerIndex - 5), Math.min(matrix.length - 1, headerIndex + 8));
     const columns = resolveColumns(matrix[headerIndex] ?? [], yearHint);
     if (!columns) continue;
 
     const startIndex = findMetaStart(matrix, headerIndex, previousEnd);
     const endIndex = findBlockEnd(matrix, headerIndex, nextHeaderIndex, columns);
-    const metadata = parseMetadata(matrix, startIndex, headerIndex, columns, yearHint);
+    const metadata = parseMetadata(matrix, startIndex, headerIndex, endIndex, columns, yearHint);
     const collectors: ExpectedCollectorRow[] = [];
     for (let rowIndex = headerIndex + 1; rowIndex <= endIndex; rowIndex += 1) {
       const row = matrix[rowIndex] ?? [];
