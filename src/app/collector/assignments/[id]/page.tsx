@@ -2,10 +2,12 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } from "@/lib/assignments/queries";
+import { getHyperCareForMatch } from "@/lib/hyper-care/lookup";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AssignmentWorkControls } from "@/components/AssignmentWorkControls";
 import { AssignmentTaskTracking } from "@/components/AssignmentTaskTracking";
 import { BonusSubmissionForm } from "@/components/BonusSubmissionForm";
+import { HyperCareSection } from "@/components/HyperCareSection";
 
 function formatTimestamp(value: string | null): string {
   if (!value) return "—";
@@ -38,6 +40,7 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
   const collaborators = await getMatchCollaborators(supabase, assignment.match_id);
   const others = collaborators.filter((c) => c.collector_id !== profile.id);
   const taskTimers = await getAssignmentTaskTimers(supabase, assignment.id);
+  const hyperCare = await getHyperCareForMatch(assignment.match.home_team, assignment.match.away_team);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -100,6 +103,8 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
           <dd className="mt-0.5 text-chalk-50">{formatTimestamp(assignment.completed_at)}</dd>
         </div>
       </dl>
+
+      <HyperCareSection sections={hyperCare} />
 
       {assignment.notes && (
         <div className="rounded-card border border-pitch-700 bg-pitch-900 p-5">
