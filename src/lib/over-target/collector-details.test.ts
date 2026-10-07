@@ -191,15 +191,17 @@ describe("Collector Over Target page wiring", () => {
     assert.match(source, />SLA</);
     assert.match(source, /details\.assignment_href/);
     assert.match(source, /SlaCountdown/);
-    assert.match(source, /<Link href=\{assignmentHref\}/);
+    assert.match(source, /<Link href=\{matchIdHref\}/);
     assert.match(source, /details\.home_team/);
     assert.match(source, /details\.away_team/);
+    assert.match(source, /isAdmin \? details\.match_href : details\.assignment_href/);
   });
 
-  it("does not add Home Team, Away Team, or Match ID links to the Admin Over Target client", () => {
-    const source = readFileSync(join(dir, "../../app/admin/over-target/OverTargetClient.tsx"), "utf8");
-    assert.match(source, /variant="admin"/);
-    assert.equal(source.includes("Home Team"), false);
-    assert.equal(source.includes("collectorOverTargetAssignmentHref"), false);
+  it("keeps Collector Over Target client on the collector assignment route", () => {
+    const source = readFileSync(join(dir, "../../app/collector/over-target/OverTargetClient.tsx"), "utf8");
+    assert.match(source, /variant="collector"/);
+    assert.match(source, /CollectorOverTargetRecord/);
+    assert.equal(source.includes("AdminOverTargetRecord"), false);
+    assert.equal(source.includes("/admin/matches/"), false);
   });
 });

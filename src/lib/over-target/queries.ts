@@ -3,6 +3,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, OverTargetRow } from "@/types/database.types";
 import {
+  mergeAdminOverTargetRecords,
+  type AdminOverTargetAssignmentDetails,
+  type AdminOverTargetMatchDetails,
+  type AdminOverTargetRecord,
+} from "./admin-details";
+import {
   mergeCollectorOverTargetRecords,
   type CollectorOverTargetAssignmentDetails,
   type CollectorOverTargetMatchDetails,
@@ -125,6 +131,104 @@ export async function getCollectorOverTargetRecords(
   const matchById = await getCollectorOverTargetMatchDetails(client, matchIds);
 
   return mergeCollectorOverTargetRecords(records, assignmentById, matchById);
+}
+
+async function getAdminOverTargetAssignmentDetails(
+  client: Client,
+  assignmentIds: string[]
+): Promise<Map<string, AdminOverTargetAssignmentDetails>> {
+  const byId = new Map<string, AdminOverTargetAssignmentDetails>();
+  if (assignmentIds.length === 0) return byId;
+  for (let i = 0; i < assignmentIds.length; i += LOOKUP_CHUNK_SIZE) {
+    const chunk = assignmentIds.slice(i, i + LOOKUP_CHUNK_SIZE);
+    const { data, error } = await client
+      .from("assignments")
+      .select("id, match_id, sla, status")
+      .in("id", chunk);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      byId.set(row.id, row);
+    }
+  }
+  return byId;
+}
+
+async function getAdminOverTargetMatchDetailsById(
+  client: Client,
+  matchIds: string[]
+): Promise<Map<string, AdminOverTargetMatchDetails>> {
+  const byId = new Map<string, AdminOverTargetMatchDetails>();
+  if (matchIds.length === 0) return byId;
+  for (let i = 0; i < matchIds.length; i += LOOKUP_CHUNK_SIZE) {
+    const chunk = matchIds.slice(i, i + LOOKUP_CHUNK_SIZE);
+    const { data, error } = await client
+      .from("matches")
+      .select("id, external_id, home_team, away_team")
+      .in("id", chunk);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      byId.set(row.id, row);
+    }
+  }
+  return byId;
+}
+
+async function getAdminOverTargetMatchDetailsByExternalId(
+  client: Client,
+  externalIds: string[]
+): Promise<Map<string, AdminOverTargetMatchDetails>> {
+  const byExternalId = new Map<string, AdminOverTargetMatchDetails>();
+  if (externalIds.length === 0) return byExternalId;
+  for (let i = 0; i < externalIds.length; i += LOOKUP_CHUNK_SIZE) {
+    const chunk = externalIds.slice(i, i + LOOKUP_CHUNK_SIZE);
+    const { data, error } = await client
+      .from("matches")
+      .select("id, external_id, home_team, away_team")
+      .in("external_id", chunk);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      if (!byExternalId.has(row.external_id)) byExternalId.set(row.external_id, row);
+    }
+  }
+  return byExternalId;
+}
+
+export async function getAdminOverTargetRecords(client: Client): Promise<AdminOverTargetRecord[]> {
+  const records = await getAllOverTargetRecords(client);
+  if (records.length === 0) return [];
+
+  const assignmentIds = [
+    ...new Set(records.map((row) => row.assignment_id).filter((id): id is string => Boolean(id))),
+  ];
+  const assignmentById = await getAdminOverTargetAssignmentDetails(client, assignmentIds);
+
+  const matchIds = [
+    ...new Set(
+      records
+        .map((row) => {
+          const assignment = row.assignment_id ? assignmentById.get(row.assignment_id) : undefined;
+          return assignment?.match_id ?? row.match_id;
+        })
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const matchById = await getAdminOverTargetMatchDetailsById(client, matchIds);
+
+  const unresolvedExternalIds = [
+    ...new Set(
+      records
+        .filter((row) => {
+          const assignment = row.assignment_id ? assignmentById.get(row.assignment_id) : undefined;
+          const matchId = assignment?.match_id ?? row.match_id;
+          if (matchId && matchById.has(matchId)) return false;
+          return Boolean(row.match_external_id?.trim());
+        })
+        .map((row) => row.match_external_id.trim())
+    ),
+  ];
+  const matchByExternalId = await getAdminOverTargetMatchDetailsByExternalId(client, unresolvedExternalIds);
+
+  return mergeAdminOverTargetRecords(records, assignmentById, matchById, matchByExternalId);
 }
 
 export async function getRetryableOverTargetRecords(client: Client): Promise<OverTargetRow[]> {

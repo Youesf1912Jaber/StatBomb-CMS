@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { SlaCountdown } from "@/components/SlaCountdown";
+import type { AdminOverTargetRecord } from "@/lib/over-target/admin-details";
 import type { CollectorOverTargetRecord } from "@/lib/over-target/collector-details";
-import type { OverTargetRow, OverTargetSheetSyncStatus } from "@/types/database.types";
+import type { AssignmentStatus, OverTargetRow, OverTargetSheetSyncStatus } from "@/types/database.types";
 import {
   displayOverTargetCount,
   displayOverTargetDone,
@@ -17,7 +18,7 @@ import {
 type OverTargetTableVariant = "admin" | "collector";
 
 interface OverTargetTableProps {
-  records: OverTargetRow[] | CollectorOverTargetRecord[];
+  records: OverTargetRow[] | CollectorOverTargetRecord[] | AdminOverTargetRecord[];
   variant: OverTargetTableVariant;
 }
 
@@ -29,17 +30,26 @@ const SYNC_STATUS_OPTIONS: Array<{ value: OverTargetSheetSyncStatus | "all"; lab
   { value: "imported", label: "Imported" },
 ];
 
-function collectorMatchDetails(row: OverTargetRow | CollectorOverTargetRecord): Pick<
-  CollectorOverTargetRecord,
-  "home_team" | "away_team" | "sla" | "assignment_status" | "assignment_href"
-> {
-  const collector = row as CollectorOverTargetRecord;
+type OverTargetMatchDetails = {
+  home_team: string | null;
+  away_team: string | null;
+  sla: string | null;
+  assignment_status: AssignmentStatus | null;
+  assignment_href: string | null;
+  match_href: string | null;
+};
+
+function overTargetMatchDetails(
+  row: OverTargetRow | CollectorOverTargetRecord | AdminOverTargetRecord
+): OverTargetMatchDetails {
+  const enriched = row as CollectorOverTargetRecord & AdminOverTargetRecord;
   return {
-    home_team: collector.home_team ?? null,
-    away_team: collector.away_team ?? null,
-    sla: collector.sla ?? null,
-    assignment_status: collector.assignment_status ?? null,
-    assignment_href: collector.assignment_href ?? null,
+    home_team: enriched.home_team ?? null,
+    away_team: enriched.away_team ?? null,
+    sla: enriched.sla ?? null,
+    assignment_status: enriched.assignment_status ?? null,
+    assignment_href: enriched.assignment_href ?? null,
+    match_href: enriched.match_href ?? null,
   };
 }
 
@@ -99,9 +109,9 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
                 {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">HR-Code</th>}
                 {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Collector</th>}
                 {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Team</th>}
-                {!isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Home Team</th>}
-                {!isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Away Team</th>}
-                {!isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">SLA</th>}
+                <th className="whitespace-nowrap px-3 py-3 font-medium">Home Team</th>
+                <th className="whitespace-nowrap px-3 py-3 font-medium">Away Team</th>
+                <th className="whitespace-nowrap px-3 py-3 font-medium">SLA</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Count</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Done</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Sync Status</th>
@@ -109,14 +119,14 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
             </thead>
             <tbody className="divide-y divide-pitch-800">
               {filtered.map((row) => {
-                const details = collectorMatchDetails(row);
-                const assignmentHref = isAdmin ? null : details.assignment_href;
+                const details = overTargetMatchDetails(row);
+                const matchIdHref = isAdmin ? details.match_href : details.assignment_href;
                 const matchIdLabel = displayOverTargetText(row.match_external_id);
                 return (
                   <tr key={row.id} className="bg-pitch-900 text-chalk-50">
                     <td className="whitespace-nowrap px-3 py-3 font-mono">
-                      {assignmentHref ? (
-                        <Link href={assignmentHref} className="text-chalk-50 hover:text-clock-amber">
+                      {matchIdHref ? (
+                        <Link href={matchIdHref} className="text-chalk-50 hover:text-clock-amber">
                           {matchIdLabel}
                         </Link>
                       ) : (
@@ -127,17 +137,15 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
                     {isAdmin && <td className="whitespace-nowrap px-3 py-3 font-mono">{displayOverTargetText(row.hr_code)}</td>}
                     {isAdmin && <td className="whitespace-nowrap px-3 py-3">{displayOverTargetText(row.collector_name)}</td>}
                     {isAdmin && <td className="whitespace-nowrap px-3 py-3">{displayOverTargetText(row.team)}</td>}
-                    {!isAdmin && <td className="whitespace-nowrap px-3 py-3">{displayOverTargetText(details.home_team)}</td>}
-                    {!isAdmin && <td className="whitespace-nowrap px-3 py-3">{displayOverTargetText(details.away_team)}</td>}
-                    {!isAdmin && (
-                      <td className="whitespace-nowrap px-3 py-3">
-                        {details.sla ? (
-                          <SlaCountdown sla={details.sla} status={details.assignment_status ?? "Not Started"} />
-                        ) : (
-                          displayOverTargetText(null)
-                        )}
-                      </td>
-                    )}
+                    <td className="whitespace-nowrap px-3 py-3">{displayOverTargetText(details.home_team)}</td>
+                    <td className="whitespace-nowrap px-3 py-3">{displayOverTargetText(details.away_team)}</td>
+                    <td className="whitespace-nowrap px-3 py-3">
+                      {details.sla ? (
+                        <SlaCountdown sla={details.sla} status={details.assignment_status ?? "Not Started"} />
+                      ) : (
+                        displayOverTargetText(null)
+                      )}
+                    </td>
                     <td className="whitespace-nowrap px-3 py-3">{displayOverTargetCount(row)}</td>
                     <td className="whitespace-nowrap px-3 py-3">{displayOverTargetDone(row)}</td>
                     <td className="whitespace-nowrap px-3 py-3">{displayOverTargetSyncStatus(row.sheet_sync_status)}</td>

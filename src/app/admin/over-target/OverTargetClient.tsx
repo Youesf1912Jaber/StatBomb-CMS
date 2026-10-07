@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { OverTargetTable } from "@/components/OverTargetTable";
-import type { OverTargetRow } from "@/types/database.types";
+import type { AdminOverTargetRecord } from "@/lib/over-target/admin-details";
 
 type RecordsResponse = {
-  records?: OverTargetRow[];
+  records?: AdminOverTargetRecord[];
   error?: string;
 };
 
 export function AdminOverTargetClient() {
-  const [records, setRecords] = useState<OverTargetRow[]>([]);
+  const [records, setRecords] = useState<AdminOverTargetRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

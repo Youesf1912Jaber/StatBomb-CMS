@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAllOverTargetRecords } from "@/lib/over-target/queries";
+import { getAdminOverTargetRecords } from "@/lib/over-target/queries";
 import { PreviewInputError } from "@/lib/sync/preview";
 import { createClient } from "@/lib/supabase/server";
 
@@ -18,7 +18,7 @@ export async function GET() {
   }
 
   try {
-    const records = await getAllOverTargetRecords(supabase);
+    const records = await getAdminOverTargetRecords(supabase);
     return NextResponse.json({ records });
   } catch (error) {
     console.error("Admin Over Target list failed", error);
