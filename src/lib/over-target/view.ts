@@ -30,7 +30,9 @@ export function displayOverTargetSyncStatus(status: OverTargetSheetSyncStatus): 
   return "Imported";
 }
 
-export function overTargetSearchHaystack(row: OverTargetRow): string {
+export function overTargetSearchHaystack(
+  row: OverTargetRow & { home_team?: string | null; away_team?: string | null }
+): string {
   return [
     row.match_external_id,
     displayOverTargetWeek(row),
@@ -38,6 +40,8 @@ export function overTargetSearchHaystack(row: OverTargetRow): string {
     row.hr_code,
     row.collector_name ?? "",
     row.team ?? "",
+    row.home_team ?? "",
+    row.away_team ?? "",
     displayOverTargetCount(row),
     displayOverTargetDone(row),
     displayOverTargetSyncStatus(row.sheet_sync_status),

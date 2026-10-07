@@ -2,16 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { OverTargetTable } from "@/components/OverTargetTable";
-import type { OverTargetRow } from "@/types/database.types";
+import type { CollectorOverTargetRecord } from "@/lib/over-target/collector-details";
 
 type RecordsResponse = {
-  records?: OverTargetRow[];
+  records?: CollectorOverTargetRecord[];
   hr_code?: string | null;
   error?: string;
 };
 
 export function CollectorOverTargetClient() {
-  const [records, setRecords] = useState<OverTargetRow[]>([]);
+  const [records, setRecords] = useState<CollectorOverTargetRecord[]>([]);
   const [hrCode, setHrCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOverTargetRecordsForHrCode } from "@/lib/over-target/queries";
+import { getCollectorOverTargetRecords } from "@/lib/over-target/queries";
 import { PreviewInputError } from "@/lib/sync/preview";
 import { createClient } from "@/lib/supabase/server";
 
@@ -22,7 +22,7 @@ export async function GET() {
   }
 
   try {
-    const records = await getOverTargetRecordsForHrCode(supabase, profile.hr_code);
+    const records = await getCollectorOverTargetRecords(supabase, profile.hr_code);
     return NextResponse.json({ records, hr_code: profile.hr_code ?? null });
   } catch (error) {
     console.error("Collector Over Target list failed", error);
