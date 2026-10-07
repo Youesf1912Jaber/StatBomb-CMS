@@ -150,11 +150,8 @@ describe("admin annual spare balance wiring", () => {
     assert.equal(queries.includes("batchUpdate"), false);
   });
 
-  it("does not change Collector Expected UI or Annual Spare writes", () => {
-    const collector = readFileSync(join(dir, "../../app/collector/expected/ExpectedClient.tsx"), "utf8");
+  it("does not write Annual Spare", () => {
     const sheet = readFileSync(join(dir, "sheet.ts"), "utf8");
-    assert.equal(collector.includes("annual-spare"), false);
-    assert.equal(collector.includes("Annual Spare"), false);
     assert.match(sheet, /readAnnualSpareSheet/);
     assert.equal(sheet.includes("values:batchUpdate"), false);
   });

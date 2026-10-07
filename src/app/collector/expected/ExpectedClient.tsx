@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ExpectedWorkShiftsTable } from "@/components/ExpectedWorkShiftsTable";
+import type { AnnualSpareBalance } from "@/lib/annual-spare/balance";
 import {
   displayExpectedDailyShift,
   displayExpectedDate,
@@ -17,6 +18,17 @@ type WeeksResponse = {
   hr_code?: string | null;
   error?: string;
 };
+
+type AnnualSpareResponse = {
+  hr_code?: string | null;
+  balance?: AnnualSpareBalance | null;
+  error?: string;
+};
+
+function displayBalanceNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  return String(value);
+}
 
 const DAY_HEADERS = [
   ["sunday", "Sunday"],
@@ -52,6 +64,9 @@ function collectorDailyValue(row: ExpectedWeekViewCollector, day: (typeof DAY_HE
 export function CollectorExpectedClient() {
   const [weeks, setWeeks] = useState<ExpectedWeekView[]>([]);
   const [hrCode, setHrCode] = useState<string | null>(null);
+  const [balance, setBalance] = useState<AnnualSpareBalance | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,9 +92,31 @@ export function CollectorExpectedClient() {
     }
   }, []);
 
+  const loadBalance = useCallback(async () => {
+    setBalanceLoading(true);
+    setBalanceError(null);
+    try {
+      const response = await fetch("/api/collector/expected/annual-spare", { cache: "no-store" });
+      const payload = (await response.json()) as AnnualSpareResponse;
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to read Annual Spare balance.");
+      }
+      setBalance(payload.balance ?? null);
+    } catch (reason: unknown) {
+      setBalanceError(reason instanceof Error ? reason.message : "Unable to read Annual Spare balance.");
+      setBalance(null);
+    } finally {
+      setBalanceLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadWeeks("initial");
   }, [loadWeeks]);
+
+  useEffect(() => {
+    void loadBalance();
+  }, [loadBalance]);
 
   return (
     <div className="space-y-6">
@@ -92,13 +129,56 @@ export function CollectorExpectedClient() {
         </div>
         <button
           type="button"
-          onClick={() => void loadWeeks("refresh")}
+          onClick={() => {
+            void loadWeeks("refresh");
+            void loadBalance();
+          }}
           disabled={loading || refreshing}
           className="rounded-card border border-clock-amber bg-clock-amber/10 px-4 py-2 text-sm font-semibold text-clock-amber transition-colors hover:bg-clock-amber/20 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {refreshing ? "Refreshing..." : "Refresh Expected"}
         </button>
       </div>
+
+      <section className="rounded-card border border-pitch-700 bg-pitch-900 p-5">
+        <h2 className="font-display text-lg text-chalk-50">My Annual Spare</h2>
+        <p className="mt-1 text-sm text-chalk-200">
+          Your original Annual Spare balances minus consumed AL-R and AL-C days.
+        </p>
+        {balanceLoading && <p className="mt-4 text-sm text-chalk-200">Reading Annual Spare balance…</p>}
+        {balanceError && (
+          <p role="alert" className="mt-4 rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+            {balanceError}
+          </p>
+        )}
+        {!balanceLoading && !balanceError && !balance && (
+          <p className="mt-4 text-sm text-chalk-200">No Annual Spare record was found for your HR-Code.</p>
+        )}
+        {!balanceLoading && !balanceError && balance && (
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-card border border-pitch-700 px-4 py-3">
+              <dt className="text-xs uppercase tracking-wide text-pitch-500">Total Available</dt>
+              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.total_available)}</dd>
+            </div>
+            <div className="rounded-card border border-pitch-700 px-4 py-3">
+              <dt className="text-xs uppercase tracking-wide text-pitch-500">Available AL-R</dt>
+              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.remaining_al_r)}</dd>
+            </div>
+            <div className="rounded-card border border-pitch-700 px-4 py-3">
+              <dt className="text-xs uppercase tracking-wide text-pitch-500">Available AL-C</dt>
+              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.remaining_al_c)}</dd>
+            </div>
+            <div className="rounded-card border border-pitch-700 px-4 py-3">
+              <dt className="text-xs uppercase tracking-wide text-pitch-500">Used</dt>
+              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.used)}</dd>
+            </div>
+            <div className="rounded-card border border-pitch-700 px-4 py-3">
+              <dt className="text-xs uppercase tracking-wide text-pitch-500">Remaining</dt>
+              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.remaining)}</dd>
+            </div>
+          </dl>
+        )}
+      </section>
 
       {!loading && !hrCode && (
         <p className="rounded-card border border-pitch-700 bg-pitch-900 px-4 py-3 text-sm text-chalk-200">

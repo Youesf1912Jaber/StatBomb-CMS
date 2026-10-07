@@ -26,7 +26,7 @@ export type ActiveLeaveUsage = {
   al_c: number;
 };
 
-function normalizeHrCode(value: unknown): string {
+export function normalizeBalanceHrCode(value: unknown): string {
   return String(value ?? "")
     .replace(/[\u200b-\u200f\u202a-\u202e]/g, "")
     .replace(/\s+/g, " ")
@@ -43,7 +43,7 @@ export function countActiveLeaveUsage(rows: LedgerUsageInput[]): Map<string, Act
   const usage = new Map<string, ActiveLeaveUsage>();
   for (const row of rows) {
     if (row.action !== "consume") continue;
-    const hrCode = normalizeHrCode(row.hr_code);
+    const hrCode = normalizeBalanceHrCode(row.hr_code);
     if (!hrCode) continue;
     const current = usage.get(hrCode) ?? { al_r: 0, al_c: 0 };
     if (row.leave_type === "AL-R") current.al_r += 1;
@@ -62,7 +62,7 @@ export function buildAnnualSpareBalances(
   const balances: AnnualSpareBalance[] = [];
 
   for (const row of spareRows) {
-    const hrCode = normalizeHrCode(row.hr_code);
+    const hrCode = normalizeBalanceHrCode(row.hr_code);
     if (!hrCode || seen.has(hrCode)) continue;
     seen.add(hrCode);
     const usage = usageByHrCode.get(hrCode) ?? { al_r: 0, al_c: 0 };
@@ -83,6 +83,18 @@ export function buildAnnualSpareBalances(
   }
 
   return balances;
+}
+
+export function findAnnualSpareBalanceForHrCode(
+  spareRows: AnnualSpareRow[],
+  ledgerRows: LedgerUsageInput[],
+  hrCode: string
+): AnnualSpareBalance | null {
+  const normalized = normalizeBalanceHrCode(hrCode);
+  if (!normalized) return null;
+  const ownSpare = spareRows.filter((row) => normalizeBalanceHrCode(row.hr_code) === normalized);
+  const ownLedger = ledgerRows.filter((row) => normalizeBalanceHrCode(row.hr_code) === normalized);
+  return buildAnnualSpareBalances(ownSpare, ownLedger)[0] ?? null;
 }
 
 export function filterAnnualSpareBalances(
