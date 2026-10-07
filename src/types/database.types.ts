@@ -229,6 +229,22 @@ export type ExpectedWeekCollectorRow = {
   updated_at: string;
 };
 
+export type AnnualLeaveType = "AL-R" | "AL-C";
+export type AnnualLeaveAction = "consume" | "reverse";
+
+export type AnnualLeaveLedgerRow = {
+  id: string;
+  hr_code: string;
+  collector_id: string | null;
+  leave_date: string;
+  leave_type: AnnualLeaveType;
+  source_week: string | null;
+  source_cell: string | null;
+  action: AnnualLeaveAction;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OverTargetSource = "app" | "google_sheet";
 export type OverTargetSheetSyncStatus = "pending" | "synced" | "failed" | "imported";
 
@@ -557,6 +573,23 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<ExpectedWeekCollectorRow>;
+        Relationships: [];
+      };
+      annual_leave_ledger: {
+        Row: AnnualLeaveLedgerRow;
+        Insert: {
+          id?: string;
+          hr_code: string;
+          collector_id?: string | null;
+          leave_date: string;
+          leave_type: AnnualLeaveType;
+          source_week?: string | null;
+          source_cell?: string | null;
+          action?: AnnualLeaveAction;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<AnnualLeaveLedgerRow>;
         Relationships: [];
       };
       over_target: {
