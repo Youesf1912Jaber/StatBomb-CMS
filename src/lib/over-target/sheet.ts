@@ -9,6 +9,10 @@ import {
   parseOverTargetWeekDate,
   type OverTargetSheetSourceRow,
 } from "./identity";
+import {
+  findFirstEmptyOverTargetRow,
+  overTargetRowHasData,
+} from "./write-row";
 
 const GOOGLE_SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 const OVER_TARGET_RANGE = "A:AZ";
@@ -235,45 +239,12 @@ async function loadOverTargetSheet(): Promise<LoadedOverTargetSheet> {
   };
 }
 
-/**
- * Determines whether a row contains an actual Over Target record.
- *
- * IMPORTANT:
- * The Done column is intentionally NOT considered here.
- *
- * The sheet contains FALSE values in Done for empty/template rows.
- * Those rows must still be treated as available for a new Over Target record.
- *
- * Example:
- * ID | Week | ETA | SLA | Hr-Code | Team | Collector | Count | Done
- *    |      |     |     |         |      |           |       | FALSE
- *
- * This row is considered empty because the actual OT data fields are empty.
- */
-function rowHasContent(
-  row: unknown[],
-  indexes: OverTargetColumnIndexes
-): boolean {
-  const dataColumns = [
-    indexes.id,
-    indexes.week,
-    indexes.hrCode,
-    indexes.team,
-    indexes.collector,
-    indexes.count,
-  ];
-
-  return dataColumns.some(
-    (index) => index >= 0 && cellText(row[index]) !== ""
-  );
-}
-
 function mapSourceRow(
   row: unknown[],
   rowNumber: number,
   indexes: OverTargetColumnIndexes
 ): OverTargetSheetSourceRow | null {
-  if (!rowHasContent(row, indexes)) {
+  if (!overTargetRowHasData(row, indexes)) {
     return null;
   }
 
@@ -306,29 +277,6 @@ export async function readOverTargetSheet(): Promise<
       (row): row is OverTargetSheetSourceRow =>
         row !== null
     );
-}
-
-/**
- * Finds the first available row for a new Over Target record.
- *
- * Done is deliberately ignored by rowHasContent(), so rows containing
- * template/formula FALSE values in Done are still considered empty.
- */
-function findFirstEmptyRow(
-  matrix: unknown[][],
-  indexes: OverTargetColumnIndexes
-): number {
-  let lastContentRow = 1;
-
-  for (let index = 1; index < matrix.length; index += 1) {
-    const row = matrix[index] ?? [];
-
-    if (rowHasContent(row, indexes)) {
-      lastContentRow = index + 1;
-    }
-  }
-
-  return lastContentRow + 1;
 }
 
 function cellWrite(
@@ -372,7 +320,7 @@ export async function appendOverTargetRow(
     indexes,
   } = await loadOverTargetSheet();
 
-  const targetRow = findFirstEmptyRow(matrix, indexes);
+  const targetRow = findFirstEmptyOverTargetRow(matrix, indexes);
 
   const writes = [
     cellWrite(
