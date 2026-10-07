@@ -6,6 +6,7 @@ export type AdminOverTargetRecord = OverTargetRow & {
   sla: string | null;
   assignment_status: AssignmentStatus | null;
   match_href: string | null;
+  add_collector_href: string | null;
 };
 
 export type AdminOverTargetAssignmentDetails = Pick<AssignmentRow, "id" | "match_id" | "collector_id" | "sla" | "status">;
@@ -25,6 +26,13 @@ export function adminOverTargetAssignmentHref(assignmentId: string | null | unde
   if (!assignmentId) return null;
   const trimmed = assignmentId.trim();
   return trimmed ? `/admin/assignments/${encodeURIComponent(trimmed)}` : null;
+}
+
+export function adminOverTargetAddCollectorHref(matchId: string | null | undefined): string | null {
+  if (!matchId) return null;
+  const trimmed = matchId.trim();
+  if (!trimmed) return null;
+  return `/admin/matches/${encodeURIComponent(trimmed)}/distribution`;
 }
 
 export function uniqueAdminAssignmentByCollectorMatch(
@@ -93,6 +101,7 @@ export function mergeAdminOverTargetMatchDetails(
   const assignmentFromId = row.assignment_id ? assignmentById.get(row.assignment_id) ?? null : null;
   const match = resolveAdminMatch(row, assignmentFromId, matchById, matchByExternalId);
   const assignment = assignmentFromId ?? (row.assignment_id ? null : resolveFallbackAdminAssignment(row, match, assignmentByCollectorMatch));
+  const matchIdForCollector = row.match_external_id?.trim() || match?.external_id?.trim() || "";
   return {
     ...row,
     home_team: match?.home_team ?? null,
@@ -100,6 +109,7 @@ export function mergeAdminOverTargetMatchDetails(
     sla: assignment?.sla ?? null,
     assignment_status: assignment?.status ?? null,
     match_href: resolveAdminAssignmentHref(row, assignment),
+    add_collector_href: adminOverTargetAddCollectorHref(matchIdForCollector),
   };
 }
 

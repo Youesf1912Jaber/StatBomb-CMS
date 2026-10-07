@@ -37,6 +37,7 @@ type OverTargetMatchDetails = {
   assignment_status: AssignmentStatus | null;
   assignment_href: string | null;
   match_href: string | null;
+  add_collector_href: string | null;
 };
 
 function overTargetMatchDetails(
@@ -50,6 +51,7 @@ function overTargetMatchDetails(
     assignment_status: enriched.assignment_status ?? null,
     assignment_href: enriched.assignment_href ?? null,
     match_href: enriched.match_href ?? null,
+    add_collector_href: enriched.add_collector_href ?? null,
   };
 }
 
@@ -115,6 +117,7 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Count</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Done</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Sync Status</th>
+                {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Add Collector</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-pitch-800">
@@ -149,6 +152,22 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
                     <td className="whitespace-nowrap px-3 py-3">{displayOverTargetCount(row)}</td>
                     <td className="whitespace-nowrap px-3 py-3">{displayOverTargetDone(row)}</td>
                     <td className="whitespace-nowrap px-3 py-3">{displayOverTargetSyncStatus(row.sheet_sync_status)}</td>
+                    {isAdmin && (
+                      <td className="whitespace-nowrap px-3 py-3">
+                        {details.add_collector_href ? (
+                          <Link
+                            href={details.add_collector_href}
+                            className="inline-flex rounded-[8px] border border-pitch-700 px-2.5 py-1.5 text-xs text-chalk-50 hover:border-clock-amber"
+                          >
+                            Add Collector
+                          </Link>
+                        ) : (
+                          <span className="inline-flex rounded-[8px] border border-pitch-800 px-2.5 py-1.5 text-xs text-pitch-500">
+                            Add Collector
+                          </span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
