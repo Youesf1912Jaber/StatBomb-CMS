@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import type { OverTargetRow } from "../../types/database.types";
+import { formatAddAssignmentFeedback } from "./add-assignment-feedback";
 import {
   attachOverTargetsToAssignments,
   parseDistributionOverTargetFields,
@@ -200,5 +204,70 @@ describe("idempotency", () => {
     assert.deepEqual(second.records, []);
     assert.deepEqual(second.warnings, []);
     assert.equal(second.sheetFailed, false);
+  });
+});
+
+describe("service-role insert", () => {
+  it("uses the injected create client and does not create extra assignments", async () => {
+    const clients: string[] = [];
+    const result = await attachOverTargetsToAssignments(
+      [{ assignmentId: "asg-1", overTarget: true, overTargetCount: 4 }],
+      {
+        weekDate: "10/5/2026",
+        createdBy: "admin-1",
+        create: async (input) => {
+          clients.push("service-role");
+          assert.equal(input.assignmentId, "asg-1");
+          assert.equal(input.count, 4);
+          return { ok: true, record: makeRecord({ assignment_id: "asg-1", count_value: 4 }) };
+        },
+      }
+    );
+
+    assert.deepEqual(clients, ["service-role"]);
+    assert.equal(result.records.length, 1);
+    assert.equal(result.warnings.length, 0);
+  });
+
+  it("wires Add Assignment Over Target writes through createServiceRoleClient", () => {
+    const routePath = join(fileURLToPath(new URL(".", import.meta.url)), "../../app/api/matches/[matchId]/distribution/route.ts");
+    const source = readFileSync(routePath, "utf8");
+    assert.match(source, /createClient,\s*createServiceRoleClient/);
+    assert.match(source, /const overTargetClient = createServiceRoleClient\(\)/);
+    assert.match(source, /createOverTargetRecord\(overTargetClient,\s*input\)/);
+    assert.equal(source.includes("createOverTargetRecord(supabase, input)"), false);
+  });
+});
+
+describe("Add Assignment warning visibility", () => {
+  it("keeps assignment success and surfaces Over Target sheet failure warnings", () => {
+    const feedback = formatAddAssignmentFeedback({
+      assignments: [{ id: "asg-1", task: "Live Data Collection", half: "Half 1" }],
+      warnings: ["Over Target was saved in the database, but writing the Google Sheet row failed: Unable to write Over Target to Google Sheets. The Distribution assignment asg-1 was not rolled back. Retry the sheet write from Admin Over Target."],
+      overTargetSheetFailed: true,
+    });
+    assert.equal(feedback.successMessage, "Assignment added successfully. Live Data Collection · Half 1 · asg-1");
+    assert.equal(feedback.warnings.length, 1);
+    assert.match(feedback.warnings[0] ?? "", /was not rolled back/);
+  });
+
+  it("does not show only a success message when overTargetSheetFailed is true", () => {
+    const feedback = formatAddAssignmentFeedback({
+      assignments: [{ id: "asg-2", task: "Pre-Match", half: "Half 2" }],
+      overTargetSheetFailed: true,
+    });
+    assert.match(feedback.successMessage, /^Assignment added successfully/);
+    assert.equal(feedback.warnings.length, 1);
+    assert.match(feedback.warnings[0] ?? "", /Google Sheet row failed/);
+  });
+
+  it("shows success without warnings for a normal assignment", () => {
+    const feedback = formatAddAssignmentFeedback({
+      assignments: [{ id: "asg-3", task: "Live Data Collection", half: "Full Match" }],
+      warnings: [],
+      overTargetSheetFailed: false,
+    });
+    assert.equal(feedback.successMessage, "Assignment added successfully. Live Data Collection · Full Match · asg-3");
+    assert.deepEqual(feedback.warnings, []);
   });
 });

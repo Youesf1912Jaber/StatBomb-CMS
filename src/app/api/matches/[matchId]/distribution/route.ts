@@ -6,7 +6,7 @@ import { fetchAllMatches, findMatchByExternalId } from "@/lib/match-master-previ
 import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
 import { findAssignmentByLogicalKey } from "@/lib/sync/reconcile";
 import { PreviewInputError } from "@/lib/sync/preview";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import type { AssignmentRow } from "@/types/database.types";
 import { createOverTargetRecord } from "@/lib/over-target/create";
 import {
@@ -205,6 +205,7 @@ export async function POST(
       matchId: databaseMatch.id,
     });
 
+    const overTargetClient = createServiceRoleClient();
     const attached = await attachOverTargetsToAssignments(
       persisted.map((assignment, index) => ({
         assignmentId: assignment.id,
@@ -214,7 +215,7 @@ export async function POST(
       {
         weekDate: resolveOverTargetDistributionWeek(),
         createdBy: profile.id,
-        create: (input) => createOverTargetRecord(supabase, input),
+        create: (input) => createOverTargetRecord(overTargetClient, input),
       },
     );
 

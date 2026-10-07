@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DISTRIBUTION_TASK_OPTIONS } from "@/lib/distribution-options";
+import { formatAddAssignmentFeedback } from "@/lib/over-target/add-assignment-feedback";
 import type { TeamSheetCollector } from "@/lib/sync/google-sheets";
 import { TaskInputModal } from "./TaskInputModal";
 
@@ -38,6 +39,7 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [showTaskInput, setShowTaskInput] = useState(false);
 
   // Collect all available tasks: predefined + custom from pending
@@ -95,6 +97,7 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
     resetEntry();
     setError(null);
     setSuccess(null);
+    setWarnings([]);
     setOpen(false);
   }
 
@@ -120,19 +123,21 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
     if (!window.confirm(`You are about to add ${pending.length} assignment${pending.length === 1 ? "" : "s"} to the Distribution Google Sheet.`)) return;
     setSubmitting(true);
     setError(null);
+    setWarnings([]);
     try {
       const response = await fetch(`/api/matches/${encodeURIComponent(matchId)}/distribution`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ assignments: pending.map(({ collectorHrCode: code, task: value, half: selectedHalf, shiftDate: selectedShiftDate, overTarget: ot, overTargetCount: otCount }) => ({ collectorHrCode: code, task: value, half: selectedHalf, shiftDate: selectedShiftDate, overTarget: ot, overTargetCount: otCount })) }),
       });
-      const payload = await response.json() as { success?: boolean; error?: string; count?: number; assignments?: Array<{ id: string; task: string; half: string }> };
+      const payload = await response.json() as { success?: boolean; error?: string; count?: number; assignments?: Array<{ id: string; task: string; half: string }>; warnings?: string[]; overTargetSheetFailed?: boolean };
       if (!response.ok || !payload.success) throw new Error(payload.error ?? "The assignments could not be created.");
       setPending([]);
       resetEntry();
       setOpen(false);
-      const details = (payload.assignments ?? []).map((assignment) => `${assignment.task} · ${assignment.half} · ${assignment.id}`).join("; ");
-      setSuccess(`Assignment added successfully.${details ? ` ${details}` : ""}`);
+      const feedback = formatAddAssignmentFeedback(payload);
+      setSuccess(feedback.successMessage);
+      setWarnings(feedback.warnings);
       router.refresh();
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "The assignments could not be created.");
@@ -145,7 +150,14 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
     return (
       <div className="space-y-3">
         {success && <p role="status" className="rounded-[8px] border border-green-900 bg-green-950/30 px-4 py-3 text-sm text-green-200">{success}</p>}
-        <button type="button" onClick={() => { setOpen(true); setSuccess(null); }} className="inline-flex rounded-[8px] bg-clock-amber px-4 py-2 text-sm font-medium text-pitch-950">
+        {warnings.length > 0 && (
+          <div role="status" className="space-y-2">
+            {warnings.map((warning) => (
+              <p key={warning} className="rounded-[8px] border border-amber-900 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{warning}</p>
+            ))}
+          </div>
+        )}
+        <button type="button" onClick={() => { setOpen(true); setSuccess(null); setWarnings([]); }} className="inline-flex rounded-[8px] bg-clock-amber px-4 py-2 text-sm font-medium text-pitch-950">
           Add Assignment
         </button>
       </div>
