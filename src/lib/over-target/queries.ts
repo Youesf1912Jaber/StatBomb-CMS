@@ -3,7 +3,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, OverTargetRow } from "@/types/database.types";
 import {
+  adminOverTargetCollectorMatchKey,
   mergeAdminOverTargetRecords,
+  uniqueAdminAssignmentByCollectorMatch,
   type AdminOverTargetAssignmentDetails,
   type AdminOverTargetMatchDetails,
   type AdminOverTargetRecord,
@@ -143,7 +145,7 @@ async function getAdminOverTargetAssignmentDetails(
     const chunk = assignmentIds.slice(i, i + LOOKUP_CHUNK_SIZE);
     const { data, error } = await client
       .from("assignments")
-      .select("id, match_id, sla, status")
+      .select("id, match_id, collector_id, sla, status")
       .in("id", chunk);
     if (error) throw error;
     for (const row of data ?? []) {
@@ -151,6 +153,39 @@ async function getAdminOverTargetAssignmentDetails(
     }
   }
   return byId;
+}
+
+async function getAdminOverTargetAssignmentsByCollectorMatch(
+  client: Client,
+  pairs: Array<{ collector_id: string; match_id: string }>
+): Promise<AdminOverTargetAssignmentDetails[]> {
+  const collectorIds = [...new Set(pairs.map((pair) => pair.collector_id))];
+  const matchIds = [...new Set(pairs.map((pair) => pair.match_id))];
+  if (collectorIds.length === 0 || matchIds.length === 0) return [];
+
+  const pairKeys = new Set(
+    pairs
+      .map((pair) => adminOverTargetCollectorMatchKey(pair.collector_id, pair.match_id))
+      .filter((key): key is string => Boolean(key))
+  );
+  const rows: AdminOverTargetAssignmentDetails[] = [];
+  for (let i = 0; i < collectorIds.length; i += LOOKUP_CHUNK_SIZE) {
+    const collectorChunk = collectorIds.slice(i, i + LOOKUP_CHUNK_SIZE);
+    for (let j = 0; j < matchIds.length; j += LOOKUP_CHUNK_SIZE) {
+      const matchChunk = matchIds.slice(j, j + LOOKUP_CHUNK_SIZE);
+      const { data, error } = await client
+        .from("assignments")
+        .select("id, match_id, collector_id, sla, status")
+        .in("collector_id", collectorChunk)
+        .in("match_id", matchChunk);
+      if (error) throw error;
+      for (const row of data ?? []) {
+        const key = adminOverTargetCollectorMatchKey(row.collector_id, row.match_id);
+        if (key && pairKeys.has(key)) rows.push(row);
+      }
+    }
+  }
+  return rows;
 }
 
 async function getAdminOverTargetMatchDetailsById(
@@ -228,7 +263,23 @@ export async function getAdminOverTargetRecords(client: Client): Promise<AdminOv
   ];
   const matchByExternalId = await getAdminOverTargetMatchDetailsByExternalId(client, unresolvedExternalIds);
 
-  return mergeAdminOverTargetRecords(records, assignmentById, matchById, matchByExternalId);
+  const fallbackPairs = records.flatMap((row) => {
+    if (row.assignment_id?.trim()) return [];
+    const collectorId = row.collector_id?.trim();
+    if (!collectorId) return [];
+    const matchId =
+      row.match_id?.trim() ||
+      (row.match_external_id?.trim() ? matchByExternalId.get(row.match_external_id.trim())?.id : undefined);
+    if (!matchId) return [];
+    return [{ collector_id: collectorId, match_id: matchId }];
+  });
+  const fallbackAssignments = await getAdminOverTargetAssignmentsByCollectorMatch(client, fallbackPairs);
+  const assignmentByCollectorMatch = uniqueAdminAssignmentByCollectorMatch([
+    ...assignmentById.values(),
+    ...fallbackAssignments,
+  ]);
+
+  return mergeAdminOverTargetRecords(records, assignmentById, matchById, matchByExternalId, assignmentByCollectorMatch);
 }
 
 export async function getRetryableOverTargetRecords(client: Client): Promise<OverTargetRow[]> {

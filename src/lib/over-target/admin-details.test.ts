@@ -5,9 +5,10 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { OverTargetRow } from "../../types/database.types";
 import {
-  adminOverTargetMatchHref,
+  adminOverTargetAssignmentHref,
   mergeAdminOverTargetMatchDetails,
   mergeAdminOverTargetRecords,
+  uniqueAdminAssignmentByCollectorMatch,
   type AdminOverTargetAssignmentDetails,
   type AdminOverTargetMatchDetails,
 } from "./admin-details";
@@ -52,6 +53,7 @@ function makeRecord(overrides: Partial<OverTargetRow> = {}): OverTargetRow {
 const assignment: AdminOverTargetAssignmentDetails = {
   id: "asg-1",
   match_id: "match-1",
+  collector_id: "col-1",
   sla: "2026-10-05T19:35:00.000Z",
   status: "In Progress",
 };
@@ -63,16 +65,20 @@ const match: AdminOverTargetMatchDetails = {
   away_team: "Chelsea",
 };
 
-describe("adminOverTargetMatchHref", () => {
-  it("links Match ID to the existing Admin Match Distribution page", () => {
-    assert.equal(adminOverTargetMatchHref("12345"), "/admin/matches/12345/distribution");
+describe("adminOverTargetAssignmentHref", () => {
+  it("links Match ID to the existing Admin Assignment Detail page", () => {
+    assert.equal(adminOverTargetAssignmentHref("asg-1"), "/admin/assignments/asg-1");
+    assert.equal(
+      adminOverTargetAssignmentHref("72006803-2257-43ef-822c-e5c13df6910d"),
+      "/admin/assignments/72006803-2257-43ef-822c-e5c13df6910d"
+    );
   });
 
-  it("returns no link when the match external id is missing", () => {
-    assert.equal(adminOverTargetMatchHref(null), null);
-    assert.equal(adminOverTargetMatchHref(undefined), null);
-    assert.equal(adminOverTargetMatchHref(""), null);
-    assert.equal(adminOverTargetMatchHref("   "), null);
+  it("returns no link when assignment_id is missing", () => {
+    assert.equal(adminOverTargetAssignmentHref(null), null);
+    assert.equal(adminOverTargetAssignmentHref(undefined), null);
+    assert.equal(adminOverTargetAssignmentHref(""), null);
+    assert.equal(adminOverTargetAssignmentHref("   "), null);
   });
 });
 
@@ -87,11 +93,28 @@ describe("mergeAdminOverTargetMatchDetails", () => {
     assert.equal(merged.away_team, "Chelsea");
     assert.equal(merged.sla, "2026-10-05T19:35:00.000Z");
     assert.equal(merged.assignment_status, "In Progress");
-    assert.equal(merged.match_href, "/admin/matches/12345/distribution");
+    assert.equal(merged.match_href, "/admin/assignments/asg-1");
+    assert.equal(merged.match_href?.includes("/admin/matches/"), false);
+    assert.equal(merged.match_href?.includes("/distribution"), false);
     assert.equal(merged.match_external_id, "12345");
   });
 
-  it("does not crash when assignment_id is missing and still links a resolved Match Master record", () => {
+  it("links an Over Target row with assignment_id to /admin/assignments/{assignment_id}", () => {
+    const merged = mergeAdminOverTargetMatchDetails(
+      makeRecord({ assignment_id: "72006803-2257-43ef-822c-e5c13df6910d" }),
+      new Map([
+        [
+          "72006803-2257-43ef-822c-e5c13df6910d",
+          { ...assignment, id: "72006803-2257-43ef-822c-e5c13df6910d" },
+        ],
+      ]),
+      new Map([[match.id, match]])
+    );
+    assert.equal(merged.match_href, "/admin/assignments/72006803-2257-43ef-822c-e5c13df6910d");
+    assert.notEqual(merged.match_href, "/admin/matches/12345/distribution");
+  });
+
+  it("does not crash when assignment_id is missing and still resolves teams without linking to distribution", () => {
     const merged = mergeAdminOverTargetMatchDetails(
       makeRecord({ assignment_id: null, match_id: null }),
       new Map(),
@@ -102,7 +125,8 @@ describe("mergeAdminOverTargetMatchDetails", () => {
     assert.equal(merged.home_team, "Arsenal");
     assert.equal(merged.away_team, "Chelsea");
     assert.equal(merged.sla, null);
-    assert.equal(merged.match_href, "/admin/matches/12345/distribution");
+    assert.equal(merged.match_href, null);
+    assert.equal(merged.match_external_id, "12345");
   });
 
   it("does not crash when assignment_id is missing and match_id still resolves teams", () => {
@@ -115,7 +139,43 @@ describe("mergeAdminOverTargetMatchDetails", () => {
     assert.equal(merged.home_team, "Arsenal");
     assert.equal(merged.away_team, "Chelsea");
     assert.equal(merged.sla, null);
-    assert.equal(merged.match_href, "/admin/matches/12345/distribution");
+    assert.equal(merged.match_href, null);
+  });
+
+  it("links a missing assignment_id only when collector + match resolve to one assignment", () => {
+    const fallback = uniqueAdminAssignmentByCollectorMatch([assignment]);
+    const merged = mergeAdminOverTargetMatchDetails(
+      makeRecord({ assignment_id: null, match_id: "match-1", collector_id: "col-1" }),
+      new Map(),
+      new Map([[match.id, match]]),
+      new Map(),
+      fallback
+    );
+    assert.equal(merged.assignment_id, null);
+    assert.equal(merged.match_href, "/admin/assignments/asg-1");
+    assert.equal(merged.sla, "2026-10-05T19:35:00.000Z");
+  });
+
+  it("keeps Match ID non-clickable when missing assignment_id is ambiguous across collectors", () => {
+    const other: AdminOverTargetAssignmentDetails = {
+      id: "asg-2",
+      match_id: "match-1",
+      collector_id: "col-2",
+      sla: "2026-10-05T20:00:00.000Z",
+      status: "Not Started",
+    };
+    const merged = mergeAdminOverTargetMatchDetails(
+      makeRecord({ assignment_id: null, match_id: "match-1", collector_id: null }),
+      new Map([
+        [assignment.id, assignment],
+        [other.id, other],
+      ]),
+      new Map([[match.id, match]]),
+      new Map(),
+      uniqueAdminAssignmentByCollectorMatch([assignment, other])
+    );
+    assert.equal(merged.match_external_id, "12345");
+    assert.equal(merged.match_href, null);
   });
 
   it("leaves Match ID non-clickable when the match cannot be resolved", () => {
@@ -164,10 +224,55 @@ describe("mergeAdminOverTargetRecords", () => {
     assert.equal(merged[0]?.home_team, "Arsenal");
     assert.equal(merged[0]?.away_team, "Chelsea");
     assert.equal(merged[0]?.sla, "2026-10-05T19:35:00.000Z");
-    assert.equal(merged[0]?.match_href, "/admin/matches/12345/distribution");
+    assert.equal(merged[0]?.match_href, "/admin/assignments/asg-1");
     assert.equal(merged[1]?.match_external_id, "99999");
     assert.equal(merged[1]?.match_href, null);
     assert.equal(merged[1]?.sla, null);
+  });
+
+  it("two assignments on the same match resolve to their respective assignment URLs", () => {
+    const collectorA: AdminOverTargetAssignmentDetails = {
+      id: "asg-a",
+      match_id: "match-1",
+      collector_id: "col-a",
+      sla: "2026-10-05T19:35:00.000Z",
+      status: "In Progress",
+    };
+    const collectorB: AdminOverTargetAssignmentDetails = {
+      id: "asg-b",
+      match_id: "match-1",
+      collector_id: "col-b",
+      sla: "2026-10-05T20:00:00.000Z",
+      status: "Not Started",
+    };
+    const merged = mergeAdminOverTargetRecords(
+      [
+        makeRecord({
+          id: "ot-a",
+          assignment_id: "asg-a",
+          collector_id: "col-a",
+          collector_name: "Collector A",
+          hr_code: "A-1",
+        }),
+        makeRecord({
+          id: "ot-b",
+          assignment_id: "asg-b",
+          collector_id: "col-b",
+          collector_name: "Collector B",
+          hr_code: "A-2",
+        }),
+      ],
+      new Map([
+        [collectorA.id, collectorA],
+        [collectorB.id, collectorB],
+      ]),
+      new Map([[match.id, match]])
+    );
+    assert.equal(merged[0]?.match_href, "/admin/assignments/asg-a");
+    assert.equal(merged[1]?.match_href, "/admin/assignments/asg-b");
+    assert.notEqual(merged[0]?.match_href, merged[1]?.match_href);
+    assert.equal(merged[0]?.match_href?.includes("/admin/matches/"), false);
+    assert.equal(merged[1]?.match_href?.includes("/distribution"), false);
   });
 });
 
@@ -184,12 +289,12 @@ describe("Admin Over Target page wiring", () => {
     const source = readFileSync(join(dir, "queries.ts"), "utf8");
     assert.match(source, /export async function getAdminOverTargetRecords/);
     assert.match(source, /from\("assignments"\)/);
-    assert.match(source, /select\("id, match_id, sla, status"\)/);
+    assert.match(source, /select\("id, match_id, collector_id, sla, status"\)/);
     assert.match(source, /select\("id, external_id, home_team, away_team"\)/);
     assert.match(source, /mergeAdminOverTargetRecords/);
   });
 
-  it("admin table shows Home Team, Away Team, SLA and links Match ID to the existing match page", () => {
+  it("admin table shows Home Team, Away Team, SLA and links Match ID via match_href", () => {
     const source = readFileSync(join(dir, "../../components/OverTargetTable.tsx"), "utf8");
     assert.match(source, /Home Team/);
     assert.match(source, /Away Team/);
@@ -198,6 +303,7 @@ describe("Admin Over Target page wiring", () => {
     assert.match(source, /SlaCountdown/);
     assert.match(source, /HR-Code/);
     assert.match(source, /Collector/);
+    assert.equal(source.includes("/admin/matches/"), false);
   });
 
   it("admin Over Target client uses admin-enriched records", () => {
@@ -205,6 +311,13 @@ describe("Admin Over Target page wiring", () => {
     assert.match(source, /variant="admin"/);
     assert.match(source, /AdminOverTargetRecord/);
     assert.equal(source.includes("/collector/assignments/"), false);
+  });
+
+  it("admin assignment href never points at match distribution", () => {
+    const source = readFileSync(join(dir, "admin-details.ts"), "utf8");
+    assert.match(source, /\/admin\/assignments\/\$\{encodeURIComponent\(trimmed\)\}/);
+    assert.equal(source.includes("/admin/matches/"), false);
+    assert.equal(source.includes("/distribution"), false);
   });
 
   it("does not change Collector Over Target assignment routing", () => {
