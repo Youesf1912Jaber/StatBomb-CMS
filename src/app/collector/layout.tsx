@@ -13,6 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "My FF Shots", href: "/collector/ff-shots" },
   { label: "Bonus", href: "/collector/bonus" },
   { label: "Expected", href: "/collector/expected" },
+  { label: "My Over Target", href: "/collector/over-target" },
   { label: "Notifications", href: "/collector/notifications" },
   { label: "Account Settings", href: "/collector/settings" },
 ];

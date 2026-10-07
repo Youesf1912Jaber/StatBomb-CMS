@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "FF Shots", href: "/admin/ff-shots" },
   { label: "Bonus", href: "/admin/bonus" },
   { label: "Expected", href: "/admin/expected" },
+  { label: "Over Target", href: "/admin/over-target" },
   { label: "Activity Log", href: "/admin/activity-log" },
   { label: "Notifications", href: "/admin/notifications" },
 ];
