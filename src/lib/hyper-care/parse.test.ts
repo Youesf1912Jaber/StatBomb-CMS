@@ -74,6 +74,25 @@ describe("resolveHyperCareSections", () => {
     assert.equal(sections[0]?.team_request, null);
   });
 
+  it("matches Home team against the Team table", () => {
+    const sections = resolveHyperCareSections("Chelsea", "Everton", catalog);
+    assert.equal(sections.length, 1);
+    assert.equal(sections[0]?.side, "home");
+    assert.equal(sections[0]?.team_name, "Chelsea");
+    assert.equal(sections[0]?.customer_care, null);
+    assert.equal(sections[0]?.team_request?.request, "Starting XI is 3-4-2-1");
+    assert.equal(sections[0]?.team_request?.gender, "Men");
+  });
+
+  it("matches Away team against the Customer table", () => {
+    const sections = resolveHyperCareSections("Everton", "Arsenal", catalog);
+    assert.equal(sections.length, 1);
+    assert.equal(sections[0]?.side, "away");
+    assert.equal(sections[0]?.team_name, "Arsenal");
+    assert.equal(sections[0]?.customer_care?.review_type, "Active");
+    assert.equal(sections[0]?.team_request, null);
+  });
+
   it("matches Away team against the Team table", () => {
     const sections = resolveHyperCareSections("Everton", "Chelsea", catalog);
     assert.equal(sections.length, 1);
@@ -165,9 +184,68 @@ describe("Collector Hyper Care page wiring", () => {
     assert.match(sheet, /googleRequest/);
   });
 
-  it("does not modify Admin assignment detail or Over Target", () => {
-    const admin = readFileSync(join(dir, "../../app/admin/assignments/[id]/page.tsx"), "utf8");
-    assert.equal(admin.includes("getHyperCareForMatch"), false);
-    assert.equal(admin.includes("HyperCareSection"), false);
+  it("does not modify Over Target", () => {
+    const overTarget = readFileSync(join(dir, "../over-target/view.ts"), "utf8");
+    assert.equal(overTarget.includes("getHyperCareForMatch"), false);
+    assert.equal(overTarget.includes("HyperCareSection"), false);
+  });
+});
+
+describe("Admin Hyper Care page wiring", () => {
+  const dir = fileURLToPath(new URL(".", import.meta.url));
+
+  it("Admin Distribution page loads Hyper Care server-side before Collector selection", () => {
+    const source = readFileSync(join(dir, "../../app/admin/matches/[matchId]/distribution/page.tsx"), "utf8");
+    assert.match(source, /getHyperCareForMatch/);
+    assert.match(source, /match\.home_team/);
+    assert.match(source, /match\.away_team/);
+    assert.match(source, /HyperCareSection/);
+    const hyperCareIndex = source.indexOf("<HyperCareSection");
+    const formIndex = source.indexOf("<DistributionAssignmentForm");
+    assert.ok(hyperCareIndex >= 0);
+    assert.ok(formIndex >= 0);
+    assert.ok(hyperCareIndex < formIndex);
+  });
+
+  it("Admin Distribution page does not auto-select a Collector or change Add Assignment", () => {
+    const page = readFileSync(join(dir, "../../app/admin/matches/[matchId]/distribution/page.tsx"), "utf8");
+    const form = readFileSync(
+      join(dir, "../../app/admin/matches/[matchId]/distribution/DistributionAssignmentForm.tsx"),
+      "utf8"
+    );
+    assert.match(form, /Add Assignment/);
+    assert.match(form, /collectorHrCode/);
+    assert.equal(form.includes("getHyperCareForMatch"), false);
+    assert.equal(form.includes("HyperCareSection"), false);
+    assert.match(page, /<DistributionAssignmentForm matchId=\{normalizedMatchId\} collectors=\{collectors\} \/>/);
+  });
+
+  it("Admin Assignment Detail loads Hyper Care server-side after assignment", () => {
+    const source = readFileSync(join(dir, "../../app/admin/assignments/[id]/page.tsx"), "utf8");
+    assert.match(source, /getHyperCareForMatch/);
+    assert.match(source, /assignment\.match\.home_team/);
+    assert.match(source, /assignment\.match\.away_team/);
+    assert.match(source, /HyperCareSection/);
+  });
+
+  it("does not show an empty Hyper Care section when there are no matching teams", () => {
+    const source = readFileSync(join(dir, "../../components/HyperCareSection.tsx"), "utf8");
+    assert.match(source, /if \(sections\.length === 0\) return null/);
+  });
+
+  it("reuses the Collector Hyper Care lookup and does not duplicate parsing or matching", () => {
+    const adminDistribution = readFileSync(
+      join(dir, "../../app/admin/matches/[matchId]/distribution/page.tsx"),
+      "utf8"
+    );
+    const adminAssignment = readFileSync(join(dir, "../../app/admin/assignments/[id]/page.tsx"), "utf8");
+    const collector = readFileSync(join(dir, "../../app/collector/assignments/[id]/page.tsx"), "utf8");
+    assert.match(adminDistribution, /from "@\/lib\/hyper-care\/lookup"/);
+    assert.match(adminAssignment, /from "@\/lib\/hyper-care\/lookup"/);
+    assert.match(collector, /from "@\/lib\/hyper-care\/lookup"/);
+    assert.equal(adminDistribution.includes("parseHyperCareSheet"), false);
+    assert.equal(adminAssignment.includes("parseHyperCareSheet"), false);
+    assert.equal(adminDistribution.includes("resolveHyperCareSections"), false);
+    assert.equal(adminAssignment.includes("resolveHyperCareSections"), false);
   });
 });

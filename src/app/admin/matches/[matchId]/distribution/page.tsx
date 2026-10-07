@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
+import { HyperCareSection } from "@/components/HyperCareSection";
+import { getHyperCareForMatch } from "@/lib/hyper-care/lookup";
 import { DistributionAssignmentForm } from "./DistributionAssignmentForm";
 import { DistributionRowsClient } from "./DistributionRowsClient";
 import { normalizeMatchId, pullTeamSheet, readDistributionRowsForMatch, readMatchesMasterSheet } from "@/lib/sync/google-sheets";
@@ -29,6 +31,9 @@ export default async function MatchDistributionPage({
   const match = matches.find((row) => normalizeMatchId(row.match_id) === normalizedMatchId) ?? null;
   const distribution = await readDistributionRowsForMatch(normalizedMatchId);
   const collectors = await pullTeamSheet();
+  const hyperCare = match
+    ? await getHyperCareForMatch(match.home_team, match.away_team)
+    : [];
 
   return (
     <div className="space-y-6">
@@ -83,6 +88,8 @@ export default async function MatchDistributionPage({
           </div>
         </dl>
       )}
+
+      {match && <HyperCareSection sections={hyperCare} />}
 
       {match ? (
         <DistributionAssignmentForm matchId={normalizedMatchId} collectors={collectors} />

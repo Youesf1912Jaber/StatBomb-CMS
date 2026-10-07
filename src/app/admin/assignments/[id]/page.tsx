@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } from "@/lib/assignments/queries";
 import { distributionPresenceLabel } from "@/lib/assignments/distribution-presence";
 import { getActivityLogsForAssignment } from "@/lib/activity-logs/queries";
+import { getHyperCareForMatch } from "@/lib/hyper-care/lookup";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AdminAssignmentTaskTimers } from "@/components/AdminAssignmentTaskTimers";
 import { AdminAssignmentActions } from "@/components/AdminAssignmentActions";
+import { HyperCareSection } from "@/components/HyperCareSection";
 import { ReassignButton } from "./ReassignButton";
 import { EditButton } from "./EditButton";
 import { EditDistributionDetailsButton } from "./EditDistributionDetailsButton";
@@ -40,6 +42,7 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
   const collaborators = await getMatchCollaborators(supabase, assignment.match_id);
   const activityHistory = await getActivityLogsForAssignment(supabase, assignment.id);
   const taskTimers = await getAssignmentTaskTimers(supabase, assignment.id);
+  const hyperCare = await getHyperCareForMatch(assignment.match.home_team, assignment.match.away_team);
 
   const { data: allCollectors } = await supabase
     .from("profiles")
@@ -138,6 +141,8 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
           <dd className="mt-0.5 text-chalk-50">{formatTimestamp(assignment.completed_at)}</dd>
         </div>
       </dl>
+
+      <HyperCareSection sections={hyperCare} />
 
       {assignment.notes && (
         <div className="rounded-card border border-pitch-700 bg-pitch-900 p-5">
