@@ -6,7 +6,9 @@ import {
   requireExpectedAdmin,
   serializeExpectedWeek,
 } from "@/lib/expected/api";
+import { reconcileAnnualLeaveLedger } from "@/lib/annual-spare/ledger-sync";
 import { updateExpectedDailyValue } from "@/lib/expected/sheet";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -75,6 +77,7 @@ export async function PATCH(
       value,
       rowNumber,
     });
+    await reconcileAnnualLeaveLedger(createServiceRoleClient(), data.weeks);
     const week = data.weeks.find((item) => expectedWeekId(item) === weekId);
     if (!week) {
       return NextResponse.json({ error: "Expected week was not found after saving." }, { status: 404 });

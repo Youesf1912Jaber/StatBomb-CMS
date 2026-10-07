@@ -6,6 +6,7 @@ import type {
   ExpectedWeekCollectorRow,
   ExpectedWeekRow,
 } from "@/types/database.types";
+import { reconcileAnnualLeaveLedger } from "@/lib/annual-spare/ledger-sync";
 import { expectedWeekId } from "./api";
 import { readExpectedSheet } from "./sheet";
 import type {
@@ -415,6 +416,12 @@ export async function syncExpectedWeeks(client: Client): Promise<ExpectedSyncRes
       await markMissingWeeks(client, missingIds, now);
       console.log(`[EXPECTED_SYNC] Marked ${missingIds.length} weeks as missing`);
     }
+
+    console.log("[EXPECTED_SYNC] Reconciling annual leave ledger");
+    const ledger = await reconcileAnnualLeaveLedger(client, sheet.weeks);
+    console.log(
+      `[EXPECTED_SYNC] Ledger: inserted=${ledger.inserted}, consumed=${ledger.consumed}, reversed=${ledger.reversed}`
+    );
 
     // ===== VERIFY FINAL STATE =====
     console.log("[EXPECTED_SYNC] Verifying final Supabase state");
