@@ -231,6 +231,7 @@ export type ExpectedWeekCollectorRow = {
 
 export type AnnualLeaveType = "AL-R" | "AL-C";
 export type AnnualLeaveAction = "consume" | "reverse";
+export type AnnualLeaveSheetSyncStatus = "pending" | "written" | "failed";
 
 export type AnnualLeaveLedgerRow = {
   id: string;
@@ -241,6 +242,9 @@ export type AnnualLeaveLedgerRow = {
   source_week: string | null;
   source_cell: string | null;
   action: AnnualLeaveAction;
+  sheet_sync_status: AnnualLeaveSheetSyncStatus | null;
+  sheet_sync_error: string | null;
+  sheet_applied_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -586,6 +590,9 @@ export interface Database {
           source_week?: string | null;
           source_cell?: string | null;
           action?: AnnualLeaveAction;
+          sheet_sync_status?: AnnualLeaveSheetSyncStatus | null;
+          sheet_sync_error?: string | null;
+          sheet_applied_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

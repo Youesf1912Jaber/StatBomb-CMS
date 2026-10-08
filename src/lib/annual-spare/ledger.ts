@@ -1,5 +1,6 @@
 import type { AnnualLeaveAction, AnnualLeaveLedgerRow, AnnualLeaveType } from "../../types/database.types";
 import type { ExpectedWeekBlock, ExpectedWeekday } from "../expected/types";
+import { annualLeaveSheetSyncPendingFields } from "./sheet-sync-status";
 
 export const ANNUAL_LEAVE_TYPES: AnnualLeaveType[] = ["AL-R", "AL-C"];
 
@@ -34,6 +35,9 @@ export type DesiredLeave = {
 export type LedgerPlanInsert = DesiredLeave & {
   collector_id: string | null;
   action: "consume";
+  sheet_sync_status: "pending";
+  sheet_sync_error: null;
+  sheet_applied_at: null;
 };
 
 export type LedgerPlanConsumeUpdate = {
@@ -41,10 +45,12 @@ export type LedgerPlanConsumeUpdate = {
   collector_id: string | null;
   source_week: string;
   source_cell: string;
+  sheet_sync_status: "pending";
 };
 
 export type LedgerPlanReverseUpdate = {
   id: string;
+  sheet_sync_status: "pending";
 };
 
 export type AnnualLeaveLedgerPlan = {
@@ -144,6 +150,7 @@ export function planAnnualLeaveLedger(input: {
         ...desired,
         collector_id: collectorId,
         action: "consume",
+        ...annualLeaveSheetSyncPendingFields(),
       });
       continue;
     }
@@ -153,6 +160,7 @@ export function planAnnualLeaveLedger(input: {
         collector_id: collectorId,
         source_week: desired.source_week,
         source_cell: desired.source_cell,
+        sheet_sync_status: "pending",
       });
     }
   }
@@ -162,7 +170,7 @@ export function planAnnualLeaveLedger(input: {
       leaveIdentityKey(existing.hr_code, existing.leave_date, existing.leave_type)
     );
     if (!desired && existing.action === "consume") {
-      reverseUpdates.push({ id: existing.id });
+      reverseUpdates.push({ id: existing.id, sheet_sync_status: "pending" });
     }
   }
 

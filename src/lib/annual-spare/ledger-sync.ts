@@ -9,6 +9,7 @@ import {
   planAnnualLeaveLedger,
   type AnnualLeaveLedgerPlan,
 } from "./ledger";
+import { annualLeaveSheetSyncPendingFields } from "./sheet-sync-status";
 
 type Client = SupabaseClient<Database>;
 
@@ -76,6 +77,7 @@ async function applyConsumeUpdates(
         collector_id: row.collector_id,
         source_week: row.source_week,
         source_cell: row.source_cell,
+        ...annualLeaveSheetSyncPendingFields(),
       })
       .eq("id", row.id);
     if (error) throw error;
@@ -89,7 +91,7 @@ async function applyReverseUpdates(
   for (const row of rows) {
     const { error } = await client
       .from("annual_leave_ledger")
-      .update({ action: "reverse" })
+      .update({ action: "reverse", ...annualLeaveSheetSyncPendingFields() })
       .eq("id", row.id);
     if (error) throw error;
   }

@@ -190,10 +190,17 @@ describe("planAnnualLeaveLedger", () => {
     assert.equal(plan.consumeUpdates.length, 0);
     assert.equal(plan.reverseUpdates.length, 0);
     assert.deepEqual(
-      plan.inserts.map((row) => [row.hr_code, row.leave_date, row.leave_type, row.action, row.collector_id]),
+      plan.inserts.map((row) => [
+        row.hr_code,
+        row.leave_date,
+        row.leave_type,
+        row.action,
+        row.collector_id,
+        row.sheet_sync_status,
+      ]),
       [
-        ["C001", "2026-08-16", "AL-R", "consume", "profile-1"],
-        ["C001", "2026-08-17", "AL-C", "consume", "profile-1"],
+        ["C001", "2026-08-16", "AL-R", "consume", "profile-1", "pending"],
+        ["C001", "2026-08-17", "AL-C", "consume", "profile-1", "pending"],
       ]
     );
   });
@@ -264,6 +271,7 @@ describe("planAnnualLeaveLedger", () => {
         collector_id: "profile-1",
         source_week: "2026-08-16",
         source_cell: "Sunday",
+        sheet_sync_status: "pending",
       },
     ]);
     assert.equal(plan.reverseUpdates.length, 0);
@@ -288,7 +296,7 @@ describe("planAnnualLeaveLedger", () => {
     });
     assert.equal(plan.inserts.length, 0);
     assert.equal(plan.consumeUpdates.length, 0);
-    assert.deepEqual(plan.reverseUpdates, [{ id: "row-1" }]);
+    assert.deepEqual(plan.reverseUpdates, [{ id: "row-1", sheet_sync_status: "pending" }]);
   });
 
   it("does not reverse an already reversed leave that is still absent", () => {
@@ -331,7 +339,7 @@ describe("planAnnualLeaveLedger", () => {
     assert.equal(plan.inserts[0]?.leave_type, "AL-C");
     assert.equal(plan.inserts[0]?.action, "consume");
     assert.equal(plan.inserts[0]?.leave_date, "2026-08-16");
-    assert.deepEqual(plan.reverseUpdates, [{ id: "row-al-r" }]);
+    assert.deepEqual(plan.reverseUpdates, [{ id: "row-al-r", sheet_sync_status: "pending" }]);
     assert.equal(plan.consumeUpdates.length, 0);
   });
 

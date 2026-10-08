@@ -88,3 +88,30 @@ describe("annual leave ledger migration 0032", () => {
     assert.equal(annualSpare.includes(":append"), false);
   });
 });
+
+describe("annual leave ledger sheet sync migration 0033", () => {
+  const next = readFileSync(join(dir, "../../../supabase/migrations/0033_annual_leave_ledger_sheet_sync.sql"), "utf8");
+
+  it("adds nullable sync columns without modifying 0031 or 0032", () => {
+    assert.equal(previous.includes("annual_leave_ledger"), false);
+    assert.equal(migration.includes("sheet_sync_status"), false);
+    assert.equal(migration.includes("sheet_applied_at"), false);
+    assert.match(next, /alter table annual_leave_ledger/);
+    assert.match(next, /add column sheet_sync_status text/);
+    assert.match(next, /add column sheet_sync_error text/);
+    assert.match(next, /add column sheet_applied_at timestamptz/);
+    assert.equal(/sheet_sync_status text not null/.test(next), false);
+    assert.equal(/default 'pending'/.test(next), false);
+    assert.equal(/update annual_leave_ledger/.test(next), false);
+    assert.equal(next.includes("over_target"), false);
+    assert.equal(next.includes("batchUpdate"), false);
+  });
+
+  it("allows pending, written, and failed without changing leave identity", () => {
+    assert.match(next, /annual_leave_ledger_sheet_sync_status_check/);
+    assert.match(next, /sheet_sync_status in \('pending', 'written', 'failed'\)/);
+    assert.match(next, /annual_leave_ledger_sheet_sync_status_idx/);
+    assert.equal(next.includes("drop constraint annual_leave_ledger_identity_unique"), false);
+    assert.equal(next.includes("create table annual_leave_ledger"), false);
+  });
+});
