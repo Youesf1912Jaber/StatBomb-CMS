@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import type { ScorecardRow } from "./types";
 import {
   SCORECARD_ALL_MONTHS,
@@ -153,5 +156,20 @@ describe("scorecardTableCells", () => {
     assert.deepEqual(scorecardTableCells(afterHeaders, afterRows), [
       ["Sep 2026", "B-2", "Ada", "Team A", "Full Time", "99%", "70%"],
     ]);
+  });
+});
+
+describe("Collector Scorecard UI uses collector API only", () => {
+  it("fetches GET /api/collector/scorecard and never the admin Scorecard API", () => {
+    const dir = fileURLToPath(new URL(".", import.meta.url));
+    const client = readFileSync(join(dir, "../../app/collector/scorecard/ScorecardClient.tsx"), "utf8");
+    const page = readFileSync(join(dir, "../../app/collector/scorecard/page.tsx"), "utf8");
+    const layout = readFileSync(join(dir, "../../app/collector/layout.tsx"), "utf8");
+    for (const source of [client, page, layout]) {
+      assert.equal(source.includes("/api/admin/scorecard"), false);
+    }
+    assert.match(client, /fetch\("\/api\/collector\/scorecard"/);
+    assert.match(layout, /My Scorecard/);
+    assert.match(layout, /\/collector\/scorecard/);
   });
 });
