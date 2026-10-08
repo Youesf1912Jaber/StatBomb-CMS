@@ -19,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Expected", href: "/admin/expected" },
   { label: "Over Target", href: "/admin/over-target" },
   { label: "Scorecard", href: "/admin/scorecard" },
+  { label: "Links", href: "/admin/links" },
   { label: "Activity Log", href: "/admin/activity-log" },
   { label: "Notifications", href: "/admin/notifications" },
 ];
