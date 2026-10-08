@@ -5,6 +5,12 @@ import * as XLSX from "xlsx";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ProfileRow } from "@/types/database.types";
 import { upsertCollectorToTeamSheet } from "@/lib/sync/google-sheets";
+import {
+  PROTECTED_ADMIN_IDENTITY_PRESERVED_MESSAGE,
+  buildCollectorImportProfileWrite,
+  isProtectedAdminProfile,
+  protectedAdminIdentityWouldChange,
+} from "@/lib/admin/protected-admins";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_ROWS = 500;
@@ -264,6 +270,14 @@ export async function provisionCollectors(client: Client, rows: CollectorImportR
   for (const row of rows) {
     const existingByHr = profilesByHr.get(row.hr_code);
     const existingByEmail = profilesByEmail.get(row.email);
+    const existing = existingByHr ?? existingByEmail;
+    if (
+      (existingByHr && isProtectedAdminProfile(existingByHr) && protectedAdminIdentityWouldChange(existingByHr, row))
+      || (existingByEmail && isProtectedAdminProfile(existingByEmail) && protectedAdminIdentityWouldChange(existingByEmail, row))
+    ) {
+      resultRows.push({ ...row, outcome: "skipped", message: PROTECTED_ADMIN_IDENTITY_PRESERVED_MESSAGE });
+      continue;
+    }
     let user = existingByHr
       ? { id: existingByHr.id, email: existingByHr.email }
       : existingByEmail
@@ -283,16 +297,10 @@ export async function provisionCollectors(client: Client, rows: CollectorImportR
       usersByEmail.set(row.email, user);
       created += 1;
     }
-    const existing = existingByHr ?? existingByEmail;
+    const write = buildCollectorImportProfileWrite(existing, row);
     const profile = await client.from("profiles").upsert({
       id: user.id,
-      email: row.email,
-      full_name: row.full_name,
-      hr_code: row.hr_code,
-      phone: row.phone,
-      team: row.team,
-      status: row.status,
-      role: existing?.role ?? "collector",
+      ...write,
     }, { onConflict: "id" }).select("id").single();
     if (profile.error) {
       resultRows.push({ ...row, outcome: "error", message: `Failed to save collector profile: ${safeSupabaseError(profile.error)}` });
@@ -339,7 +347,7 @@ export async function provisionCollectors(client: Client, rows: CollectorImportR
     counts: {
       created,
       updated,
-      skipped: 0,
+      skipped: resultRows.filter((row) => row.outcome === "skipped").length,
       errors: resultRows.filter((row) => row.outcome === "error").length,
     },
     rows: resultRows,

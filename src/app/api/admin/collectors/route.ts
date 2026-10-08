@@ -7,6 +7,7 @@ import {
   assertCanSaveProfile,
   assertCanSuspendProfile,
   isCollectorAuthorizationError,
+  planTeamRosterProfileUpdate,
 } from "@/lib/admin/protected-admins";
 import { deleteCollectorFromTeamSheetByHrCode, pullTeamSheet, upsertCollectorToTeamSheet } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
@@ -164,39 +165,33 @@ export async function POST(request: Request) {
         }
         seenHr.add(row.hr_code);
         const existing = profilesByHr.get(row.hr_code);
-        if (!existing) {
+        const plan = planTeamRosterProfileUpdate(existing, row);
+        if (plan.outcome === "skipped") {
           skipped += 1;
-          rows.push({ hr_code: row.hr_code, outcome: "skipped", message: "No existing profile matched this HR-Code; no Auth user or profile was created." });
+          rows.push({ hr_code: row.hr_code, outcome: "skipped", message: plan.message });
           continue;
         }
-        if (!row.full_name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+        if (plan.outcome === "error" || !existing) {
           errors += 1;
-          rows.push({ hr_code: row.hr_code, outcome: "error", message: "Name and a valid email are required." });
+          rows.push({ hr_code: row.hr_code, outcome: "error", message: plan.outcome === "error" ? plan.message : "Name and a valid email are required." });
           continue;
         }
-        if (existing.email.toLowerCase() !== row.email) {
-          const authUpdate = await admin.service.auth.admin.updateUserById(existing.id, { email: row.email, email_confirm: true });
+        if (plan.authEmail) {
+          const authUpdate = await admin.service.auth.admin.updateUserById(existing.id, { email: plan.authEmail, email_confirm: true });
           if (authUpdate.error) {
             errors += 1;
             rows.push({ hr_code: row.hr_code, outcome: "error", message: "Unable to update the Auth email." });
             continue;
           }
         }
-        const saved = await admin.service.from("profiles").update({
-          full_name: row.full_name,
-          email: row.email,
-          hr_code: row.hr_code,
-          phone: row.phone,
-          team: row.team,
-          status: row.status,
-        }).eq("id", existing.id).select("id").single();
+        const saved = await admin.service.from("profiles").update(plan.fields).eq("id", existing.id).select("id").single();
         if (saved.error) {
           errors += 1;
           rows.push({ hr_code: row.hr_code, outcome: "error", message: "Unable to update the profile roster fields." });
           continue;
         }
         updated += 1;
-        rows.push({ hr_code: row.hr_code, outcome: "updated", message: `Updated ${existing.role} profile roster fields.` });
+        rows.push({ hr_code: row.hr_code, outcome: "updated", message: plan.message });
         await admin.service.from("activity_logs").insert({
           user_id: admin.user.id,
           assignment_id: null,

@@ -4,6 +4,7 @@ export const PROTECTED_ADMIN_EMAIL_MESSAGE = "Protected core admins cannot have 
 export const PROTECTED_ADMIN_SUSPEND_MESSAGE = "Protected core admins cannot be suspended.";
 export const PROTECTED_ADMIN_DELETE_MESSAGE = "Protected core admins cannot be deleted.";
 export const PROTECTED_ADMIN_FLAG_MESSAGE = "Protected-admin status cannot be changed.";
+export const PROTECTED_ADMIN_IDENTITY_PRESERVED_MESSAGE = "Protected core admin identity was preserved.";
 export const LAST_ADMIN_DEMOTION_MESSAGE = "The last remaining admin cannot be downgraded.";
 
 export class CollectorAuthorizationError extends Error {
@@ -94,4 +95,115 @@ export function assertCanDeleteProfile(
   if (isProtectedAdminProfile(profile)) {
     throw new CollectorAuthorizationError(PROTECTED_ADMIN_DELETE_MESSAGE);
   }
+}
+
+type ProtectedRosterIdentity = {
+  role: "admin" | "collector";
+  hr_code: string | null;
+  email: string;
+  is_protected_admin?: boolean | null;
+};
+
+export type TeamRosterIncoming = {
+  hr_code: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  team: string | null;
+  status: string | null;
+};
+
+export type TeamRosterProfileUpdatePlan =
+  | { outcome: "skipped"; message: string }
+  | { outcome: "error"; message: string }
+  | {
+      outcome: "update";
+      message: string;
+      authEmail?: string;
+      fields: {
+        full_name: string;
+        phone: string | null;
+        team: string | null;
+        status: string | null;
+        email?: string;
+        hr_code?: string;
+      };
+    };
+
+export function protectedAdminIdentityWouldChange(
+  existing: ProtectedRosterIdentity | null | undefined,
+  incoming: { hr_code?: string | null; email?: string | null }
+): boolean {
+  if (!existing || !isProtectedAdminProfile(existing)) return false;
+  return normalizeProtectedHrCode(incoming.hr_code) !== normalizeProtectedHrCode(existing.hr_code)
+    || normalizeProtectedEmail(incoming.email) !== normalizeProtectedEmail(existing.email);
+}
+
+export function buildCollectorImportProfileWrite(
+  existing: ProtectedRosterIdentity | null | undefined,
+  row: { email: string; hr_code: string; full_name: string; phone: string | null; team: string | null; status: string | null }
+) {
+  if (existing && isProtectedAdminProfile(existing)) {
+    return {
+      email: existing.email,
+      hr_code: existing.hr_code ?? row.hr_code,
+      full_name: row.full_name,
+      phone: row.phone,
+      team: row.team,
+      status: row.status,
+      role: existing.role,
+    };
+  }
+  return {
+    email: row.email,
+    hr_code: row.hr_code,
+    full_name: row.full_name,
+    phone: row.phone,
+    team: row.team,
+    status: row.status,
+    role: existing?.role ?? "collector",
+  };
+}
+
+export function planTeamRosterProfileUpdate(
+  existing: ProtectedRosterIdentity | undefined,
+  row: TeamRosterIncoming
+): TeamRosterProfileUpdatePlan {
+  if (!existing) {
+    return {
+      outcome: "skipped",
+      message: "No existing profile matched this HR-Code; no Auth user or profile was created.",
+    };
+  }
+  if (!row.full_name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+    return { outcome: "error", message: "Name and a valid email are required." };
+  }
+  if (protectedAdminIdentityWouldChange(existing, row)) {
+    return { outcome: "skipped", message: PROTECTED_ADMIN_IDENTITY_PRESERVED_MESSAGE };
+  }
+  if (isProtectedAdminProfile(existing)) {
+    return {
+      outcome: "update",
+      message: `Updated ${existing.role} profile roster fields.`,
+      fields: {
+        full_name: row.full_name,
+        phone: row.phone,
+        team: row.team,
+        status: row.status,
+      },
+    };
+  }
+  return {
+    outcome: "update",
+    message: `Updated ${existing.role} profile roster fields.`,
+    authEmail: normalizeProtectedEmail(existing.email) !== normalizeProtectedEmail(row.email) ? row.email : undefined,
+    fields: {
+      full_name: row.full_name,
+      email: row.email,
+      hr_code: row.hr_code,
+      phone: row.phone,
+      team: row.team,
+      status: row.status,
+    },
+  };
 }
