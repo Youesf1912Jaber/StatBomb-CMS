@@ -1,6 +1,13 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { classifyCollectorImport, parseCollectorImport, provisionCollectors } from "@/lib/admin/collector-import";
+import {
+  assertCanChangeRole,
+  assertCanDeleteProfile,
+  assertCanSaveProfile,
+  assertCanSuspendProfile,
+  isCollectorAuthorizationError,
+} from "@/lib/admin/protected-admins";
 import { deleteCollectorFromTeamSheetByHrCode, pullTeamSheet, upsertCollectorToTeamSheet } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/database.types";
@@ -44,8 +51,9 @@ export async function POST(request: Request) {
       const body = (await request.json()) as { action?: string; id?: string; password?: string; confirmPassword?: string };
       if (body.action === "suspend-collector" || body.action === "resume-collector") {
         if (!body.id) throw new Error("A collector is required.");
-        const profileResult = await admin.service.from("profiles").select("id,role,suspended_at").eq("id", body.id).single();
+        const profileResult = await admin.service.from("profiles").select("id,role,suspended_at,is_protected_admin").eq("id", body.id).single();
         if (profileResult.error || !profileResult.data) throw new Error("Collector profile not found.");
+        assertCanSuspendProfile(profileResult.data);
         if (profileResult.data.role !== "collector") throw new Error("Only collector accounts can be suspended here.");
         const suspended = body.action === "suspend-collector";
         const updated = await admin.service.from("profiles").update({ suspended_at: suspended ? new Date().toISOString() : null }).eq("id", body.id).is("deleted_at", null);
@@ -63,6 +71,7 @@ export async function POST(request: Request) {
         const profileResult = await admin.service.from("profiles").select("*").eq("id", body.id).single();
         if (profileResult.error || !profileResult.data) throw new Error("Collector profile not found.");
         const profile = profileResult.data;
+        assertCanDeleteProfile(profile);
         if (profile.role === "admin") throw new Error("Admin accounts must be managed separately.");
         if (profile.id === admin.user.id) throw new Error("You cannot delete the currently logged-in account.");
         const audit = await admin.service.from("activity_logs").insert({
@@ -198,6 +207,9 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({ result: { updated, skipped, errors, rows } });
     } catch (error) {
+      if (isCollectorAuthorizationError(error)) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
       return NextResponse.json({ error: error instanceof Error ? error.message : "Team roster synchronization failed." }, { status: 422 });
     }
   }
@@ -227,6 +239,7 @@ export async function PATCH(request: Request) {
       phone?: string | null;
       team?: string | null;
       status?: string | null;
+      is_protected_admin?: boolean | null;
     };
     const profilesResult = await admin.service.from("profiles").select("*");
     if (profilesResult.error) throw new Error("Unable to inspect team members.");
@@ -235,9 +248,7 @@ export async function PATCH(request: Request) {
 
     if (body.action === "role") {
       if (!existing || (body.role !== "admin" && body.role !== "collector")) throw new Error("A valid team member and role are required.");
-      if (existing.role === "admin" && body.role === "collector" && profiles.filter((profile) => profile.role === "admin").length <= 1) {
-        throw new Error("The last remaining admin cannot be downgraded.");
-      }
+      assertCanChangeRole(existing, body.role, profiles);
       const updated = await admin.service.from("profiles").update({ role: body.role }).eq("id", existing.id).select("*").single();
       if (updated.error) throw new Error("Unable to change the team member role.");
       await admin.service.from("activity_logs").insert({
@@ -250,6 +261,12 @@ export async function PATCH(request: Request) {
     const email = String(body.email ?? "").trim().toLowerCase();
     const hrCode = String(body.hr_code ?? "").replace(/\s+/g, " ").trim().toUpperCase();
     const fullName = String(body.full_name ?? "").replace(/\s+/g, " ").trim();
+    assertCanSaveProfile(existing, {
+      role: body.role,
+      hr_code: hrCode,
+      email,
+      is_protected_admin: body.is_protected_admin,
+    });
     if (!fullName || !hrCode || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Full Name, HR-Code, and a valid Email are required.");
     if (profiles.some((profile) => profile.hr_code?.toUpperCase() === hrCode && profile.id !== body.id)) throw new Error("That HR-Code already belongs to another team member.");
     if (profiles.some((profile) => profile.email.toLowerCase() === email && profile.id !== body.id)) throw new Error("That email already belongs to another team member.");
@@ -298,6 +315,9 @@ export async function PATCH(request: Request) {
     }
     return NextResponse.json({ profile: saved.data, sheetSync });
   } catch (error) {
+    if (isCollectorAuthorizationError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json({ error: error instanceof Error ? error.message : "Team member operation failed." }, { status: 422 });
   }
 }
