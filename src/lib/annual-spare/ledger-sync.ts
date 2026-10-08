@@ -9,6 +9,7 @@ import {
   planAnnualLeaveLedger,
   type AnnualLeaveLedgerPlan,
 } from "./ledger";
+import { applyPendingAnnualLeaveSheetWrites } from "./sheet-apply";
 import { annualLeaveSheetSyncPendingFields } from "./sheet-sync-status";
 
 type Client = SupabaseClient<Database>;
@@ -114,6 +115,8 @@ export async function reconcileAnnualLeaveLedger(
   if (plan.inserts.length > 0) await insertRows(client, plan.inserts);
   if (plan.consumeUpdates.length > 0) await applyConsumeUpdates(client, plan.consumeUpdates);
   if (plan.reverseUpdates.length > 0) await applyReverseUpdates(client, plan.reverseUpdates);
+
+  await applyPendingAnnualLeaveSheetWrites(client);
 
   return {
     inserted: plan.inserts.length,

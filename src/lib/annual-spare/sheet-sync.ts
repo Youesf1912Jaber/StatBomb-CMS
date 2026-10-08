@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AnnualLeaveLedgerRow, Database } from "../../types/database.types";
 import {
   annualLeaveSheetSyncFailedFields,
+  annualLeaveSheetSyncPendingFields,
   annualLeaveSheetSyncWrittenFields,
 } from "./sheet-sync-status";
 
@@ -38,7 +39,8 @@ export async function markAnnualLeaveSheetSyncWritten(
   const { error } = await client
     .from("annual_leave_ledger")
     .update(annualLeaveSheetSyncWrittenFields(appliedAt))
-    .eq("id", id);
+    .eq("id", id)
+    .eq("sheet_sync_status", "pending");
   if (error) throw error;
 }
 
@@ -50,6 +52,27 @@ export async function markAnnualLeaveSheetSyncFailed(
   const { error } = await client
     .from("annual_leave_ledger")
     .update(annualLeaveSheetSyncFailedFields(errorMessage))
-    .eq("id", id);
+    .eq("id", id)
+    .eq("sheet_sync_status", "pending");
   if (error) throw error;
+}
+
+export async function requeueFailedAnnualLeaveSheetSyncRows(
+  client: Client,
+  ids: string[]
+): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const requeued: string[] = [];
+  for (const id of ids) {
+    const { data, error } = await client
+      .from("annual_leave_ledger")
+      .update(annualLeaveSheetSyncPendingFields())
+      .eq("id", id)
+      .eq("sheet_sync_status", "failed")
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (data?.id) requeued.push(data.id);
+  }
+  return requeued;
 }

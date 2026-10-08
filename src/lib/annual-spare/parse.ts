@@ -57,7 +57,7 @@ function findHeaderIndex(headers: string[], ...aliases: string[]): number {
   return -1;
 }
 
-type ColumnMap = {
+export type AnnualSpareColumnMap = {
   code: number;
   name: number;
   title: number;
@@ -68,7 +68,13 @@ type ColumnMap = {
   lastUpdate: number;
 };
 
-function detectColumns(row: unknown[]): ColumnMap | null {
+export type AnnualSpareSheetInspection = {
+  headerRowNumber: number;
+  columns: AnnualSpareColumnMap;
+  rows: AnnualSpareRow[];
+};
+
+export function detectAnnualSpareColumns(row: unknown[]): AnnualSpareColumnMap | null {
   const headers = row.map((cell) => normalizeHeader(cell));
   const code = findHeaderIndex(headers, "code", "hr code", "hrcode");
   if (code < 0) return null;
@@ -104,12 +110,12 @@ function rowHasContent(row: unknown[] | undefined): boolean {
   return row.some((value) => cellText(value) !== "");
 }
 
-export function parseAnnualSpareSheet(matrix: unknown[][]): AnnualSpareRow[] {
+export function inspectAnnualSpareSheet(matrix: unknown[][]): AnnualSpareSheetInspection | null {
   let headerIndex = -1;
-  let columns: ColumnMap | null = null;
+  let columns: AnnualSpareColumnMap | null = null;
 
   for (let rowIndex = 0; rowIndex < matrix.length; rowIndex += 1) {
-    const detected = detectColumns(matrix[rowIndex] ?? []);
+    const detected = detectAnnualSpareColumns(matrix[rowIndex] ?? []);
     if (detected) {
       headerIndex = rowIndex;
       columns = detected;
@@ -117,13 +123,13 @@ export function parseAnnualSpareSheet(matrix: unknown[][]): AnnualSpareRow[] {
     }
   }
 
-  if (!columns || headerIndex < 0) return [];
+  if (!columns || headerIndex < 0) return null;
 
   const rows: AnnualSpareRow[] = [];
   for (let rowIndex = headerIndex + 1; rowIndex < matrix.length; rowIndex += 1) {
     const row = matrix[rowIndex] ?? [];
     if (!rowHasContent(row)) continue;
-    if (detectColumns(row)) continue;
+    if (detectAnnualSpareColumns(row)) continue;
 
     const hrCode = normalizeAnnualSpareHrCode(cellAt(row, columns.code));
     if (!hrCode) continue;
@@ -141,5 +147,9 @@ export function parseAnnualSpareSheet(matrix: unknown[][]): AnnualSpareRow[] {
     });
   }
 
-  return rows;
+  return { headerRowNumber: headerIndex + 1, columns, rows };
+}
+
+export function parseAnnualSpareSheet(matrix: unknown[][]): AnnualSpareRow[] {
+  return inspectAnnualSpareSheet(matrix)?.rows ?? [];
 }

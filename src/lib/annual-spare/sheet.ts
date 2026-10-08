@@ -4,8 +4,13 @@ import { googleRequest } from "@/lib/sync/google-sheets";
 import { PreviewInputError } from "@/lib/sync/preview";
 import { parseAnnualSpareSheet, type AnnualSpareRow } from "./parse";
 
-export type { AnnualSpareRow } from "./parse";
-export { normalizeAnnualSpareHrCode, parseAnnualSpareNumber, parseAnnualSpareSheet } from "./parse";
+export type { AnnualSpareRow, AnnualSpareSheetInspection } from "./parse";
+export {
+  inspectAnnualSpareSheet,
+  normalizeAnnualSpareHrCode,
+  parseAnnualSpareNumber,
+  parseAnnualSpareSheet,
+} from "./parse";
 
 const GOOGLE_SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 const ANNUAL_SPARE_RANGE = "A:Z";
@@ -58,7 +63,14 @@ async function resolveAnnualSpareSheet(spreadsheetId: string): Promise<{ title: 
   return { title, sheetId: sheet.properties.sheetId };
 }
 
-export async function readAnnualSpareSheet(): Promise<AnnualSpareRow[]> {
+export type AnnualSpareSheetSnapshot = {
+  spreadsheetId: string;
+  title: string;
+  sheetId: number;
+  matrix: unknown[][];
+};
+
+export async function readAnnualSpareSheetSnapshot(): Promise<AnnualSpareSheetSnapshot> {
   const spreadsheetId = requiredSpreadsheetId();
   const sheet = await resolveAnnualSpareSheet(spreadsheetId);
   const payload = await googleRequest<{ values?: unknown[][] }>(
@@ -66,5 +78,15 @@ export async function readAnnualSpareSheet(): Promise<AnnualSpareRow[]> {
       `${sheet.title}!${ANNUAL_SPARE_RANGE}`
     )}?valueRenderOption=FORMATTED_VALUE`
   );
-  return parseAnnualSpareSheet(payload.values ?? []);
+  return {
+    spreadsheetId,
+    title: sheet.title,
+    sheetId: sheet.sheetId,
+    matrix: payload.values ?? [],
+  };
+}
+
+export async function readAnnualSpareSheet(): Promise<AnnualSpareRow[]> {
+  const snapshot = await readAnnualSpareSheetSnapshot();
+  return parseAnnualSpareSheet(snapshot.matrix);
 }
