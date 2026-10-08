@@ -26,6 +26,36 @@ export function isProtectedAdminProfile(
   return profile?.is_protected_admin === true;
 }
 
+export const PROTECTED_ADMIN_BADGE_LABEL = "Protected Admin";
+
+export type ProtectedIdentityField = "role" | "hr_code" | "email" | "is_protected_admin";
+
+export function shouldShowProtectedAdminBadge(
+  profile: { is_protected_admin?: boolean | null } | null | undefined
+): boolean {
+  return isProtectedAdminProfile(profile);
+}
+
+export function shouldShowChangeToCollector(
+  profile: { role: string; is_protected_admin?: boolean | null } | null | undefined
+): boolean {
+  return profile?.role === "admin" && !isProtectedAdminProfile(profile);
+}
+
+export function shouldShowChangeToAdmin(
+  profile: { role: string } | null | undefined
+): boolean {
+  return profile?.role === "collector";
+}
+
+export function isProtectedIdentityFieldLocked(
+  profile: { is_protected_admin?: boolean | null } | null | undefined,
+  field: ProtectedIdentityField
+): boolean {
+  if (!isProtectedAdminProfile(profile)) return false;
+  return field === "role" || field === "hr_code" || field === "email" || field === "is_protected_admin";
+}
+
 export function normalizeProtectedHrCode(value: string | null | undefined): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().toUpperCase();
 }
