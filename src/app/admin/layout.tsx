@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Bonus", href: "/admin/bonus" },
   { label: "Expected", href: "/admin/expected" },
   { label: "Over Target", href: "/admin/over-target" },
+  { label: "Scorecard", href: "/admin/scorecard" },
   { label: "Activity Log", href: "/admin/activity-log" },
   { label: "Notifications", href: "/admin/notifications" },
 ];
