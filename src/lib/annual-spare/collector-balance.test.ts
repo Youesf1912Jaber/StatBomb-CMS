@@ -14,9 +14,9 @@ function spare(overrides: Partial<AnnualSpareRow> & { hr_code: string }): Annual
     name: "Ada Collector",
     title: "Senior",
     type: "Full Time",
-    total_available: 20,
-    available_al_r: 12,
-    available_al_c: 8,
+    total_available: 8,
+    available_al_r: 2,
+    available_al_c: 6,
     last_update: "01/10/2026",
     source_row_number: 2,
     ...overrides,
@@ -32,7 +32,7 @@ function reverse(hrCode: string, leaveType: "AL-R" | "AL-C"): LedgerUsageInput {
 }
 
 const sheet = [
-  spare({ hr_code: "C001", name: "Ada Collector" }),
+  spare({ hr_code: "A-325", name: "Ada Collector" }),
   spare({
     hr_code: "B110",
     name: "Omar Fathy",
@@ -43,73 +43,66 @@ const sheet = [
 ];
 
 describe("findAnnualSpareBalanceForHrCode", () => {
-  it("returns used 0 and full remaining when the collector has no leave", () => {
-    const row = findAnnualSpareBalanceForHrCode(sheet, [], "C001");
-    assert.equal(row?.hr_code, "C001");
-    assert.equal(row?.used, 0);
-    assert.equal(row?.remaining, 20);
-    assert.equal(row?.remaining_al_r, 12);
-    assert.equal(row?.remaining_al_c, 8);
+  it("returns sheet values exactly when the collector has no leave", () => {
+    const row = findAnnualSpareBalanceForHrCode(sheet, [], "A-325");
+    assert.equal(row?.hr_code, "A-325");
+    assert.equal(row?.total_available, 8);
+    assert.equal(row?.available_al_r, 2);
+    assert.equal(row?.available_al_c, 6);
+    assert.equal("used" in (row ?? {}), false);
+    assert.equal("remaining" in (row ?? {}), false);
   });
 
-  it("subtracts AL-R consume days for that collector only", () => {
+  it("does not subtract AL-R consume days from the displayed collector balance", () => {
     const row = findAnnualSpareBalanceForHrCode(
       sheet,
-      [consume("C001", "AL-R"), consume("C001", "AL-R"), consume("B110", "AL-C")],
-      "c001"
+      [consume("A-325", "AL-R"), consume("A-325", "AL-R"), consume("B110", "AL-C")],
+      "a-325"
     );
-    assert.equal(row?.used, 2);
-    assert.equal(row?.used_al_r, 2);
-    assert.equal(row?.used_al_c, 0);
-    assert.equal(row?.remaining, 18);
-    assert.equal(row?.remaining_al_r, 10);
-    assert.equal(row?.remaining_al_c, 8);
+    assert.equal(row?.hr_code, "A-325");
+    assert.equal(row?.total_available, 8);
+    assert.equal(row?.available_al_r, 2);
+    assert.equal(row?.available_al_c, 6);
   });
 
-  it("subtracts AL-C consume days for that collector only", () => {
-    const row = findAnnualSpareBalanceForHrCode(sheet, [consume("C001", "AL-C")], "C001");
-    assert.equal(row?.used, 1);
-    assert.equal(row?.used_al_c, 1);
-    assert.equal(row?.remaining, 19);
-    assert.equal(row?.remaining_al_c, 7);
+  it("does not subtract AL-C consume days from the displayed collector balance", () => {
+    const row = findAnnualSpareBalanceForHrCode(sheet, [consume("A-325", "AL-C")], "A-325");
+    assert.equal(row?.total_available, 8);
+    assert.equal(row?.available_al_c, 6);
   });
 
-  it("adds mixed AL-R and AL-C consume days", () => {
+  it("does not reduce displayed balances for mixed AL-R and AL-C consume days", () => {
     const row = findAnnualSpareBalanceForHrCode(
       sheet,
-      [consume("C001", "AL-R"), consume("C001", "AL-C")],
-      "C001"
+      [consume("A-325", "AL-R"), consume("A-325", "AL-C")],
+      "A-325"
     );
-    assert.equal(row?.used, 2);
-    assert.equal(row?.used_al_r, 1);
-    assert.equal(row?.used_al_c, 1);
-    assert.equal(row?.remaining, 18);
-    assert.equal(row?.remaining_al_r, 11);
-    assert.equal(row?.remaining_al_c, 7);
+    assert.equal(row?.total_available, 8);
+    assert.equal(row?.available_al_r, 2);
+    assert.equal(row?.available_al_c, 6);
   });
 
-  it("does not count reversed leave", () => {
+  it("ignores reversed leave and still shows sheet values", () => {
     const row = findAnnualSpareBalanceForHrCode(
       sheet,
-      [consume("C001", "AL-R"), reverse("C001", "AL-R"), reverse("C001", "AL-C")],
-      "C001"
+      [consume("A-325", "AL-R"), reverse("A-325", "AL-R"), reverse("A-325", "AL-C")],
+      "A-325"
     );
-    assert.equal(row?.used, 1);
-    assert.equal(row?.remaining, 19);
-    assert.equal(row?.remaining_al_r, 11);
+    assert.equal(row?.total_available, 8);
+    assert.equal(row?.available_al_r, 2);
   });
 
   it("returns only the requested collector balance", () => {
     const row = findAnnualSpareBalanceForHrCode(
       sheet,
-      [consume("C001", "AL-R"), consume("B110", "AL-C")],
+      [consume("A-325", "AL-R"), consume("B110", "AL-C")],
       "B110"
     );
     assert.equal(row?.hr_code, "B110");
     assert.equal(row?.name, "Omar Fathy");
-    assert.equal(row?.used, 1);
-    assert.equal(row?.used_al_c, 1);
-    assert.equal(row?.remaining, 9);
+    assert.equal(row?.total_available, 10);
+    assert.equal(row?.available_al_r, 4);
+    assert.equal(row?.available_al_c, 6);
   });
 
   it("returns null when the collector has no Annual Spare record", () => {
@@ -126,11 +119,12 @@ describe("collector annual spare wiring", () => {
     const route = readFileSync(join(dir, "../../app/api/collector/expected/annual-spare/route.ts"), "utf8");
     const queries = readFileSync(join(dir, "queries.ts"), "utf8");
     assert.match(route, /requireExpectedCollector/);
-    assert.match(route, /getAnnualSpareBalanceForHrCode\(createClient\(\), access\.hr_code\)/);
+    assert.match(route, /getAnnualSpareBalanceForHrCode\(access\.hr_code\)/);
     assert.equal(route.includes("searchParams"), false);
     assert.equal(route.includes("request.json"), false);
     assert.match(queries, /findAnnualSpareBalanceForHrCode/);
-    assert.match(queries, /fetchConsumeLedgerRows\(client, normalized\)/);
+    assert.equal(queries.includes("fetchConsumeLedgerRows"), false);
+    assert.equal(queries.includes("annual_leave_ledger"), false);
   });
 
   it("collector Expected page shows My Annual Spare from the collector API", () => {
@@ -142,9 +136,13 @@ describe("collector annual spare wiring", () => {
     assert.match(source, /Available AL-R/);
     assert.match(source, /Available AL-C/);
     assert.match(source, /No Annual Spare record was found for your HR-Code/);
+    assert.equal(source.includes(">Used<"), false);
+    assert.equal(source.includes(">Remaining<"), false);
+    assert.equal(source.includes("balance.used"), false);
+    assert.equal(source.includes("balance.remaining"), false);
   });
 
-  it("does not change Admin Expected balance UI or Annual Spare writes", () => {
+  it("does not change Admin Expected search or Annual Spare writes", () => {
     const admin = readFileSync(join(dir, "../../app/admin/expected/ExpectedClient.tsx"), "utf8");
     const sheet = readFileSync(join(dir, "sheet.ts"), "utf8");
     assert.match(admin, /\/api\/admin\/expected\/annual-spare/);

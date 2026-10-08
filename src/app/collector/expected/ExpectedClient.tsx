@@ -143,7 +143,7 @@ export function CollectorExpectedClient() {
       <section className="rounded-card border border-pitch-700 bg-pitch-900 p-5">
         <h2 className="font-display text-lg text-chalk-50">My Annual Spare</h2>
         <p className="mt-1 text-sm text-chalk-200">
-          Your original Annual Spare balances minus consumed AL-R and AL-C days.
+          Your current Annual Spare balances from the Annual Spare Google Sheet. Values are shown exactly as read.
         </p>
         {balanceLoading && <p className="mt-4 text-sm text-chalk-200">Reading Annual Spare balance…</p>}
         {balanceError && (
@@ -155,26 +155,18 @@ export function CollectorExpectedClient() {
           <p className="mt-4 text-sm text-chalk-200">No Annual Spare record was found for your HR-Code.</p>
         )}
         {!balanceLoading && !balanceError && balance && (
-          <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <dl className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-card border border-pitch-700 px-4 py-3">
               <dt className="text-xs uppercase tracking-wide text-pitch-500">Total Available</dt>
               <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.total_available)}</dd>
             </div>
             <div className="rounded-card border border-pitch-700 px-4 py-3">
               <dt className="text-xs uppercase tracking-wide text-pitch-500">Available AL-R</dt>
-              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.remaining_al_r)}</dd>
+              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.available_al_r)}</dd>
             </div>
             <div className="rounded-card border border-pitch-700 px-4 py-3">
               <dt className="text-xs uppercase tracking-wide text-pitch-500">Available AL-C</dt>
-              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.remaining_al_c)}</dd>
-            </div>
-            <div className="rounded-card border border-pitch-700 px-4 py-3">
-              <dt className="text-xs uppercase tracking-wide text-pitch-500">Used</dt>
-              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.used)}</dd>
-            </div>
-            <div className="rounded-card border border-pitch-700 px-4 py-3">
-              <dt className="text-xs uppercase tracking-wide text-pitch-500">Remaining</dt>
-              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.remaining)}</dd>
+              <dd className="mt-1 text-sm text-chalk-50">{displayBalanceNumber(balance.available_al_c)}</dd>
             </div>
           </dl>
         )}

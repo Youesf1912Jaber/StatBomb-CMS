@@ -196,7 +196,7 @@ export function ExpectedClient() {
           <div>
             <h2 className="font-display text-lg text-chalk-50">Annual Spare</h2>
             <p className="mt-1 text-sm text-chalk-200">
-              Original balances from Annual Spare minus consumed AL-R and AL-C days.
+              Current balances from the Annual Spare Google Sheet. Values are shown exactly as read.
             </p>
           </div>
           <label className="text-sm text-chalk-200">
@@ -225,7 +225,7 @@ export function ExpectedClient() {
             <table className="min-w-full text-left text-sm">
               <thead className="bg-pitch-800 text-xs uppercase tracking-wide text-chalk-300">
                 <tr>
-                  {["HR-Code", "Name", "Total Available", "Available AL-R", "Available AL-C", "Used", "Remaining"].map(
+                  {["HR-Code", "Name", "Total Available", "Available AL-R", "Available AL-C"].map(
                     (header) => (
                       <th key={header} className="whitespace-nowrap px-3 py-3 font-medium">
                         {header}
@@ -240,10 +240,8 @@ export function ExpectedClient() {
                     <td className="px-3 py-3 font-mono text-chalk-50">{row.hr_code}</td>
                     <td className="px-3 py-3 text-chalk-50">{row.name ?? "—"}</td>
                     <td className="px-3 py-3 text-chalk-50">{displayBalanceNumber(row.total_available)}</td>
-                    <td className="px-3 py-3 text-chalk-50">{displayBalanceNumber(row.remaining_al_r)}</td>
-                    <td className="px-3 py-3 text-chalk-50">{displayBalanceNumber(row.remaining_al_c)}</td>
-                    <td className="px-3 py-3 text-chalk-50">{displayBalanceNumber(row.used)}</td>
-                    <td className="px-3 py-3 text-chalk-50">{displayBalanceNumber(row.remaining)}</td>
+                    <td className="px-3 py-3 text-chalk-50">{displayBalanceNumber(row.available_al_r)}</td>
+                    <td className="px-3 py-3 text-chalk-50">{displayBalanceNumber(row.available_al_c)}</td>
                   </tr>
                 ))}
               </tbody>
