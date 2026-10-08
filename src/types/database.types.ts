@@ -49,6 +49,7 @@ export type ProfileRow = {
   team: string | null;
   status: string | null;
   role: UserRole;
+  is_protected_admin: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -346,6 +347,7 @@ export interface Database {
           deleted_at?: string | null;
           suspended_at?: string | null;
           role?: UserRole;
+          is_protected_admin?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -360,6 +362,7 @@ export interface Database {
           deleted_at?: string | null;
           suspended_at?: string | null;
           role?: UserRole;
+          is_protected_admin?: boolean;
           created_at?: string;
           updated_at?: string;
         };
