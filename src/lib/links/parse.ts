@@ -1,12 +1,42 @@
 import type { LinksCell, LinksSheetData } from "./types";
 
 export const LINKS_PARSER_CONTRACT = {
-  input: "Sheets values API matrices: FORMATTED_VALUE required, FORMULA optional",
+  input: "Sheets gridData cells or values matrices: formatted text, optional FORMULA, optional hyperlink metadata",
   cells: "one output cell per non-empty value, in sheet row/column order",
   text: "formatted cell display text, including Arabic, with invisible characters stripped",
-  href: "http(s) only, from structured href, URL in text, or HYPERLINK() formula",
+  href: "http(s) only, from gridData hyperlink metadata, HYPERLINK() formula, structured href, or URL in text",
   columns: "none; Links is a freeform grid and is not parsed as a headered table",
 } as const;
+
+export type LinksGridCellData = {
+  formattedValue?: unknown;
+  hyperlink?: unknown;
+  userEnteredValue?: {
+    formulaValue?: unknown;
+    stringValue?: unknown;
+  };
+  textFormatRuns?: Array<{
+    format?: {
+      link?: {
+        uri?: unknown;
+      };
+    };
+  }>;
+  userEnteredFormat?: {
+    textFormat?: {
+      link?: {
+        uri?: unknown;
+      };
+    };
+  };
+  effectiveFormat?: {
+    textFormat?: {
+      link?: {
+        uri?: unknown;
+      };
+    };
+  };
+};
 
 export type LinksStructuredCell = {
   text?: unknown;
@@ -76,17 +106,72 @@ function hrefFromFormula(value: unknown): string | null {
   return normalizeHref(raw) ?? extractLinksHref(raw);
 }
 
-function resolveHref(value: unknown, text: string, formula: unknown): string | null {
-  const explicit = providedHref(value);
-  if (explicit) return normalizeHref(explicit) ?? extractLinksHref(explicit);
-  return extractLinksHref(text) ?? hrefFromFormula(formula);
+function hrefFromCandidate(value: unknown): string | null {
+  const text = cellText(value);
+  if (!text) return null;
+  return normalizeHref(text) ?? extractLinksHref(text);
 }
 
-export function parseLinksSheet(matrix: unknown[][], formulas: unknown[][] = []): LinksSheetData {
+export function hrefFromGridCell(cell: LinksGridCellData | null | undefined): string | null {
+  if (!cell) return null;
+  const runUris = (cell.textFormatRuns ?? []).map((run) => run.format?.link?.uri);
+  const candidates = [
+    cell.hyperlink,
+    ...runUris,
+    cell.userEnteredFormat?.textFormat?.link?.uri,
+    cell.effectiveFormat?.textFormat?.link?.uri,
+  ];
+  for (const candidate of candidates) {
+    const href = hrefFromCandidate(candidate);
+    if (href) return href;
+  }
+  return null;
+}
+
+export function matricesFromGridData(
+  rowData: Array<{ values?: LinksGridCellData[] } | undefined> | undefined
+): { formatted: unknown[][]; formulas: unknown[][]; hyperlinks: (string | null)[][] } {
+  const formatted: unknown[][] = [];
+  const formulas: unknown[][] = [];
+  const hyperlinks: (string | null)[][] = [];
+  for (const row of rowData ?? []) {
+    const values = row?.values ?? [];
+    const formattedRow: unknown[] = [];
+    const formulaRow: unknown[] = [];
+    const hrefRow: (string | null)[] = [];
+    for (const cell of values) {
+      formattedRow.push(cell?.formattedValue ?? "");
+      formulaRow.push(cell?.userEnteredValue?.formulaValue ?? "");
+      hrefRow.push(hrefFromGridCell(cell));
+    }
+    formatted.push(formattedRow);
+    formulas.push(formulaRow);
+    hyperlinks.push(hrefRow);
+  }
+  return { formatted, formulas, hyperlinks };
+}
+
+function resolveHref(
+  value: unknown,
+  text: string,
+  formula: unknown,
+  gridHref: string | null | undefined
+): string | null {
+  const explicit = providedHref(value);
+  if (explicit) return hrefFromCandidate(explicit);
+  return hrefFromCandidate(gridHref) ?? hrefFromFormula(formula) ?? extractLinksHref(text);
+}
+
+export function parseLinksSheet(
+  matrix: unknown[][],
+  formulas: unknown[][] = [],
+  hyperlinks: Array<Array<string | null | undefined>> = []
+): LinksSheetData {
   const cells: LinksCell[] = [];
   for (let rowIndex = 0; rowIndex < matrix.length; rowIndex += 1) {
     const row = matrix[rowIndex] ?? [];
     const formulaRow = formulas[rowIndex] ?? [];
+    const hrefRow = hyperlinks[rowIndex] ?? [];
     for (let column = 0; column < row.length; column += 1) {
       const value = row[column];
       const text = displayText(value);
@@ -95,7 +180,7 @@ export function parseLinksSheet(matrix: unknown[][], formulas: unknown[][] = [])
         row: rowIndex + 1,
         column,
         text,
-        href: resolveHref(value, text, formulaRow[column]),
+        href: resolveHref(value, text, formulaRow[column], hrefRow[column] ?? null),
       });
     }
   }

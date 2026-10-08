@@ -44,6 +44,9 @@ describe("Links UI is read-only", () => {
     const board = readFileSync(join(dir, "../../components/LinksBoard.tsx"), "utf8");
     assert.match(board, /noopener noreferrer/);
     assert.match(board, /target="_blank"/);
+    assert.match(board, /isLinksHttpHref\(cell\.href\)/);
+    assert.match(board, /<a href=\{cell\.href\}/);
+    assert.equal(board.includes("onClick"), false);
     assert.match(client, /Refresh/);
     assert.match(client, /\/api\/links/);
   });
