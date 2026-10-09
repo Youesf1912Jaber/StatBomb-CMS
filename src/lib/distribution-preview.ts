@@ -2,6 +2,7 @@ import "server-only";
 
 import type { DistributionMatchRow } from "@/lib/sync/google-sheets";
 import { normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId } from "@/lib/sync/google-sheets";
+import { parseCalendarDate } from "@/lib/dates";
 import { parseDistributionSla } from "@/lib/distribution-assignments";
 import { assignmentLogicalKey, currentDistributionKeys } from "@/lib/sync/reconcile";
 import type { AssignmentRow, MatchRow, ProfileRow } from "@/types/database.types";
@@ -71,17 +72,7 @@ function validSla(value: string | null, fallbackDate?: string | null): boolean {
 function comparableShiftDate(value: string | null): string | null {
   const text = value?.trim() ?? "";
   if (!text) return null;
-  const isoMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  const dotMatch = text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-  const [, isoYear, isoMonth, isoDay] = isoMatch ?? [];
-  const [, slashMonth, slashDay, slashYear] = slashMatch ?? [];
-  const [, dotDay, dotMonth, dotYear] = dotMatch ?? [];
-  const year = isoYear ?? slashYear ?? dotYear;
-  const month = isoMonth ?? slashMonth ?? dotMonth;
-  const day = isoDay ?? slashDay ?? dotDay;
-  if (!year || !month || !day) return text.toLowerCase();
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  return parseCalendarDate(text, "mdy") ?? text.toLowerCase();
 }
 
 function comparableFieldsMatch(row: DistributionMatchRow, assignment: AssignmentRow): boolean {

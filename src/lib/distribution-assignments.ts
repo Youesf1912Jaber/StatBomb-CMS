@@ -1,5 +1,6 @@
 import "server-only";
 
+import { parseCalendarDate } from "@/lib/dates";
 import type { DistributionMatchRow } from "@/lib/sync/google-sheets";
 import { normalizeDistributionCollectorHrCode, normalizeDistributionHalf, normalizeDistributionTask, normalizeMatchId } from "@/lib/sync/google-sheets";
 import { findAssignmentByLogicalKey } from "@/lib/sync/reconcile";
@@ -162,9 +163,7 @@ export function parseDistributionSla(value: string | null, fallbackDate?: string
 }
 
 function toShiftDate(value: string | null): string | null {
-  const parsed = parseDistributionDateTime(value);
-  if (!parsed || !isValidCivilDate(parsed.year, parsed.month, parsed.day)) return null;
-  return `${pad(parsed.year, 4)}-${pad(parsed.month)}-${pad(parsed.day)}`;
+  return parseCalendarDate(value, "mdy");
 }
 
 function toSla(value: string | null, fallbackDate?: string | null): string | null {

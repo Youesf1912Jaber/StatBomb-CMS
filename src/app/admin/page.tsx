@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getAdminDashboardAssignments } from "@/lib/assignments/queries";
 import { AssignmentTable } from "@/components/AssignmentTable";
-import { getCairoToday } from "@/lib/dates";
+import { getCairoToday, isCurrentShiftDate } from "@/lib/dates";
 import { AdminBulkCompleteButton } from "./AdminBulkCompleteButton";
 import { RefreshDistributionButton } from "./RefreshDistributionButton";
 
@@ -19,7 +19,7 @@ export default async function AdminDashboardPage() {
   const assignments = await getAdminDashboardAssignments(supabase);
   const currentShiftDate = getCairoToday();
   const currentShiftAssignments = assignments.filter(
-    (assignment) => assignment.shift_date === currentShiftDate
+    (assignment) => isCurrentShiftDate(assignment.shift_date, currentShiftDate)
   );
   const allDistributedAssignments = assignments;
   const bulkCompletionCount = allDistributedAssignments.filter(

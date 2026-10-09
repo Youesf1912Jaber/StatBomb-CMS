@@ -6,7 +6,13 @@ import {
   isOperationalAssignment,
 } from "@/lib/assignments/distribution-presence";
 import { getAssignmentsForCollector } from "@/lib/assignments/queries";
-import { getCairoToday, toCairoDateString } from "@/lib/dates";
+import {
+  getCairoToday,
+  isCurrentShiftDate,
+  isOnOrAfterCalendarDate,
+  isUpcomingShiftDate,
+  toCairoDateString,
+} from "@/lib/dates";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AssignmentTable } from "@/components/AssignmentTable";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
@@ -92,7 +98,7 @@ export default async function CollectorDashboardPage() {
 
   // A) Today's Work — shift_date is the operational grouping, not match_date.
   const todaysWork = currentAssignments.filter(
-    (a) => a.shift_date === today
+    (a) => isCurrentShiftDate(a.shift_date, today)
   );
 
   // B) Currently In Progress — regardless of shift/match date.
@@ -104,8 +110,8 @@ export default async function CollectorDashboardPage() {
   // not-yet-shift-dated with a future-or-today match date.
   const upcoming = currentAssignments.filter((a) => {
     if (a.status !== "Not Started") return false;
-    if (a.shift_date) return a.shift_date > today;
-    return a.match.match_date >= today;
+    if (a.shift_date) return isUpcomingShiftDate(a.shift_date, today);
+    return isOnOrAfterCalendarDate(a.match.match_date, today);
   });
 
   // D) Completed Today — by actual completion timestamp, in Cairo.
