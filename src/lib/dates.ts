@@ -1,7 +1,8 @@
 /**
- * The collector dashboard's day-bucketing (Today's Work, Completed Today)
- * is defined against Africa/Cairo per the final spec's §4, regardless of
- * the server's or the browser's local timezone.
+ * Calendar-date utilities for StatBomb CMS.
+ *
+ * Date-only values must not be converted through a timezone.
+ * Actual timestamps are formatted in Africa/Cairo.
  *
  * Date-only values are normalized to validated `YYYY-MM-DD` calendar strings
  * for comparisons. Slash dates from Distribution are MDY (`M/D/YYYY`).
@@ -10,16 +11,25 @@
 
 const CAIRO_TZ = "Africa/Cairo";
 
+export type CalendarDateFormat = "iso" | "mdy";
 export type SlashDateOrder = "mdy" | "dmy";
 
 function pad2(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
-/** True only for a real Gregorian calendar day (rejects 2/30, month 13, etc.). */
-export function isValidCalendarYmd(year: number, month: number, day: number): boolean {
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
-  if (year < 1000 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+function isValidCalendarDate(
+  year: number,
+  month: number,
+  day: number,
+): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return false;
+  }
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+
   const date = new Date(Date.UTC(year, month - 1, day));
   return (
     date.getUTCFullYear() === year &&
@@ -28,62 +38,129 @@ export function isValidCalendarYmd(year: number, month: number, day: number): bo
   );
 }
 
+/** True only for a real Gregorian calendar day (rejects 2/30, month 13, etc.). */
+export function isValidCalendarYmd(year: number, month: number, day: number): boolean {
+  return isValidCalendarDate(year, month, day);
+}
+
 export function formatCalendarYmd(year: number, month: number, day: number): string | null {
-  if (!isValidCalendarYmd(year, month, day)) return null;
+  if (!isValidCalendarDate(year, month, day)) return null;
   return `${year.toString().padStart(4, "0")}-${pad2(month)}-${pad2(day)}`;
 }
 
+function parseIsoCalendarDate(input: string): string | null {
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/.exec(input);
+  if (!match) return null;
+  return formatCalendarYmd(Number(match[1]), Number(match[2]), Number(match[3]));
+}
+
+function parseSlashCalendarDate(input: string, order: SlashDateOrder): string | null {
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:$|\s)/.exec(input);
+  if (!match) return null;
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  const year = Number(match[3]);
+  if (order === "mdy") {
+    return formatCalendarYmd(year, first, second);
+  }
+  return formatCalendarYmd(year, second, first);
+}
+
 /**
- * Parse a date-only value to validated `YYYY-MM-DD`.
- * ISO `YYYY-MM-DD` is always accepted. Slash dates use `slashOrder`
- * (`mdy` = Distribution / Over Target `M/D/YYYY`).
+ * Validates and normalizes a calendar date without timezone conversion.
+ *
+ * `iso` accepts only `YYYY-MM-DD` (never guesses slash order).
+ * `mdy` accepts ISO first, then explicit US `M/D/YYYY`.
+ * `dmy` accepts ISO first, then `D/M/YYYY`.
  */
 export function parseCalendarDate(
   value: string | null | undefined,
-  slashOrder: SlashDateOrder = "mdy",
+  format: CalendarDateFormat | SlashDateOrder = "iso",
 ): string | null {
-  const text = value?.replace(/\u00a0/g, " ").trim() ?? "";
-  if (!text) return null;
+  const input = value?.replace(/\u00a0/g, " ").trim() ?? "";
+  if (!input) return null;
 
-  const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/);
-  if (iso) {
-    return formatCalendarYmd(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  if (format === "iso") {
+    return parseIsoCalendarDate(input);
   }
 
-  const slash = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:$|\s)/);
-  if (slash) {
-    const first = Number(slash[1]);
-    const second = Number(slash[2]);
-    const year = Number(slash[3]);
-    if (slashOrder === "mdy") {
-      return formatCalendarYmd(year, first, second);
-    }
-    return formatCalendarYmd(year, second, first);
-  }
-
-  return null;
+  return parseIsoCalendarDate(input) ?? parseSlashCalendarDate(input, format);
 }
 
+/** Today's date in Africa/Cairo, as YYYY-MM-DD. */
+export function getCairoToday(): string {
+  return formatInCairo(new Date());
+}
+
+/** Formats an actual instant as YYYY-MM-DD in Africa/Cairo. */
+export function formatInCairo(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CAIRO_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+/**
+ * Converts a date-only ISO value to its normalized calendar date.
+ * Timestamp values are converted to the corresponding Cairo date.
+ *
+ * US slash dates are interpreted explicitly as M/D/YYYY.
+ */
+export function toCairoDateString(value: string): string {
+  const input = value.trim();
+
+  const isoDate = parseCalendarDate(input, "iso");
+  if (isoDate) return isoDate;
+
+  const usDate = parseCalendarDate(input, "mdy");
+  if (usDate) return usDate;
+
+  const timestamp = new Date(input);
+
+  if (Number.isNaN(timestamp.getTime())) {
+    throw new RangeError(`Invalid date or timestamp: ${value}`);
+  }
+
+  return formatInCairo(timestamp);
+}
+
+/** Compares calendar dates after explicit parsing. */
 export function calendarDatesEqual(
   left: string | null | undefined,
   right: string | null | undefined,
-  slashOrder: SlashDateOrder = "mdy",
+  format: CalendarDateFormat | SlashDateOrder = "iso",
 ): boolean {
-  const a = parseCalendarDate(left, slashOrder);
-  const b = parseCalendarDate(right, slashOrder);
-  return a !== null && b !== null && a === b;
+  const normalizedLeft = parseCalendarDate(left, format);
+  const normalizedRight = parseCalendarDate(right, format);
+
+  return (
+    normalizedLeft !== null &&
+    normalizedRight !== null &&
+    normalizedLeft === normalizedRight
+  );
 }
 
+/** Compares two calendar dates after parsing. Returns null if invalid. */
 export function compareCalendarDates(
   left: string | null | undefined,
   right: string | null | undefined,
-  slashOrder: SlashDateOrder = "mdy",
-): number | null {
-  const a = parseCalendarDate(left, slashOrder);
-  const b = parseCalendarDate(right, slashOrder);
-  if (a === null || b === null) return null;
-  if (a < b) return -1;
-  if (a > b) return 1;
+  format: CalendarDateFormat | SlashDateOrder = "iso",
+): -1 | 0 | 1 | null {
+  const normalizedLeft = parseCalendarDate(left, format);
+  const normalizedRight = parseCalendarDate(right, format);
+
+  if (!normalizedLeft || !normalizedRight) return null;
+  if (normalizedLeft < normalizedRight) return -1;
+  if (normalizedLeft > normalizedRight) return 1;
+
   return 0;
 }
 
@@ -112,38 +189,16 @@ export function isOnOrAfterCalendarDate(
   return cmp !== null && cmp >= 0;
 }
 
-/** Today's date in Africa/Cairo, as `YYYY-MM-DD` (matches Postgres `date`). */
-export function getCairoToday(): string {
-  return formatInCairo(new Date());
-}
-
-/** Formats any Date as `YYYY-MM-DD` in Africa/Cairo. */
-export function formatInCairo(date: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: CAIRO_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
-
 /**
- * `YYYY-MM-DD` (a Postgres `date`) is returned as that civil day.
- * Timestamptz values are converted to Africa/Cairo.
- */
-export function toCairoDateString(isoDateOrTimestamp: string): string {
-  const trimmed = isoDateOrTimestamp.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return parseCalendarDate(trimmed) ?? trimmed;
-  }
-  return formatInCairo(new Date(isoDateOrTimestamp));
-}
-
-/**
- * Human-readable Cairo date + time (e.g. "16 Sep 2026, 6:30 PM") for
- * notification timestamps. Same Africa/Cairo anchoring as the rest of the app.
+ * Human-readable Cairo date + time for actual notification timestamps.
  */
 export function formatCairoDateTime(isoTimestamp: string): string {
+  const date = new Date(isoTimestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new RangeError(`Invalid timestamp: ${isoTimestamp}`);
+  }
+
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: CAIRO_TZ,
     day: "2-digit",
@@ -151,5 +206,5 @@ export function formatCairoDateTime(isoTimestamp: string): string {
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(isoTimestamp));
+  }).format(date);
 }
