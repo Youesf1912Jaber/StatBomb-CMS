@@ -62,7 +62,6 @@ async function syncAssignmentCompletionToSheet(
 async function fetchCompletedDistributionAssignments(
   supabase: ReturnType<typeof createClient>,
 ) {
-  const rows: Array<Awaited<ReturnType<typeof distributionStatusUpdateForAssignment>> & { id: string }> = [];
   // The helper below is typed explicitly from the table row to avoid relying
   // on a single PostgREST response, which may be capped at 1,000 rows.
   const assignments: Array<{
