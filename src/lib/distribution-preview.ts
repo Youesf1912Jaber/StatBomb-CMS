@@ -72,7 +72,7 @@ function validSla(value: string | null, fallbackDate?: string | null): boolean {
 function comparableShiftDate(value: string | null): string | null {
   const text = value?.trim() ?? "";
   if (!text) return null;
-  return parseCalendarDate(text, "mdy") ?? text.toLowerCase();
+  return parseCalendarDate(text, "dmy") ?? text.toLowerCase();
 }
 
 function comparableFieldsMatch(row: DistributionMatchRow, assignment: AssignmentRow): boolean {

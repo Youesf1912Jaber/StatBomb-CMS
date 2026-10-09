@@ -19,12 +19,23 @@ export function RefreshDistributionButton() {
         method: "POST",
         cache: "no-store",
       });
-      const payload = await response.json() as {
+      const responseText = await response.text();
+      let payload: {
         success?: boolean;
         present?: number;
         missing?: number;
         error?: string;
-      };
+      } = {};
+      try {
+        payload = JSON.parse(responseText) as typeof payload;
+      } catch {
+        const detail = responseText.replace(/\\s+/g, " ").trim().slice(0, 240);
+        throw new Error(
+          detail
+            ? `Refresh failed (HTTP ${response.status}): ${detail}`
+            : `Refresh failed (HTTP ${response.status}) and returned an empty response.`
+        );
+      }
       if (!response.ok || !payload.success) {
         throw new Error(payload.error ?? "Unable to refresh Distribution.");
       }

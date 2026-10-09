@@ -448,7 +448,7 @@ export async function pullDistributionSheet(): Promise<GoogleSheetsPull> {
   const spreadsheetId = required("GOOGLE_SHEETS_SPREADSHEET_ID");
   const sheetName = normalizedSheetName(process.env.GOOGLE_SHEETS_DISTRIBUTION_TAB ?? "Distribution");
   const headerRow = Number(process.env.GOOGLE_SHEETS_HEADER_ROW ?? "1");
-  const configuredMaxRows = Number(process.env.GOOGLE_SHEETS_MAX_ROWS ?? "500");
+  const configuredMaxRows = Number(process.env.GOOGLE_SHEETS_MAX_ROWS ?? "10000");
   const maxRows =
     Number.isInteger(configuredMaxRows) && configuredMaxRows > 0
       ? Math.min(configuredMaxRows, PREVIEW_LIMITS.maxRows)
@@ -631,9 +631,9 @@ export async function createDistributionAssignments(inputs: DistributionCreateIn
     if (!matchId || !collectorHrCode || !task) {
       throw new PreviewInputError("Each assignment requires a valid Match ID, Collector, and Task.");
     }
-    if (!DISTRIBUTION_TASK_OPTIONS.some((option) => option === task)) {
-      throw new PreviewInputError(`The selected task is not valid: ${task}`);
-    }
+    // Distribution supports custom task scopes (for example, "Duels").
+    // Validate that the task is non-empty above, but do not restrict it to the
+    // app's predefined dropdown options; preserve the exact normalized task in Sheets.
     return { ...input, matchId, collectorHrCode, task, half };
   });
 
@@ -729,9 +729,8 @@ export async function updateDistributionRow(input: DistributionUpdateInput): Pro
   if (!matchId || !Number.isSafeInteger(input.rowNumber) || input.rowNumber < 2 || !expectedHrCode || !collectorHrCode || !task) {
     throw new PreviewInputError("The Distribution edit input is invalid.");
   }
-  if (!DISTRIBUTION_TASK_OPTIONS.some((option) => option === task)) {
-    throw new PreviewInputError("The selected task is not valid.");
-  }
+  // Keep custom Distribution tasks editable; the sheet is the source of truth
+  // for task scopes and they must not be rejected by a stale frontend options list.
 
   const sheetName = normalizedSheetName(process.env.GOOGLE_SHEETS_DISTRIBUTION_TAB ?? "Distribution");
   const values = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
@@ -915,8 +914,9 @@ export async function readDistributionRowsForMatch(matchId: string): Promise<Dis
 
 export async function readDistributionRowsForPreview(): Promise<DistributionMatchRow[]> {
   const pull = await pullDistributionSheet();
-  const values = await readDistributionSheetRange(`${pull.sheetName}!A:Z`);
-  const matrix = values.length > 0 ? values : [pull.rows.headers, ...pull.rows.rows];
+  // pullDistributionSheet already fetched the configured range including headers.
+  // Reuse that response instead of making a second full-sheet API request.
+  const matrix = [pull.rows.headers, ...pull.rows.rows];
   const headers = (matrix[0] ?? []).map(normalizeDistributionHeader);
   const findHeaderIndex = (...aliases: string[]) => {
     const normalizedAliases = aliases.map(normalizeDistributionHeader);

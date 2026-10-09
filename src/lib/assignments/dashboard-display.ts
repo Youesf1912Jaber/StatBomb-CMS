@@ -12,10 +12,10 @@ export function displayAssignmentMatchId(assignment: {
 
 /**
  * Distribution Shift Date, never Match Date.
- * Parses with MDY-aware calendar utilities so slash dates stay on the same day.
+ * Parses Distribution Shift Date as DMY (day/month/year); ISO dates remain supported.
  */
 export function displayAssignmentShiftDate(assignment: {
   shift_date?: string | null;
 }): string {
-  return parseCalendarDate(assignment.shift_date, "mdy") ?? "—";
+  return parseCalendarDate(assignment.shift_date, "dmy") ?? "—";
 }

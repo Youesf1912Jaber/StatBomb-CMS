@@ -163,7 +163,7 @@ export function parseDistributionSla(value: string | null, fallbackDate?: string
 }
 
 function toShiftDate(value: string | null): string | null {
-  return parseCalendarDate(value, "mdy");
+  return parseCalendarDate(value, "dmy");
 }
 
 function toSla(value: string | null, fallbackDate?: string | null): string | null {
