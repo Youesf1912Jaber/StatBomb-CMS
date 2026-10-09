@@ -1026,6 +1026,110 @@ export async function readDistributionRowsForPreview(): Promise<DistributionMatc
   }));
 }
 
+
+export type DistributionStatusUpdate = {
+  matchId: string;
+  collectorHrCode: string;
+  task: string;
+  half: string;
+  status: "Complete" | "In Progress";
+};
+
+function columnLetter(index: number): string {
+  let value = index + 1;
+  let result = "";
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
+/**
+ * Writes assignment completion states back to the live Distribution sheet.
+ * Each update must match exactly one row by Match ID + collector HR code +
+ * task + half. Ambiguous or missing identities fail safely without writing.
+ */
+export async function updateDistributionStatuses(
+  updates: DistributionStatusUpdate[],
+): Promise<{ updated: number }> {
+  if (updates.length === 0) return { updated: 0 };
+
+  const sheetName = normalizedSheetName(process.env.GOOGLE_SHEETS_DISTRIBUTION_TAB ?? "Distribution");
+  const values = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
+  if (values.length < 2) throw new PreviewInputError("No assignment rows were found in the Distribution sheet.");
+
+  const headers = (values[0] ?? []).map(normalizeDistributionHeader);
+  const indexes = getDistributionHeaderIndexes(headers);
+  const statusIndex = headers.findIndex((header) => header === "status");
+  if (statusIndex < 0) throw new PreviewInputError("The Distribution sheet is missing the Status column.");
+
+  const writes: Array<{ rowNumber: number; status: DistributionStatusUpdate["status"] }> = [];
+  const seenRows = new Set<number>();
+
+  for (const update of updates) {
+    const matchId = normalizeMatchId(update.matchId);
+    const hrCode = normalizeDistributionCollectorHrCode(update.collectorHrCode);
+    const task = normalizeDistributionTask(update.task);
+    const half = normalizeDistributionHalf(update.half);
+    if (!matchId || !hrCode || !task || !half) {
+      throw new PreviewInputError("A Distribution status update has incomplete assignment identity.");
+    }
+
+    const matches = values.slice(1).flatMap((row, index) =>
+      matchesDistributionIdentity(row, indexes, matchId, hrCode, task, half)
+        ? [{ rowNumber: index + 2, currentStatus: String(row[statusIndex] ?? "").trim() }]
+        : []
+    );
+    if (matches.length !== 1) {
+      throw new PreviewInputError(
+        matches.length === 0
+          ? `No matching Distribution row was found for Match ID ${matchId}, HR code ${hrCode}, task ${task}, half ${half}.`
+          : `Multiple Distribution rows match Match ID ${matchId}, HR code ${hrCode}, task ${task}, half ${half}. No status was changed.`
+      );
+    }
+    const match = matches[0];
+    if (!match) throw new PreviewInputError("The matching Distribution row could not be resolved.");
+    if (seenRows.has(match.rowNumber)) {
+      throw new PreviewInputError("Multiple status updates target the same Distribution row.");
+    }
+    seenRows.add(match.rowNumber);
+    if (match.currentStatus.toLowerCase() !== update.status.toLowerCase()) {
+      writes.push({ rowNumber: match.rowNumber, status: update.status });
+    }
+  }
+
+  if (writes.length === 0) return { updated: 0 };
+
+  const spreadsheetId = required("GOOGLE_SHEETS_SPREADSHEET_ID");
+  const statusColumn = columnLetter(statusIndex);
+  await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      valueInputOption: "USER_ENTERED",
+      data: writes.map((write) => ({
+        range: `${sheetName}!${statusColumn}${write.rowNumber}:${statusColumn}${write.rowNumber}`,
+        majorDimension: "ROWS",
+        values: [[write.status]],
+      })),
+    }),
+  });
+
+  const verification = await readDistributionSheetRange(
+    `${sheetName}!${statusColumn}:${statusColumn}`,
+    "FORMATTED_VALUE",
+  );
+  for (const write of writes) {
+    const actual = String(verification[write.rowNumber - 1]?.[0] ?? "").trim();
+    if (actual.toLowerCase() !== write.status.toLowerCase()) {
+      throw new PreviewInputError("The Distribution status update could not be verified.");
+    }
+  }
+
+  return { updated: writes.length };
+}
+
 export type DeductionSheetSourceRow = {
   source_row_number: number;
   match_id: string;
