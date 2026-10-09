@@ -448,7 +448,7 @@ export async function pullDistributionSheet(): Promise<GoogleSheetsPull> {
   const spreadsheetId = required("GOOGLE_SHEETS_SPREADSHEET_ID");
   const sheetName = normalizedSheetName(process.env.GOOGLE_SHEETS_DISTRIBUTION_TAB ?? "Distribution");
   const headerRow = Number(process.env.GOOGLE_SHEETS_HEADER_ROW ?? "1");
-  const configuredMaxRows = Number(process.env.GOOGLE_SHEETS_MAX_ROWS ?? "500");
+  const configuredMaxRows = Number(process.env.GOOGLE_SHEETS_MAX_ROWS ?? "10000");
   const maxRows =
     Number.isInteger(configuredMaxRows) && configuredMaxRows > 0
       ? Math.min(configuredMaxRows, PREVIEW_LIMITS.maxRows)
