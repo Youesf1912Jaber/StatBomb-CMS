@@ -799,6 +799,72 @@ async function findDistributionSheetId(spreadsheetId: string, title: string): Pr
   return sheet.properties.sheetId;
 }
 
+export type DistributionDeleteInput = {
+  matchId: string;
+  collectorHrCode: string;
+  task: string;
+  half: string;
+};
+
+/**
+ * Permanently removes one uniquely identified assignment row from the live
+ * Distribution sheet. The caller must authenticate and authorize the admin.
+ * Refuses to delete if the identity is missing or ambiguous.
+ */
+export async function deleteDistributionRowFromSheet(input: DistributionDeleteInput): Promise<{ rowNumber: number }> {
+  const matchId = normalizeMatchId(input.matchId);
+  const collectorHrCode = normalizeDistributionCollectorHrCode(input.collectorHrCode);
+  const task = normalizeDistributionTask(input.task);
+  const half = normalizeDistributionHalf(input.half);
+  if (!matchId || !collectorHrCode || !task || !half) {
+    throw new PreviewInputError("The Distribution assignment identity is incomplete.");
+  }
+
+  const sheetName = normalizedSheetName(process.env.GOOGLE_SHEETS_DISTRIBUTION_TAB ?? "Distribution");
+  const values = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
+  if (values.length < 2) throw new PreviewInputError("No assignment rows were found in the Distribution sheet.");
+  const indexes = getDistributionHeaderIndexes((values[0] ?? []).map(normalizeDistributionHeader));
+  const matchingRows = values.slice(1).flatMap((row, index) =>
+    matchesDistributionIdentity(row, indexes, matchId, collectorHrCode, task, half)
+      ? [index + 2]
+      : []
+  );
+
+  if (matchingRows.length === 0) {
+    throw new DistributionRowConflictError();
+  }
+  if (matchingRows.length > 1) {
+    throw new PreviewInputError("More than one matching row exists in Distribution. No row was deleted; resolve the duplicate rows first.");
+  }
+
+  const rowNumber = matchingRows[0];
+  if (rowNumber === undefined) throw new DistributionRowConflictError();
+  const spreadsheetId = required("GOOGLE_SHEETS_SPREADSHEET_ID");
+  const sheetId = await findDistributionSheetId(spreadsheetId, sheetName);
+  await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: { sheetId, dimension: "ROWS", startIndex: rowNumber - 1, endIndex: rowNumber },
+        },
+      }],
+    }),
+  });
+
+  const remaining = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
+  const remainingIndexes = getDistributionHeaderIndexes((remaining[0] ?? []).map(normalizeDistributionHeader));
+  const stillExists = remaining.slice(1).some((row) =>
+    matchesDistributionIdentity(row, remainingIndexes, matchId, collectorHrCode, task, half)
+  );
+  if (stillExists) {
+    throw new PreviewInputError("The row deletion could not be verified. Refresh Distribution before trying again.");
+  }
+
+  await refreshDistributionMatchBorders();
+  return { rowNumber };
+}
+
 export async function refreshDistributionMatchBorders(): Promise<void> {
   const sheetName = normalizedSheetName(process.env.GOOGLE_SHEETS_DISTRIBUTION_TAB ?? "Distribution");
   const values = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
