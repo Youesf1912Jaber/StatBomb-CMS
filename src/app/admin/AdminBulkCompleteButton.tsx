@@ -40,6 +40,7 @@ export function AdminBulkCompleteButton({ eligibleCount }: AdminBulkCompleteButt
 
       setConfirming(false);
       setMessage(`Successfully marked ${result.completedCount} assignments as Completed.`);
+      if (result.warning) setError(result.warning);
       router.refresh();
     });
   }
