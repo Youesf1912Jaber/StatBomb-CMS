@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { deleteDistributionRowFromSheet } from "@/lib/sync/google-sheets";
-import { PreviewInputError, } from "@/lib/sync/preview";
+import { deleteDistributionRowFromSheet, DistributionRowConflictError } from "@/lib/sync/google-sheets";
+import { PreviewInputError } from "@/lib/sync/preview";
 
 export const runtime = "nodejs";
 
@@ -71,7 +71,7 @@ export async function DELETE(request: Request) {
     const message = error instanceof PreviewInputError
       ? error.safeMessage
       : "The Distribution row could not be deleted.";
-    const status = error instanceof PreviewInputError ? 422 : 500;
+    const status = error instanceof DistributionRowConflictError ? 409 : error instanceof PreviewInputError ? 422 : 500;
     return NextResponse.json({ success: false, error: message }, { status });
   }
 }
