@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { displayAssignmentMatchId, displayAssignmentShiftDate } from "@/lib/assignments/dashboard-display";
 import { distributionPresenceLabel } from "@/lib/assignments/distribution-presence";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
 import { AdminAssignmentActions } from "./AdminAssignmentActions";
@@ -67,6 +68,8 @@ export function AssignmentTable({
         a.task,
         a.half,
         a.match.competition ?? "",
+        displayAssignmentMatchId(a),
+        displayAssignmentShiftDate(a),
         showCollector ? (collectorNames[a.collector_id] ?? "") : "",
       ]
         .join(" ")
@@ -108,7 +111,9 @@ export function AssignmentTable({
             <thead className="border-b border-pitch-700 bg-pitch-900 text-chalk-200">
               <tr>
                 <th className="px-3 py-2">Match</th>
+                <th className="whitespace-nowrap px-3 py-2">Match ID</th>
                 <th className="px-3 py-2">Match Date</th>
+                <th className="whitespace-nowrap px-3 py-2">Shift Date</th>
                 <th className="px-3 py-2">Kick-off</th>
                 <th className="px-3 py-2">Task</th>
                 <th className="px-3 py-2">Half</th>
@@ -129,7 +134,13 @@ export function AssignmentTable({
                       {a.match.home_team} vs {a.match.away_team}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-chalk-200">{a.match.match_date}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-chalk-200">
+                    {displayAssignmentMatchId(a)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-chalk-200">{a.match.match_date}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-chalk-200">
+                    {displayAssignmentShiftDate(a)}
+                  </td>
                   <td className="px-3 py-2 text-chalk-200">
                     {a.match.kickoff_time ? new Date(a.match.kickoff_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
                   </td>
