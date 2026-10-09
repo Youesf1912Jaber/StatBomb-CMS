@@ -236,21 +236,41 @@ export async function reconcileDistributionAssignments(
     }
   }
 
+  // Process independent logical assignments concurrently. The sheet can contain
+  // thousands of rows; awaiting an RPC for every row serially can exceed Vercel's
+  // function timeout. Duplicate logical keys are filtered before entering a batch.
+  const RECONCILIATION_BATCH_SIZE = 8;
+  const eligibleRows: DistributionMatchRow[] = [];
   for (const row of distributionRows) {
     const logicalKey = distributionRowLogicalKey(row);
     if (!logicalKey || logicalKeyCounts.get(logicalKey) !== 1) {
       result.skipped += 1;
       continue;
     }
+    eligibleRows.push(row);
+  }
 
-    const outcome = await createOrUpdateAssignment(
-      supabase,
-      row,
-      profilesResult.data ?? [],
-      matches,
-      assignments,
-    );
-    result[outcome] += 1;
+  for (let offset = 0; offset < eligibleRows.length; offset += RECONCILIATION_BATCH_SIZE) {
+    const batch = eligibleRows.slice(offset, offset + RECONCILIATION_BATCH_SIZE);
+    const outcomes = await Promise.allSettled(batch.map((row) =>
+      createOrUpdateAssignment(
+        supabase,
+        row,
+        profilesResult.data ?? [],
+        matches,
+        assignments,
+      )
+    ));
+
+    let firstError: unknown;
+    for (const outcome of outcomes) {
+      if (outcome.status === "fulfilled") {
+        result[outcome.value] += 1;
+      } else if (firstError === undefined) {
+        firstError = outcome.reason;
+      }
+    }
+    if (firstError !== undefined) throw firstError;
   }
 
   const currentAssignments = await fetchAllAssignments(supabase);

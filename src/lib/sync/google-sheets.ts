@@ -915,8 +915,9 @@ export async function readDistributionRowsForMatch(matchId: string): Promise<Dis
 
 export async function readDistributionRowsForPreview(): Promise<DistributionMatchRow[]> {
   const pull = await pullDistributionSheet();
-  const values = await readDistributionSheetRange(`${pull.sheetName}!A:Z`);
-  const matrix = values.length > 0 ? values : [pull.rows.headers, ...pull.rows.rows];
+  // pullDistributionSheet already fetched the configured range including headers.
+  // Reuse that response instead of making a second full-sheet API request.
+  const matrix = [pull.rows.headers, ...pull.rows.rows];
   const headers = (matrix[0] ?? []).map(normalizeDistributionHeader);
   const findHeaderIndex = (...aliases: string[]) => {
     const normalizedAliases = aliases.map(normalizeDistributionHeader);
