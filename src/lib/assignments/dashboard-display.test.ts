@@ -85,10 +85,10 @@ describe("displayAssignmentShiftDate", () => {
     assert.notEqual(displayAssignmentShiftDate(assignment), "2026-10-09");
   });
 
-  it("parses Distribution MDY Shift Date without timezone shift", () => {
-    assert.equal(displayAssignmentShiftDate(makeAssignment({ shift_date: "10/9/2026" })), "2026-10-09");
-    assert.equal(displayAssignmentShiftDate(makeAssignment({ shift_date: "9/28/2026" })), "2026-09-28");
-    assert.notEqual(displayAssignmentShiftDate(makeAssignment({ shift_date: "9/9/2026" })), "2026-10-09");
+  it("parses Distribution DMY Shift Date without timezone shift", () => {
+    assert.equal(displayAssignmentShiftDate(makeAssignment({ shift_date: "29/9/2026" })), "2026-09-29");
+    assert.equal(displayAssignmentShiftDate(makeAssignment({ shift_date: "30/9/2026" })), "2026-09-30");
+    assert.equal(displayAssignmentShiftDate(makeAssignment({ shift_date: "9/10/2026" })), "2026-10-09");
   });
 
   it("handles missing or invalid Shift Date without throwing", () => {

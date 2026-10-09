@@ -9,7 +9,7 @@ import {
   parseCalendarDate,
 } from "./dates";
 
-describe("parseCalendarDate MDY (Distribution)", () => {
+describe("parseCalendarDate MDY (Match Date) and DMY (Distribution Shift Date)", () => {
   it("treats 2026-10-09 and 10/9/2026 as the same calendar day", () => {
     assert.equal(parseCalendarDate("2026-10-09", "mdy"), "2026-10-09");
     assert.equal(parseCalendarDate("10/9/2026", "mdy"), "2026-10-09");
@@ -44,10 +44,12 @@ describe("parseCalendarDate MDY (Distribution)", () => {
 });
 
 describe("Current Shift and Upcoming", () => {
-  it("Current Shift matches ISO and MDY for the same Cairo day", () => {
+  it("Current Shift matches ISO and DMY Shift Dates for the same Cairo day", () => {
     assert.equal(isCurrentShiftDate("2026-10-09", "2026-10-09"), true);
-    assert.equal(isCurrentShiftDate("10/9/2026", "2026-10-09"), true);
-    assert.equal(isCurrentShiftDate("10/09/2026", "2026-10-09"), true);
+    assert.equal(isCurrentShiftDate("9/10/2026", "2026-10-09"), true);
+    assert.equal(isCurrentShiftDate("29/9/2026", "2026-09-29"), true);
+    assert.equal(isCurrentShiftDate("30/9/2026", "2026-09-30"), true);
+    assert.equal(isCurrentShiftDate("09/10/2026", "2026-10-09"), true);
     assert.equal(isCurrentShiftDate("2026-09-09", "2026-10-09"), false);
     assert.equal(isCurrentShiftDate("9/9/2026", "2026-10-09"), false);
     assert.equal(isCurrentShiftDate(null, "2026-10-09"), false);
@@ -57,11 +59,12 @@ describe("Current Shift and Upcoming", () => {
   it("Upcoming uses calendar order, not MDY string lexicography", () => {
     assert.equal(isUpcomingShiftDate("2026-10-10", "2026-10-09"), true);
     assert.equal(isUpcomingShiftDate("10/10/2026", "2026-10-09"), true);
-    assert.equal(isUpcomingShiftDate("9/28/2026", "2026-09-09"), true);
+    assert.equal(isUpcomingShiftDate("30/9/2026", "2026-09-29"), true);
+    assert.equal(isUpcomingShiftDate("28/9/2026", "2026-09-09"), true);
     assert.equal(isUpcomingShiftDate("2026-10-09", "2026-10-09"), false);
-    assert.equal(isUpcomingShiftDate("10/9/2026", "2026-10-09"), false);
+    assert.equal(isUpcomingShiftDate("9/10/2026", "2026-10-09"), false);
     assert.equal(isUpcomingShiftDate("2026-10-08", "2026-10-09"), false);
-    assert.equal(isUpcomingShiftDate("9/8/2026", "2026-10-09"), false);
+    assert.equal(isUpcomingShiftDate("8/9/2026", "2026-10-09"), false);
     assert.equal(isUpcomingShiftDate(null, "2026-10-09"), false);
   });
 
@@ -76,5 +79,21 @@ describe("Current Shift and Upcoming", () => {
     assert.equal(compareCalendarDates("9/28/2026", "2026-10-09", "mdy"), -1);
     assert.equal(compareCalendarDates("10/9/2026", "2026-10-09", "mdy"), 0);
     assert.equal(compareCalendarDates("10/10/2026", "2026-10-09", "mdy"), 1);
+  });
+});
+
+
+describe("Distribution Shift Date uses DMY", () => {
+  it("parses day-first dates without swapping month and day", () => {
+    assert.equal(parseCalendarDate("29/9/2026", "dmy"), "2026-09-29");
+    assert.equal(parseCalendarDate("30/9/2026", "dmy"), "2026-09-30");
+    assert.equal(parseCalendarDate("9/10/2026", "dmy"), "2026-10-09");
+    assert.equal(parseCalendarDate("2026-10-09", "dmy"), "2026-10-09");
+  });
+
+  it("rejects invalid DMY dates", () => {
+    assert.equal(parseCalendarDate("31/9/2026", "dmy"), null);
+    assert.equal(parseCalendarDate("29/2/2025", "dmy"), null);
+    assert.equal(parseCalendarDate("32/1/2026", "dmy"), null);
   });
 });

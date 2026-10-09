@@ -5,7 +5,7 @@
  * Actual timestamps are formatted in Africa/Cairo.
  *
  * Date-only values are normalized to validated `YYYY-MM-DD` calendar strings
- * for comparisons. Slash dates from Distribution are MDY (`M/D/YYYY`).
+ * for comparisons. Distribution Shift Date uses DMY (`D/M/YYYY`); Match Date sources may use MDY.
  * Date-only parsing never uses `Date.parse` / `new Date("M/D/YYYY")`.
  */
 
@@ -164,12 +164,12 @@ export function compareCalendarDates(
   return 0;
 }
 
-/** Current Shift / Today's Work: same calendar day, ISO or MDY. */
+/** Current Shift / Today's Work: Distribution Shift Date is DMY; ISO is also accepted. */
 export function isCurrentShiftDate(
   shiftDate: string | null | undefined,
   todayIso: string,
 ): boolean {
-  return calendarDatesEqual(shiftDate, todayIso, "mdy");
+  return calendarDatesEqual(shiftDate, todayIso, "dmy");
 }
 
 /** Upcoming: shift_date is a real calendar day strictly after today. */
@@ -177,7 +177,7 @@ export function isUpcomingShiftDate(
   shiftDate: string | null | undefined,
   todayIso: string,
 ): boolean {
-  const cmp = compareCalendarDates(shiftDate, todayIso, "mdy");
+  const cmp = compareCalendarDates(shiftDate, todayIso, "dmy");
   return cmp !== null && cmp > 0;
 }
 
