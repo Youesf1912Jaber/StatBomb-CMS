@@ -151,7 +151,7 @@ export function parseBonusDate(raw: string): string | null {
   }
 
   // The Bonus sheet uses US month/day/year order: M/D/YYYY.
-  const mdy = text.match(/^(\d{1,2})(?:\\/|\\.|-)(\d{1,2})(?:\\/|\\.|-)(\d{4})/);
+  const mdy = text.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
   if (mdy) {
     const month = Number(mdy[1]);
     const day = Number(mdy[2]);
