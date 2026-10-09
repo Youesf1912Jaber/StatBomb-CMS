@@ -30,6 +30,7 @@ function assignmentQueryCounts(assignments: Database["public"]["Tables"]["assign
  * instead of casting through `any`.
  */
 const MATCH_ID_CHUNK_SIZE = 100;
+const ASSIGNMENTS_PAGE_SIZE = 1000;
 
 async function attachMatches(
   supabase: Client,
@@ -103,19 +104,34 @@ export async function getAdminDashboardAssignments(supabase: Client): Promise<As
   console.error("Admin dashboard query start", {
     query: "admin assignments query",
   });
-  const { data, error } = await supabase
-    .from("assignments")
-    .select("*")
-    .eq("hidden_from_admin_dashboard", false)
-    .eq("distribution_present", true);
-  if (error) {
-    console.error("Admin dashboard query failed", {
-      query: "admin assignments query",
-      ...queryErrorFields(error),
-    });
-    throw error;
+
+  // Supabase/PostgREST limits a single response to a maximum page size. Fetch
+  // every page so recent assignments aren't silently omitted once the table
+  // grows beyond that limit.
+  const assignments: Database["public"]["Tables"]["assignments"]["Row"][] = [];
+  for (let from = 0; ; from += ASSIGNMENTS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select("*")
+      .eq("hidden_from_admin_dashboard", false)
+      .eq("distribution_present", true)
+      .order("id", { ascending: true })
+      .range(from, from + ASSIGNMENTS_PAGE_SIZE - 1);
+
+    if (error) {
+      console.error("Admin dashboard query failed", {
+        query: "admin assignments query",
+        offset: from,
+        ...queryErrorFields(error),
+      });
+      throw error;
+    }
+
+    const page = data ?? [];
+    assignments.push(...page);
+    if (page.length < ASSIGNMENTS_PAGE_SIZE) break;
   }
-  const assignments = data ?? [];
+
   console.error("Admin dashboard query complete", {
     query: "admin assignments query",
     ...assignmentQueryCounts(assignments),
