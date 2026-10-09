@@ -59,31 +59,61 @@ async function syncAssignmentCompletionToSheet(
   }
 }
 
+async function fetchCompletedDistributionAssignments(
+  supabase: ReturnType<typeof createClient>,
+) {
+  const rows: Array<Awaited<ReturnType<typeof distributionStatusUpdateForAssignment>> & { id: string }> = [];
+  // The helper below is typed explicitly from the table row to avoid relying
+  // on a single PostgREST response, which may be capped at 1,000 rows.
+  const assignments: Array<{
+    id: string;
+    match_id: string;
+    collector_id: string;
+    task: string;
+    raw_task_value: string | null;
+    half: string;
+  }> = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select("id, match_id, collector_id, task, raw_task_value, half")
+      .eq("distribution_present", true)
+      .eq("hidden_from_admin_dashboard", false)
+      .eq("status", "Completed")
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw error;
+    const page = data ?? [];
+    assignments.push(...page);
+    if (page.length < 1000) break;
+  }
+  return assignments;
+}
+
 async function syncCurrentDistributionCompletionsToSheet(
   supabase: ReturnType<typeof createClient>,
 ): Promise<string | null> {
   try {
-    const { data: assignments, error: assignmentsError } = await supabase
-      .from("assignments")
-      .select("*")
-      .eq("distribution_present", true)
-      .eq("hidden_from_admin_dashboard", false)
-      .eq("status", "Completed");
-    if (assignmentsError) throw assignmentsError;
-    const rows = assignments ?? [];
+    const rows = await fetchCompletedDistributionAssignments(supabase);
     if (rows.length === 0) return null;
 
     const collectorIds = [...new Set(rows.map((row) => row.collector_id))];
     const matchIds = [...new Set(rows.map((row) => row.match_id))];
-    const [{ data: collectors, error: collectorsError }, { data: matches, error: matchesError }] = await Promise.all([
-      supabase.from("profiles").select("id, hr_code").in("id", collectorIds),
-      supabase.from("matches").select("id, external_id").in("id", matchIds),
-    ]);
-    if (collectorsError) throw collectorsError;
-    if (matchesError) throw matchesError;
+    const collectors: Array<{ id: string; hr_code: string | null }> = [];
+    const matches: Array<{ id: string; external_id: string }> = [];
+    for (let offset = 0; offset < collectorIds.length; offset += 100) {
+      const { data, error } = await supabase.from("profiles").select("id, hr_code").in("id", collectorIds.slice(offset, offset + 100));
+      if (error) throw error;
+      collectors.push(...(data ?? []));
+    }
+    for (let offset = 0; offset < matchIds.length; offset += 100) {
+      const { data, error } = await supabase.from("matches").select("id, external_id").in("id", matchIds.slice(offset, offset + 100));
+      if (error) throw error;
+      matches.push(...(data ?? []));
+    }
 
-    const collectorsById = new Map((collectors ?? []).map((collector) => [collector.id, collector]));
-    const matchesById = new Map((matches ?? []).map((match) => [match.id, match]));
+    const collectorsById = new Map(collectors.map((collector) => [collector.id, collector]));
+    const matchesById = new Map(matches.map((match) => [match.id, match]));
     const updates: DistributionStatusUpdate[] = rows.flatMap((assignment) => {
       const collector = collectorsById.get(assignment.collector_id);
       const match = matchesById.get(assignment.match_id);
