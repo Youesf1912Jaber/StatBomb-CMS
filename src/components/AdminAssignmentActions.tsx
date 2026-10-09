@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { adminMarkAssignmentComplete, hideAssignmentFromDashboard } from "@/lib/assignments/actions";
 import type { AssignmentStatus } from "@/types/database.types";
 
-type PendingAction = "hide" | "complete" | null;
+type PendingAction = "hide" | "complete" | "remove-sheet" | null;
 
 interface AdminAssignmentActionsProps {
   assignmentId: string;
@@ -50,6 +50,30 @@ export function AdminAssignmentActions({ assignmentId, status }: AdminAssignment
     });
   }
 
+  function runRemoveFromSheet() {
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/admin/distribution-row", {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ assignmentId }),
+        });
+        const result = await response.json() as { success?: boolean; error?: string; deletedRow?: number };
+        if (!response.ok || !result.success) {
+          setError(result.error ?? "The Distribution row could not be deleted.");
+          setPendingAction(null);
+          return;
+        }
+        setPendingAction(null);
+        setMessage(`Removed from Distribution sheet (row ${result.deletedRow}). Assignment history was preserved.`);
+        router.refresh();
+      } catch {
+        setError("The Distribution row could not be deleted. Check your connection and refresh before retrying.");
+        setPendingAction(null);
+      }
+    });
+  }
+
   function runComplete() {
     startTransition(async () => {
       const result = await adminMarkAssignmentComplete(assignmentId);
@@ -75,6 +99,18 @@ export function AdminAssignmentActions({ assignmentId, status }: AdminAssignment
         >
           Remove from Dashboard
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setMessage(null);
+            setPendingAction("remove-sheet");
+          }}
+          disabled={isPending}
+          className="rounded-card border border-clock-red/70 px-3 py-1.5 text-xs font-semibold text-clock-red transition-colors hover:border-clock-red disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Remove from Sheet
+        </button>
         {status !== "Completed" && (
           <button
             type="button"
@@ -97,8 +133,10 @@ export function AdminAssignmentActions({ assignmentId, status }: AdminAssignment
           <div className="max-w-md space-y-4 rounded-card border border-pitch-700 bg-pitch-900 p-6 shadow-xl">
             <p className="text-sm text-chalk-50">
               {pendingAction === "hide"
-                ? "Are you sure you want to remove this assignment from the Dashboard?"
-                : "Mark this assignment as completed manually?"}
+                ? "Remove this assignment from the Dashboard only? The Google Sheets row will remain unchanged."
+                : pendingAction === "remove-sheet"
+                  ? "Permanently delete this collector's assignment row from the Distribution Google Sheet? The assignment history in the app will be preserved. This cannot be undone."
+                  : "Mark this assignment as completed manually?"}
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -111,11 +149,11 @@ export function AdminAssignmentActions({ assignmentId, status }: AdminAssignment
               </button>
               <button
                 type="button"
-                onClick={pendingAction === "hide" ? runHide : runComplete}
+                onClick={pendingAction === "hide" ? runHide : pendingAction === "remove-sheet" ? runRemoveFromSheet : runComplete}
                 disabled={isPending}
                 className="rounded-card bg-clock-amber px-4 py-2 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isPending ? "Working..." : "Confirm"}
+                {isPending ? "Working..." : pendingAction === "remove-sheet" ? "Delete Sheet Row" : "Confirm"}
               </button>
             </div>
           </div>
