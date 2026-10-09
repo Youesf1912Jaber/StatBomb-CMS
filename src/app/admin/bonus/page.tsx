@@ -5,17 +5,47 @@ import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 
 export const runtime = "nodejs";
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const MDY_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
 
 function display(value: string | null | undefined): string {
   return value && value.trim() ? value : "—";
 }
 
-function displayDate(value: string | null, raw: string): string {
-  if (value) {
-    const [year, month, day] = value.split("-");
-    if (year && month && day) return `${day}/${month}/${year}`;
+/** Parse the sheet's M/D/YYYY format into a timezone-free ISO calendar date. */
+function parseBonusFilterDate(value: string | undefined): string {
+  const input = value?.trim() ?? "";
+  if (!input) return "";
+
+  const iso = ISO_DATE.exec(input);
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+      ? input
+      : "";
   }
+
+  const mdy = MDY_DATE.exec(input);
+  if (!mdy) return "";
+  const month = Number(mdy[1]);
+  const day = Number(mdy[2]);
+  const year = Number(mdy[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+}
+
+function formatBonusDateInput(value: string): string {
+  const match = ISO_DATE.exec(value);
+  return match ? `${Number(match[2])}/${Number(match[3])}/${match[1]}` : "";
+}
+
+function displayDate(value: string | null, raw: string): string {
+  if (value) return formatBonusDateInput(value);
+  // Preserve the raw value if it cannot be normalized, rather than guessing its date order.
   return display(raw);
 }
 
@@ -65,8 +95,8 @@ export default async function AdminBonusPage({
     redirect("/collector");
   }
 
-  const from = typeof searchParams.from === "string" && ISO_DATE.test(searchParams.from) ? searchParams.from : "";
-  const to = typeof searchParams.to === "string" && ISO_DATE.test(searchParams.to) ? searchParams.to : "";
+  const from = parseBonusFilterDate(searchParams.from);
+  const to = parseBonusFilterDate(searchParams.to);
 
   const allRecords = await getAllBonusRecords();
   const records = filterBonusByDateRange(allRecords, from, to);

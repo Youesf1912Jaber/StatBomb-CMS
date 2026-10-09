@@ -108,14 +108,18 @@ function columnLetter(index: number): string {
 }
 
 /**
- * Formats a JavaScript Date object as YYYY-MM-DD for writing to the Bonus sheet.
- * Uses the date in the server's local timezone (not UTC).
+ * Formats a submission date exactly like the Bonus Google Sheet: M/D/YYYY.
+ * Always uses the Cairo calendar date so server timezone settings cannot shift the day.
  */
 export function formatBonusDateForSheet(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Cairo",
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.month}/${values.day}/${values.year}`;
 }
 
 /**
@@ -123,14 +127,13 @@ export function formatBonusDateForSheet(date: Date): string {
  *
  * Handles multiple date formats:
  * - ISO 8601: YYYY-MM-DD (e.g., 2026-09-15)
- * - DMY format with /, -, or . separator: D/M/YYYY, DD/MM/YYYY (e.g., 15/9/2026, 9/15/2026)
- * - Fallback to JavaScript Date.parse() for other locales
+ * - M/D/YYYY format with /, -, or . separator (e.g., 10/3/2026)
+ * - Fallback to JavaScript Date.parse() for timestamp-like values
  *
  * Returns null for invalid or empty dates.
  *
- * **IMPORTANT:** When parsing DMY format, the first number is treated as the
- * DAY and the second as the MONTH. This follows the DMY (day/month/year)
- * convention. The parser validates that month is 1-12 and day is 1-31.
+ * **IMPORTANT:** Slash dates follow the Google Sheet's MDY convention: the
+ * first number is the MONTH and the second is the DAY. Calendar validity is checked.
  */
 export function parseBonusDate(raw: string): string | null {
   const text = bonusCellText(raw);
@@ -147,16 +150,23 @@ export function parseBonusDate(raw: string): string | null {
     }
   }
 
-  // Try DMY format: D/M/YYYY or DD/MM/YYYY with /, -, or . separators
-  // The regex captures: day, month, year (in that order)
-  const dmy = text.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/);
-  if (dmy) {
-    const day = Number(dmy[1]);
-    const month = Number(dmy[2]);
-    const year = Number(dmy[3]);
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+  // The Bonus sheet uses US month/day/year order: M/D/YYYY.
+  const mdy = text.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
+  if (mdy) {
+    const month = Number(mdy[1]);
+    const day = Number(mdy[2]);
+    const year = Number(mdy[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+      month >= 1 && month <= 12 &&
+      day >= 1 && day <= 31 &&
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    ) {
       return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
+    return null;
   }
 
   // Fallback to JavaScript Date.parse() for other formats
