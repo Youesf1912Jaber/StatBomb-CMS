@@ -114,22 +114,18 @@ export default async function AdminBonusPage({
         <label className="block text-sm text-chalk-200">
           From Date
           <input
-            type="text"
-            inputMode="numeric"
-            placeholder="M/D/YYYY"
+            type="date"
             name="from"
-            defaultValue={formatBonusDateInput(from)}
+            defaultValue={from}
             className="mt-1 block rounded-[8px] border border-pitch-700 bg-pitch-900 px-3 py-2 text-sm text-chalk-50"
           />
         </label>
         <label className="block text-sm text-chalk-200">
           To Date
           <input
-            type="text"
-            inputMode="numeric"
-            placeholder="M/D/YYYY"
+            type="date"
             name="to"
-            defaultValue={formatBonusDateInput(to)}
+            defaultValue={to}
             className="mt-1 block rounded-[8px] border border-pitch-700 bg-pitch-900 px-3 py-2 text-sm text-chalk-50"
           />
         </label>
