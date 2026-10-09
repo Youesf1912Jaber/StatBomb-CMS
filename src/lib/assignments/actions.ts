@@ -5,13 +5,134 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { translateSupabaseError, type AppErrorCode } from "@/lib/errors";
 import { isAssignmentTaskName } from "./task-names";
+import { updateDistributionStatuses, type DistributionStatusUpdate } from "@/lib/sync/google-sheets";
 
 export interface AssignmentActionState {
   error: string | null;
   errorCode: AppErrorCode | null;
+  warning?: string | null;
 }
 
 const OK: AssignmentActionState = { error: null, errorCode: null };
+
+async function distributionStatusUpdateForAssignment(
+  supabase: ReturnType<typeof createClient>,
+  assignmentId: string,
+): Promise<DistributionStatusUpdate> {
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("id", assignmentId)
+    .single();
+  if (assignmentError || !assignment) throw assignmentError ?? new Error("Assignment not found.");
+
+  const [{ data: match, error: matchError }, { data: collector, error: collectorError }] = await Promise.all([
+    supabase.from("matches").select("external_id").eq("id", assignment.match_id).single(),
+    supabase.from("profiles").select("hr_code").eq("id", assignment.collector_id).single(),
+  ]);
+  if (matchError || !match) throw matchError ?? new Error("Match not found.");
+  if (collectorError || !collector) throw collectorError ?? new Error("Collector not found.");
+
+  return {
+    matchId: match.external_id,
+    collectorHrCode: collector.hr_code ?? "",
+    task: assignment.raw_task_value ?? assignment.task,
+    half: assignment.half,
+    status: "Complete",
+  };
+}
+
+async function syncAssignmentCompletionToSheet(
+  supabase: ReturnType<typeof createClient>,
+  assignmentId: string,
+): Promise<string | null> {
+  try {
+    const update = await distributionStatusUpdateForAssignment(supabase, assignmentId);
+    await updateDistributionStatuses([update]);
+    return null;
+  } catch (error) {
+    console.error("Assignment completed in app but Distribution status sync failed", {
+      assignmentId,
+      error,
+    });
+    return "Assignment was completed in the app, but its Google Sheets Status could not be updated. Check the Distribution row and retry after fixing the sheet connection.";
+  }
+}
+
+async function fetchCompletedDistributionAssignments(
+  supabase: ReturnType<typeof createClient>,
+) {
+  // The helper below is typed explicitly from the table row to avoid relying
+  // on a single PostgREST response, which may be capped at 1,000 rows.
+  const assignments: Array<{
+    id: string;
+    match_id: string;
+    collector_id: string;
+    task: string;
+    raw_task_value: string | null;
+    half: string;
+  }> = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select("id, match_id, collector_id, task, raw_task_value, half")
+      .eq("distribution_present", true)
+      .eq("hidden_from_admin_dashboard", false)
+      .eq("status", "Completed")
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw error;
+    const page = data ?? [];
+    assignments.push(...page);
+    if (page.length < 1000) break;
+  }
+  return assignments;
+}
+
+async function syncCurrentDistributionCompletionsToSheet(
+  supabase: ReturnType<typeof createClient>,
+): Promise<string | null> {
+  try {
+    const rows = await fetchCompletedDistributionAssignments(supabase);
+    if (rows.length === 0) return null;
+
+    const collectorIds = [...new Set(rows.map((row) => row.collector_id))];
+    const matchIds = [...new Set(rows.map((row) => row.match_id))];
+    const collectors: Array<{ id: string; hr_code: string | null }> = [];
+    const matches: Array<{ id: string; external_id: string }> = [];
+    for (let offset = 0; offset < collectorIds.length; offset += 100) {
+      const { data, error } = await supabase.from("profiles").select("id, hr_code").in("id", collectorIds.slice(offset, offset + 100));
+      if (error) throw error;
+      collectors.push(...(data ?? []));
+    }
+    for (let offset = 0; offset < matchIds.length; offset += 100) {
+      const { data, error } = await supabase.from("matches").select("id, external_id").in("id", matchIds.slice(offset, offset + 100));
+      if (error) throw error;
+      matches.push(...(data ?? []));
+    }
+
+    const collectorsById = new Map(collectors.map((collector) => [collector.id, collector]));
+    const matchesById = new Map(matches.map((match) => [match.id, match]));
+    const updates: DistributionStatusUpdate[] = rows.flatMap((assignment) => {
+      const collector = collectorsById.get(assignment.collector_id);
+      const match = matchesById.get(assignment.match_id);
+      if (!collector?.hr_code || !match?.external_id) return [];
+      return [{
+        matchId: match.external_id,
+        collectorHrCode: collector.hr_code,
+        task: assignment.raw_task_value ?? assignment.task,
+        half: assignment.half,
+        status: "Complete" as const,
+      }];
+    });
+    await updateDistributionStatuses(updates);
+    return null;
+  } catch (error) {
+    console.error("Bulk completion succeeded in app but Distribution status sync failed", error);
+    return "Assignments were completed in the app, but one or more Google Sheets Status cells could not be updated. Check the Distribution sheet connection and retry.";
+  }
+}
+
 
 /**
  * Start Work. All authorization and the atomic state transition happen
@@ -50,9 +171,10 @@ export async function completeWork(assignmentId: string): Promise<AssignmentActi
     return { error: appError.message, errorCode: appError.code };
   }
 
+  const warning = await syncAssignmentCompletionToSheet(supabase, assignmentId);
   revalidatePath(`/collector/assignments/${assignmentId}`);
   revalidatePath("/collector");
-  return OK;
+  return { ...OK, warning };
 }
 
 export async function hideAssignmentFromDashboard(assignmentId: string): Promise<AssignmentActionState> {
@@ -92,11 +214,12 @@ export async function adminMarkAssignmentComplete(assignmentId: string): Promise
     return { error: appError.message, errorCode: appError.code };
   }
 
+  const warning = await syncAssignmentCompletionToSheet(supabase, assignmentId);
   revalidatePath(`/admin/assignments/${assignmentId}`);
   revalidatePath("/admin");
   revalidatePath(`/collector/assignments/${assignmentId}`);
   revalidatePath("/collector");
-  return OK;
+  return { ...OK, warning };
 }
 
 export interface BulkCompleteAssignmentsResult extends AssignmentActionState {
@@ -116,9 +239,10 @@ export async function adminCompleteCurrentDistributionAssignments(): Promise<Bul
     return { error: appError.message, errorCode: appError.code, completedCount: 0 };
   }
 
+  const warning = await syncCurrentDistributionCompletionsToSheet(supabase);
   revalidatePath("/admin");
   revalidatePath("/collector");
-  return { ...OK, completedCount: data };
+  return { ...OK, warning, completedCount: data };
 }
 
 export type ReassignmentMode = "preserve" | "reset";

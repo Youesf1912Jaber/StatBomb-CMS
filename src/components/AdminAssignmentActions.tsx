@@ -83,7 +83,7 @@ export function AdminAssignmentActions({ assignmentId, status }: AdminAssignment
         return;
       }
       setPendingAction(null);
-      setMessage("Assignment marked as completed.");
+      setMessage(result.warning ?? "Assignment marked as completed.");
       router.refresh();
     });
   }
