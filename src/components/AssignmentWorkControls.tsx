@@ -43,6 +43,7 @@ export function AssignmentWorkControls({
       if (result.error) {
         setError(result.error);
       } else {
+        if (result.warning) setError(result.warning);
         router.refresh();
       }
     });
