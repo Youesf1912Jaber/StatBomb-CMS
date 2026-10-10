@@ -36,6 +36,8 @@ export function AssignmentTable({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>("All");
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
 
   useEffect(() => {
     if (!realtimeRefresh && !liveRefresh) return;
@@ -50,7 +52,7 @@ export function AssignmentTable({
           .subscribe()
       : null;
 
-    const interval = liveRefresh ? window.setInterval(() => router.refresh(), 5000) : null;
+    const interval = liveRefresh ? window.setInterval(() => router.refresh(), 30000) : null;
     return () => {
       if (channel) void supabase.removeChannel(channel);
       if (interval !== null) window.clearInterval(interval);
@@ -77,6 +79,12 @@ export function AssignmentTable({
       return haystack.includes(q);
     });
   }, [assignments, query, statusFilter, showCollector, collectorNames]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visiblePage = Math.min(page, pageCount);
+  const pageAssignments = useMemo(() => filtered.slice((visiblePage - 1) * pageSize, visiblePage * pageSize), [filtered, visiblePage]);
+
+  useEffect(() => setPage(1), [query, statusFilter]);
 
   return (
     <div>
@@ -127,7 +135,7 @@ export function AssignmentTable({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a) => (
+              {pageAssignments.map((a) => (
                 <tr key={a.id} className="border-b border-pitch-800 last:border-0 hover:bg-pitch-900">
                   <td className="px-3 py-2">
                     <Link href={`${detailsBasePath}/${a.id}`} className="text-chalk-50 hover:text-clock-amber">
@@ -175,6 +183,16 @@ export function AssignmentTable({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {filtered.length > pageSize && (
+        <div className="mt-3 flex flex-col gap-2 text-sm text-chalk-200 sm:flex-row sm:items-center sm:justify-between">
+          <p>Showing {(visiblePage - 1) * pageSize + 1}–{Math.min(visiblePage * pageSize, filtered.length)} of {filtered.length} assignments</p>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={visiblePage <= 1} className="rounded-lg border border-pitch-700 px-3 py-2 hover:bg-pitch-800 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+            <span className="whitespace-nowrap">Page {visiblePage} of {pageCount}</span>
+            <button type="button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={visiblePage >= pageCount} className="rounded-lg border border-pitch-700 px-3 py-2 hover:bg-pitch-800 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+          </div>
         </div>
       )}
     </div>
