@@ -46,23 +46,32 @@ async function attachMatches(
   });
 
   const matches: MatchRow[] = [];
+  const matchChunks: string[][] = [];
   for (let i = 0; i < matchIds.length; i += MATCH_ID_CHUNK_SIZE) {
-    const chunk = matchIds.slice(i, i + MATCH_ID_CHUNK_SIZE);
-    const { data, error } = await supabase
-      .from("matches")
-      .select("*")
-      .in("id", chunk);
+    matchChunks.push(matchIds.slice(i, i + MATCH_ID_CHUNK_SIZE));
+  }
 
-    if (error) {
-      console.error("Admin dashboard query failed", {
-        query: "attachMatches matches query",
-        ...counts,
-        ...queryErrorFields(error),
-      });
-      throw error;
-    }
-
-    matches.push(...(data ?? []));
+  // Avoid serial round trips for large dashboards while keeping query sizes bounded.
+  const MATCH_QUERY_CONCURRENCY = 8;
+  for (let i = 0; i < matchChunks.length; i += MATCH_QUERY_CONCURRENCY) {
+    const chunkResults = await Promise.all(
+      matchChunks.slice(i, i + MATCH_QUERY_CONCURRENCY).map(async (chunk) => {
+        const { data, error } = await supabase
+          .from("matches")
+          .select("*")
+          .in("id", chunk);
+        if (error) {
+          console.error("Admin dashboard query failed", {
+            query: "attachMatches matches query",
+            ...counts,
+            ...queryErrorFields(error),
+          });
+          throw error;
+        }
+        return data ?? [];
+      }),
+    );
+    for (const rows of chunkResults) matches.push(...rows);
   }
 
   console.error("Admin dashboard query complete", {
