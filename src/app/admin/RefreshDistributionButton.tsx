@@ -24,6 +24,10 @@ export function RefreshDistributionButton() {
         success?: boolean;
         present?: number;
         missing?: number;
+        inserted?: number;
+        updated?: number;
+        restored?: number;
+        skipped?: number;
         error?: string;
       } = {};
       try {
@@ -40,7 +44,7 @@ export function RefreshDistributionButton() {
         throw new Error(payload.error ?? "Unable to refresh Distribution.");
       }
       setSuccess(
-        `Distribution refreshed. ${payload.present ?? 0} current, ${payload.missing ?? 0} missing.`
+        `Distribution refreshed: ${payload.inserted ?? 0} added, ${payload.updated ?? 0} updated, ${payload.restored ?? 0} restored, ${payload.skipped ?? 0} skipped; ${payload.present ?? 0} current, ${payload.missing ?? 0} missing.`
       );
       router.refresh();
     } catch (reason: unknown) {
