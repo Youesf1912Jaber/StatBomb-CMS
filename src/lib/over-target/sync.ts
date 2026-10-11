@@ -169,6 +169,92 @@ async function insertChunk(client: Client, rows: Database["public"]["Tables"]["o
   }
 }
 
+function toUpdate(
+  occurrence: OverTargetOccurrence,
+  existing: OverTargetRow,
+  collectorId: string | null,
+  now: string
+): Database["public"]["Tables"]["over_target"]["Update"] {
+  const fields = occurrence.fields;
+  const week = parseOverTargetWeekDate(fields.week);
+  const count = parseImportedOverTargetCount(fields.count);
+  const done = parseOverTargetDone(fields.done);
+  const identityChanged =
+    canonicalizeOverTargetMatchId(existing.match_external_id) !== fields.match_id ||
+    canonicalizeOverTargetHrCode(existing.hr_code) !== fields.hr_code;
+
+  return {
+    // A changed match/collector identity must not keep the old assignment link.
+    // The admin view can resolve the new match by its current external ID.
+    assignment_id: identityChanged ? null : existing.assignment_id,
+    match_id: identityChanged ? null : existing.match_id,
+    collector_id: identityChanged ? collectorId : existing.collector_id ?? collectorId,
+    match_external_id: fields.match_id,
+    week_date: week.iso,
+    week_date_raw: nullableText(week.raw),
+    hr_code: fields.hr_code,
+    collector_name: nullableText(fields.collector),
+    team: nullableText(fields.team),
+    count_value: count.value,
+    count_raw: nullableText(count.raw),
+    done: done.value,
+    done_raw: nullableText(done.raw),
+    source_key: occurrence.source_key,
+    content_fingerprint: occurrence.content_fingerprint,
+    occurrence_ordinal: occurrence.occurrence_ordinal,
+    sheet_row_number: occurrence.source_row_number,
+    sheet_tab: OVER_TARGET_SHEET_TAB,
+    sheet_gid: OVER_TARGET_SHEET_GID,
+    sheet_sync_status: existing.source === OVER_TARGET_APP_SOURCE ? existing.sheet_sync_status : "imported",
+    sheet_synced_at: now,
+    last_sheet_error: null,
+    source_present: true,
+    last_seen_at: now,
+    last_synced_at: now,
+  };
+}
+
+async function updateMatchedRows(
+  client: Client,
+  matchedRows: Array<{ id: string; occurrence: OverTargetOccurrence }>,
+  existing: OverTargetRow[],
+  profilesByHr: Map<string, string>,
+  now: string
+): Promise<number> {
+  const existingById = new Map(existing.map((row) => [row.id, row]));
+  const changed: Array<{ id: string; update: Database["public"]["Tables"]["over_target"]["Update"] }> = [];
+
+  for (const item of matchedRows) {
+    const previous = existingById.get(item.id);
+    if (!previous) continue;
+    const occurrence = item.occurrence;
+    const nextCollectorId = collectorIdForHrCode(occurrence.fields.hr_code, profilesByHr);
+    const needsUpdate =
+      previous.content_fingerprint !== occurrence.content_fingerprint ||
+      previous.source_key !== occurrence.source_key ||
+      previous.sheet_row_number !== occurrence.source_row_number ||
+      !previous.source_present ||
+      previous.sheet_tab !== OVER_TARGET_SHEET_TAB ||
+      previous.sheet_gid !== OVER_TARGET_SHEET_GID;
+    if (needsUpdate) {
+      changed.push({
+        id: item.id,
+        update: toUpdate(occurrence, previous, nextCollectorId, now),
+      });
+    }
+  }
+
+  for (let i = 0; i < changed.length; i += WRITE_CHUNK_SIZE) {
+    const chunk = changed.slice(i, i + WRITE_CHUNK_SIZE);
+    const results = await Promise.all(chunk.map(async ({ id, update }) => {
+      const { error } = await client.from("over_target").update(update).eq("id", id);
+      if (error) throw error;
+    }));
+    void results;
+  }
+  return changed.length;
+}
+
 async function touchPresent(client: Client, ids: string[], now: string) {
   for (let i = 0; i < ids.length; i += WRITE_CHUNK_SIZE) {
     const chunk = ids.slice(i, i + WRITE_CHUNK_SIZE);
@@ -227,6 +313,8 @@ export async function syncOverTarget(client: Client): Promise<OverTargetSyncResu
     );
   });
 
+  const updated = await updateMatchedRows(client, plan.matchedRows, existing, profilesByHr, now);
+
   if (toInsertRows.length > 0) {
     await insertChunk(client, toInsertRows);
   }
@@ -241,8 +329,8 @@ export async function syncOverTarget(client: Client): Promise<OverTargetSyncResu
   return {
     sheetRows: occurrences.length,
     inserted: toInsertRows.length,
-    updated: 0,
-    unchanged: plan.matchedIds.length,
+    updated,
+    unchanged: Math.max(0, plan.matchedIds.length - updated),
     missing: plan.missingIds.length,
     total,
   };
