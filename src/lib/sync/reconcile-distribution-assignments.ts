@@ -271,7 +271,7 @@ export async function reconcileDistributionAssignments(
   // collector or crashing the entire refresh with a unique-constraint error.
   const assignmentsByLogicalKey = new Map<string, AssignmentRow>();
   for (const assignment of assignments) {
-    const match = matches.find((candidate) => candidate.id === assignment.match_id);
+    const match = matchesById.get(assignment.match_id);
     if (!match) continue;
     const key = assignmentLogicalKey(assignment, String(match.external_id));
     if (key) assignmentsByLogicalKey.set(key, assignment);
@@ -282,12 +282,15 @@ export async function reconcileDistributionAssignments(
   const assignmentOverridesByRowNumber = new Map<number, AssignmentRow>();
   const rowCountsByMatchCollector = new Map<string, number>();
   const assignmentsByMatchCollector = new Map<string, AssignmentRow[]>();
+  const profiles = profilesResult.data ?? [];
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile] as const));
   const profilesByHrCode = new Map(
-    (profilesResult.data ?? []).flatMap((profile) => {
+    profiles.flatMap((profile) => {
       const code = normalizeDistributionCollectorHrCode(profile.hr_code);
       return code ? [[code, profile] as const] : [];
     }),
   );
+  const matchesById = new Map(matches.map((match) => [match.id, match] as const));
   const matchesByExternalId = new Map(
     matches.flatMap((match) => {
       const id = normalizeMatchId(match.external_id);
@@ -302,8 +305,8 @@ export async function reconcileDistributionAssignments(
     rowCountsByMatchCollector.set(key, (rowCountsByMatchCollector.get(key) ?? 0) + 1);
   }
   for (const assignment of assignments) {
-    const match = matches.find((candidate) => candidate.id === assignment.match_id);
-    const profile = (profilesResult.data ?? []).find((candidate) => candidate.id === assignment.collector_id);
+    const match = matchesById.get(assignment.match_id);
+    const profile = profilesById.get(assignment.collector_id);
     const matchId = match ? normalizeMatchId(match.external_id) : null;
     const hrCode = normalizeDistributionCollectorHrCode(profile?.hr_code);
     if (!matchId || !hrCode) continue;
