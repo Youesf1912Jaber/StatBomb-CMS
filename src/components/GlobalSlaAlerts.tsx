@@ -16,6 +16,7 @@ const AUDIO_OWNER_KEY = "sla-alert-audio-owner";
 const AUDIO_OWNER_TTL_MS = 15_000;
 const REFRESH_INTERVAL_MS = 60_000;
 const COLLECTOR_SOUND_ENABLED_KEY = "statbomb-alarm-sound-enabled";
+const ADMIN_SOUND_ENABLED_KEY = "statbomb-admin-alarm-sound-enabled";
 
 interface GlobalSlaAlertsProps {
   assignments: SlaAlertAssignment[];
@@ -60,9 +61,7 @@ export function GlobalSlaAlerts({
   );
   const [soundUnlocked, setSoundUnlocked] = useState(false);
   const [soundNeedsUnlock, setSoundNeedsUnlock] = useState(false);
-  const [collectorSoundEnabled, setCollectorSoundEnabled] = useState<boolean | null>(
-    role === "collector" ? null : true
-  );
+  const [soundPreferenceEnabled, setSoundPreferenceEnabled] = useState<boolean | null>(null);
   const [collectorUnlockError, setCollectorUnlockError] = useState<string | null>(null);
   const audiosRef = useRef(new Map<string, HTMLAudioElement>());
   const tabIdRef = useRef<string>("");
@@ -72,17 +71,13 @@ export function GlobalSlaAlerts({
   }
 
   useEffect(() => {
-    if (role !== "collector") {
-      setCollectorSoundEnabled(true);
-      return;
-    }
-
     try {
-      const enabled = window.localStorage.getItem(COLLECTOR_SOUND_ENABLED_KEY) === "true";
-      setCollectorSoundEnabled(enabled);
+      const key = role === "collector" ? COLLECTOR_SOUND_ENABLED_KEY : ADMIN_SOUND_ENABLED_KEY;
+      const enabled = window.localStorage.getItem(key) === "true";
+      setSoundPreferenceEnabled(enabled);
       setSoundUnlocked(enabled);
     } catch {
-      setCollectorSoundEnabled(false);
+      setSoundPreferenceEnabled(false);
     }
   }, [role]);
 
@@ -278,25 +273,21 @@ export function GlobalSlaAlerts({
       unlock.pause();
       unlock.currentTime = 0;
 
-      if (role === "collector") {
-        try {
-          window.localStorage.setItem(COLLECTOR_SOUND_ENABLED_KEY, "true");
-        } catch {
-          setCollectorUnlockError("Please enable sound in your browser to continue.");
-          return;
-        }
-        setCollectorSoundEnabled(true);
-        setCollectorUnlockError(null);
+      try {
+        const key = role === "collector" ? COLLECTOR_SOUND_ENABLED_KEY : ADMIN_SOUND_ENABLED_KEY;
+        window.localStorage.setItem(key, "true");
+      } catch {
+        setCollectorUnlockError("Please allow site storage and enable sound in your browser to continue.");
+        return;
       }
+      setSoundPreferenceEnabled(true);
+      setCollectorUnlockError(null);
 
       setSoundUnlocked(true);
       setSoundNeedsUnlock(false);
     } catch {
-      if (role === "collector") {
-        setCollectorUnlockError("Please enable sound in your browser to continue.");
-      } else {
-        setSoundNeedsUnlock(true);
-      }
+      setCollectorUnlockError("Please enable sound in your browser to continue.");
+      setSoundNeedsUnlock(true);
     }
   }, [role]);
 
@@ -314,15 +305,15 @@ export function GlobalSlaAlerts({
     [stopAudio]
   );
 
-  const collectorSoundRequired = role === "collector" && collectorSoundEnabled !== true;
+  const soundRequired = soundPreferenceEnabled !== true;
   const showAdminSoundControl =
     role === "admin" && activeAlerts.length > 0 && (!soundUnlocked || soundNeedsUnlock);
 
-  if (!collectorSoundRequired && activeAlerts.length === 0 && !showAdminSoundControl) return null;
+  if (!soundRequired && activeAlerts.length === 0 && !showAdminSoundControl) return null;
 
   return (
     <>
-      {collectorSoundRequired && (
+      {soundRequired && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/90 px-4 backdrop-blur-sm">
           <section
             role="dialog"
