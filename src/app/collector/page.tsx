@@ -101,6 +101,13 @@ export default async function CollectorDashboardPage() {
     (a) => isCurrentShiftDate(a.shift_date, today)
   );
 
+  // Show all not-started assignments still present in the current Distribution,
+  // including rows assigned on previous shifts. Otherwise collectors can see
+  // the rows only in the long table while today's/upcoming cards remain empty.
+  const notStartedAssignments = currentDistribution.filter(
+    (a) => a.status === "Not Started"
+  );
+
   // B) Currently In Progress — regardless of shift/match date.
   const inProgress = currentAssignments.filter(
     (a) => a.status === "In Progress"
@@ -149,6 +156,12 @@ export default async function CollectorDashboardPage() {
         title="Today's Work"
         items={todaysWork}
         emptyLabel="Nothing shift-dated for today."
+      />
+
+      <Section
+        title="Not Started (All Shifts)"
+        items={notStartedAssignments}
+        emptyLabel="No not-started assignments in your current distribution."
       />
 
       <Section
