@@ -7,12 +7,19 @@ import type { AdminOverTargetRecord } from "@/lib/over-target/admin-details";
 type RecordsResponse = {
   records?: AdminOverTargetRecord[];
   error?: string;
+  sheetRows?: number;
+  inserted?: number;
+  updated?: number;
+  unchanged?: number;
+  missing?: number;
 };
 
 export function AdminOverTargetClient() {
   const [records, setRecords] = useState<AdminOverTargetRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
   const loadRecords = useCallback(async () => {
     const response = await fetch("/api/admin/over-target", { cache: "no-store" });
@@ -22,6 +29,30 @@ export function AdminOverTargetClient() {
     }
     setRecords(payload.records ?? []);
   }, []);
+
+  const refreshFromSheet = useCallback(async () => {
+    setRefreshing(true);
+    setRefreshMessage(null);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/over-target/refresh", {
+        method: "POST",
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as RecordsResponse;
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to sync the Over Target sheet.");
+      }
+      await loadRecords();
+      setRefreshMessage(
+        `Sheet sync complete: ${payload.sheetRows ?? 0} sheet rows, ${payload.inserted ?? 0} added, ${payload.updated ?? 0} updated, ${payload.missing ?? 0} hidden because they are no longer in the sheet.`
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to sync the Over Target sheet.");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadRecords]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,12 +74,27 @@ export function AdminOverTargetClient() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl text-chalk-50">Over Target</h1>
-        <p className="mt-1 text-sm text-chalk-200">
-          Cached Over Target records for all collectors. Values are read from Supabase, not Google Sheets.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl text-chalk-50">Over Target</h1>
+          <p className="mt-1 text-sm text-chalk-200">
+            Showing records that currently exist in the Google Sheets Over Target tab.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void refreshFromSheet()}
+          disabled={refreshing || loading}
+          className="rounded-[8px] border border-gold-500 px-4 py-2 text-sm font-semibold text-gold-300 transition hover:bg-gold-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {refreshing ? "Syncing Sheet…" : "Sync from Google Sheet"}
+        </button>
       </div>
+      {refreshMessage && (
+        <p role="status" className="rounded-[8px] border border-pitch-700 px-4 py-3 text-sm text-chalk-100">
+          {refreshMessage}
+        </p>
+      )}
 
       {loading && <p className="text-sm text-chalk-200">Reading Over Target records…</p>}
       {error && (

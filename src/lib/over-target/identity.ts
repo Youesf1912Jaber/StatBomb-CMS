@@ -278,6 +278,7 @@ export type OverTargetExistingRow = {
 export type OverTargetHistoricalImportPlan = {
   inserts: Array<{ occurrence: OverTargetOccurrence; assignment_id: string | null }>;
   matchedIds: string[];
+  matchedRows: Array<{ id: string; occurrence: OverTargetOccurrence }>;
   missingIds: string[];
   preservedAppIds: string[];
 };
@@ -294,25 +295,34 @@ export function planOverTargetHistoricalImport(
       .map((row) => [row.sheet_row_number as number, row])
   );
   const matchedIds: string[] = [];
+  const matchedRows: Array<{ id: string; occurrence: OverTargetOccurrence }> = [];
+  const claimedIds = new Set<string>();
   const leftoverOccurrences: OverTargetOccurrence[] = [];
 
+  // Prefer stable content identity. A row number is only a fallback because
+  // users often edit/replace a sheet row without moving it.
   for (const occurrence of occurrences) {
-    const match = existingByKey.get(occurrence.source_key) ?? existingBySheetRow.get(occurrence.source_row_number);
+    let match = existingByKey.get(occurrence.source_key);
+    if (match && claimedIds.has(match.id)) match = undefined;
+    if (!match) {
+      const rowMatch = existingBySheetRow.get(occurrence.source_row_number);
+      if (rowMatch && !claimedIds.has(rowMatch.id)) match = rowMatch;
+    }
+
     if (match) {
+      claimedIds.add(match.id);
       matchedIds.push(match.id);
+      matchedRows.push({ id: match.id, occurrence });
     } else {
       leftoverOccurrences.push(occurrence);
     }
   }
 
-  const matchedIdSet = new Set(matchedIds);
-  const leftoverExisting = existing.filter((row) => !matchedIdSet.has(row.id));
-  const preservedAppIds = leftoverExisting
-    .filter((row) => shouldPreserveAppOverTargetRow(row))
-    .map((row) => row.id);
-  const preservedAppIdSet = new Set(preservedAppIds);
+  const leftoverExisting = existing.filter((row) => !claimedIds.has(row.id));
+  // The sheet is the source of truth for this page. Keep historical records
+  // in the database, but hide every record no longer represented in the sheet.
   const missingIds = leftoverExisting
-    .filter((row) => row.source_present && !preservedAppIdSet.has(row.id))
+    .filter((row) => row.source_present)
     .map((row) => row.id);
 
   const takenAssignmentIds = new Set(
@@ -332,7 +342,7 @@ export function planOverTargetHistoricalImport(
     return { occurrence, assignment_id: assignmentId };
   });
 
-  return { inserts, matchedIds, missingIds, preservedAppIds };
+  return { inserts, matchedIds, matchedRows, missingIds, preservedAppIds: [] };
 }
 
 function validIsoDate(year: number, month: number, day: number): string | null {
