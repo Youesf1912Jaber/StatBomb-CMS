@@ -269,6 +269,7 @@ export async function reconcileDistributionAssignments(
   // row belonging to the already-assigned collector. If no current assignment
   // disambiguates the rows, skip them rather than arbitrarily assigning a
   // collector or crashing the entire refresh with a unique-constraint error.
+  const matchesById = new Map(matches.map((match) => [match.id, match] as const));
   const assignmentsByLogicalKey = new Map<string, AssignmentRow>();
   for (const assignment of assignments) {
     const match = matchesById.get(assignment.match_id);
@@ -290,7 +291,6 @@ export async function reconcileDistributionAssignments(
       return code ? [[code, profile] as const] : [];
     }),
   );
-  const matchesById = new Map(matches.map((match) => [match.id, match] as const));
   const matchesByExternalId = new Map(
     matches.flatMap((match) => {
       const id = normalizeMatchId(match.external_id);
