@@ -105,7 +105,8 @@ export default async function AdminDashboardPage() {
             detailsBasePath="/admin/assignments"
             showCollector
             collectorNames={collectorNames}
-            liveRefresh
+            liveRefresh={false}
+            realtimeRefresh={false}
           />
         )}
       </section>
