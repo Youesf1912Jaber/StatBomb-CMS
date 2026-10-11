@@ -37,6 +37,7 @@ export async function POST() {
       updated: reconciliation.updated,
       restored: reconciliation.restored,
       skipped: reconciliation.skipped,
+      skippedReasons: reconciliation.skippedReasons,
     });
   } catch (error) {
     console.error("Distribution refresh failed", error);

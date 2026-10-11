@@ -2,7 +2,7 @@ import "server-only";
 
 import type { DistributionMatchRow } from "@/lib/sync/google-sheets";
 import { reconcileDistributionPresence, type DistributionReconciliation } from "@/lib/sync/reconcile";
-import type { AssignmentRow, Database, MatchRow } from "@/types/database.types";
+import type { AssignmentRow, Database, MatchRow, ProfileRow } from "@/types/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export async function persistDistributionPresence(
@@ -20,9 +20,10 @@ export async function persistDistributionPresence(
 export async function persistReconciledDistributionPresence(
   supabase: SupabaseClient<Database>,
   input: {
-    distributionRows: Array<Pick<DistributionMatchRow, "match_id" | "task" | "half">>;
+    distributionRows: Array<Pick<DistributionMatchRow, "match_id" | "task" | "half" | "collector_hr_code">>;
     assignments: AssignmentRow[];
     matches: MatchRow[];
+    profiles?: ProfileRow[];
     matchId?: string | null;
   },
 ): Promise<DistributionReconciliation> {

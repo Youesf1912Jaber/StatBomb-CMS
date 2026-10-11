@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { planDistributionAssignment } from "@/lib/distribution-assignments";
 import { fetchAllMatches } from "@/lib/match-master-preview";
-import { type DistributionMatchRow, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
+import { normalizeDistributionCollectorHrCode, type DistributionMatchRow, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 import { distributionRowLogicalKey } from "@/lib/sync/reconcile";
 import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
 import type { AssignmentRow, Database, ProfileRow } from "@/types/database.types";
@@ -35,6 +35,7 @@ export type DistributionAssignmentReconciliation = {
   present: number;
   missing: number;
   skipped: number;
+  skippedReasons: Record<string, number>;
 };
 
 type RpcErrorFields = {
@@ -138,11 +139,29 @@ async function createOrUpdateAssignment(
   profiles: ProfileRow[],
   matches: Awaited<ReturnType<typeof fetchAllMatches>>,
   assignments: AssignmentRow[],
+  skippedReasons: Record<string, number>,
+  allowExistingCollectorUpdate: boolean,
 ): Promise<"inserted" | "updated" | "restored" | "skipped"> {
   const planned = planDistributionAssignment(row, profiles, matches, assignments, {
-    allowExistingCollectorUpdate: true,
+    allowExistingCollectorUpdate,
   });
-  if (!planned.ok) return "skipped";
+  if (!planned.ok) {
+    const reason = planned.reason.startsWith("Match ID was not found")
+      ? "match_not_found"
+      : planned.reason.startsWith("HR-Code does not resolve")
+        ? "collector_not_found_or_inactive"
+        : planned.reason.startsWith("Distribution SLA")
+          ? "invalid_sla"
+          : planned.reason.startsWith("Distribution row has no valid Match ID")
+            ? "invalid_match_id"
+            : planned.reason.startsWith("Distribution task")
+              ? "missing_task"
+              : planned.reason.startsWith("Distribution half")
+                ? "invalid_half"
+                : "invalid_assignment";
+    skippedReasons[reason] = (skippedReasons[reason] ?? 0) + 1;
+    return "skipped";
+  }
 
   const { plan } = planned;
   if (!plan.existing) {
@@ -201,6 +220,7 @@ async function createOrUpdateAssignment(
   if (index >= 0) assignments[index] = assignment;
 
   if (!plan.existing.distribution_present) return "restored";
+  if (!changed) skippedReasons.already_up_to_date = (skippedReasons.already_up_to_date ?? 0) + 1;
   return changed ? "updated" : "skipped";
 }
 
@@ -227,24 +247,37 @@ export async function reconcileDistributionAssignments(
     present: 0,
     missing: 0,
     skipped: 0,
+    skippedReasons: {},
   };
   const logicalKeyCounts = new Map<string, number>();
+  const rowKeyCounts = new Map<string, number>();
   for (const row of distributionRows) {
     const logicalKey = distributionRowLogicalKey(row);
     if (logicalKey) {
       logicalKeyCounts.set(logicalKey, (logicalKeyCounts.get(logicalKey) ?? 0) + 1);
+      const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
+      const rowKey = hrCode ? `${logicalKey}|${hrCode}` : null;
+      if (rowKey) rowKeyCounts.set(rowKey, (rowKeyCounts.get(rowKey) ?? 0) + 1);
     }
   }
 
-  // Process independent logical assignments concurrently. The sheet can contain
-  // thousands of rows; awaiting an RPC for every row serially can exceed Vercel's
-  // function timeout. Duplicate logical keys are filtered before entering a batch.
+  // Rows for the same match/task/half may be valid when assigned to different
+  // collectors. Only duplicate the exact same collector-specific row is
+  // ambiguous; do not discard assignments simply because the collector differs.
   const RECONCILIATION_BATCH_SIZE = 8;
   const eligibleRows: DistributionMatchRow[] = [];
   for (const row of distributionRows) {
     const logicalKey = distributionRowLogicalKey(row);
-    if (!logicalKey || logicalKeyCounts.get(logicalKey) !== 1) {
+    const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
+    if (!logicalKey || !hrCode) {
       result.skipped += 1;
+      result.skippedReasons.invalid_identity = (result.skippedReasons.invalid_identity ?? 0) + 1;
+      continue;
+    }
+    const rowKey = `${logicalKey}|${hrCode}`;
+    if (rowKeyCounts.get(rowKey) !== 1) {
+      result.skipped += 1;
+      result.skippedReasons.duplicate_same_collector_row = (result.skippedReasons.duplicate_same_collector_row ?? 0) + 1;
       continue;
     }
     eligibleRows.push(row);
@@ -259,6 +292,8 @@ export async function reconcileDistributionAssignments(
         profilesResult.data ?? [],
         matches,
         assignments,
+        result.skippedReasons,
+        (logicalKeyCounts.get(distributionRowLogicalKey(row) ?? "") ?? 0) === 1,
       )
     ));
 
@@ -278,6 +313,7 @@ export async function reconcileDistributionAssignments(
     distributionRows,
     assignments: currentAssignments,
     matches,
+    profiles: profilesResult.data ?? [],
   });
 
   result.present = presence.presentAssignmentIds.length;
