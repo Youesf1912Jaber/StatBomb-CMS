@@ -188,6 +188,7 @@ export async function writeOverTargetSheetForRow(client: Client, row: OverTarget
         sheet_gid: written.sheet_gid,
         sheet_synced_at: now,
         last_sheet_error: null,
+        source_present: true,
         last_synced_at: now,
         last_seen_at: now,
       })
