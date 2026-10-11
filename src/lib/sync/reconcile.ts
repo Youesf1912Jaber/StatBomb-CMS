@@ -5,12 +5,13 @@ import {
   normalizeMatchId,
   VALID_ASSIGNMENT_HALVES,
 } from "@/lib/sync/distribution-identity";
-import type { AssignmentRow, MatchRow } from "@/types/database.types";
+import type { AssignmentRow, MatchRow, ProfileRow } from "@/types/database.types";
 
 type DistributionIdentityRow = {
   match_id: string;
   task: string | null;
   half: string | null;
+  collector_hr_code?: string | null;
 };
 
 export type DistributionLogicalKey = string;
@@ -122,8 +123,18 @@ export function reconcileDistributionPresence(input: {
   distributionRows: DistributionIdentityRow[];
   assignments: AssignmentRow[];
   matches: MatchRow[];
+  profiles?: ProfileRow[];
 }): DistributionReconciliation {
-  const presentKeys = currentDistributionKeys(input.distributionRows);
+  const profilesById = new Map((input.profiles ?? []).map((profile) => [profile.id, profile]));
+  const withCollector = input.profiles && input.profiles.length > 0;
+  const presentKeys = new Set<DistributionLogicalKey>();
+  for (const row of input.distributionRows) {
+    const baseKey = distributionRowLogicalKey(row);
+    if (!baseKey) continue;
+    const hrCode = String(row.collector_hr_code ?? "").trim().toUpperCase();
+    if (withCollector && !hrCode) continue;
+    presentKeys.add(withCollector ? `${baseKey}|${hrCode}` : baseKey);
+  }
   const matchesById = new Map(
     input.matches.map((match) => [match.id, normalizeMatchId(match.external_id) ?? ""]),
   );
@@ -136,7 +147,10 @@ export function reconcileDistributionPresence(input: {
 
   for (const assignment of input.assignments) {
     const matchExternalId = matchesById.get(assignment.match_id) ?? "";
-    const key = assignmentLogicalKey(assignment, matchExternalId);
+    const baseKey = assignmentLogicalKey(assignment, matchExternalId);
+    const profile = profilesById.get(assignment.collector_id);
+    const hrCode = String(profile?.hr_code ?? "").trim().toUpperCase();
+    const key = baseKey ? (withCollector ? (hrCode ? `${baseKey}|${hrCode}` : null) : baseKey) : null;
     if (!key) {
       missingAssignmentIds.push(assignment.id);
       if (!assignment.distribution_present) unchangedMissingAssignmentIds.push(assignment.id);
