@@ -293,11 +293,7 @@ export async function reconcileDistributionAssignments(
     }
 
     if ((logicalKeyCounts.get(logicalKey) ?? 0) > 1) {
-      if (handledAmbiguousKeys.has(logicalKey)) {
-        result.skipped += 1;
-        result.skippedReasons.duplicate_logical_assignment = (result.skippedReasons.duplicate_logical_assignment ?? 0) + 1;
-        continue;
-      }
+      if (handledAmbiguousKeys.has(logicalKey)) continue;
       handledAmbiguousKeys.add(logicalKey);
       const existing = assignmentsByLogicalKey.get(logicalKey);
       const existingProfile = existing
@@ -313,8 +309,8 @@ export async function reconcileDistributionAssignments(
             normalizeDistributionCollectorHrCode(candidate.collector_hr_code) === existingHrCode
           )
         : [];
-      if (matchingRows.length === 1 && matchingRows[0] === row) {
-        eligibleRows.push(row);
+      if (matchingRows.length === 1) {
+        eligibleRows.push(matchingRows[0]);
         result.skipped += candidates.length - 1;
         result.skippedReasons.duplicate_logical_assignment =
           (result.skippedReasons.duplicate_logical_assignment ?? 0) + candidates.length - 1;
