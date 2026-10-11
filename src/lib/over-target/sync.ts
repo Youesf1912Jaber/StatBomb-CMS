@@ -3,8 +3,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, MatchRow, OverTargetRow, ProfileRow } from "@/types/database.types";
 import {
+  OVER_TARGET_APP_SOURCE,
   OVER_TARGET_SHEET_SOURCE,
   buildOverTargetOccurrences,
+  canonicalizeOverTargetHrCode,
+  canonicalizeOverTargetMatchId,
   isRetryableAppOverTargetRow,
   parseImportedOverTargetCount,
   parseOverTargetDone,
