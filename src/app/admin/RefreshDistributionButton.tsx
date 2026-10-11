@@ -28,6 +28,7 @@ export function RefreshDistributionButton() {
         updated?: number;
         restored?: number;
         skipped?: number;
+        skippedReasons?: Record<string, number>;
         error?: string;
       } = {};
       try {
@@ -43,8 +44,12 @@ export function RefreshDistributionButton() {
       if (!response.ok || !payload.success) {
         throw new Error(payload.error ?? "Unable to refresh Distribution.");
       }
+      const skipDetails = Object.entries(payload.skippedReasons ?? {})
+        .filter(([, count]) => count > 0)
+        .map(([reason, count]) => `${reason.replaceAll("_", " ")}: ${count}`)
+        .join(", ");
       setSuccess(
-        `Distribution refreshed: ${payload.inserted ?? 0} added, ${payload.updated ?? 0} updated, ${payload.restored ?? 0} restored, ${payload.skipped ?? 0} skipped; ${payload.present ?? 0} current, ${payload.missing ?? 0} missing.`
+        `Distribution refreshed: ${payload.inserted ?? 0} added, ${payload.updated ?? 0} updated, ${payload.restored ?? 0} restored, ${payload.skipped ?? 0} skipped (${skipDetails || "no skip details"}); ${payload.present ?? 0} current, ${payload.missing ?? 0} missing.`
       );
       router.refresh();
     } catch (reason: unknown) {
