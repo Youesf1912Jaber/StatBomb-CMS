@@ -7,11 +7,12 @@ import { RefreshDistributionButton } from "./RefreshDistributionButton";
 
 export const runtime = "nodejs";
 
-const CURRENT_SHIFT_STATUS_ORDER = ["Completed", "In Progress", "Overdue"] as const;
+const CURRENT_SHIFT_STATUS_ORDER = ["Completed", "In Progress", "Overdue", "Not Started"] as const;
 const CURRENT_SHIFT_SECTION_LABELS = {
   Completed: "Completed",
   "In Progress": "In Progress",
   Overdue: "Overdue / SLA Broken",
+  "Not Started": "Not Started (All Shifts)",
 } as const;
 
 export default async function AdminDashboardPage() {
@@ -62,9 +63,12 @@ export default async function AdminDashboardPage() {
           </p>
         </div>
         {CURRENT_SHIFT_STATUS_ORDER.map((status) => {
-          const statusAssignments = currentShiftAssignments.filter(
-            (assignment) => assignment.status === status
-          );
+          // New distributions can belong to a previous shift date. Keep every
+          // not-started assignment visible so fresh rows don't disappear from
+          // the status overview just because their Shift Date is not today.
+          const statusAssignments = status === "Not Started"
+            ? allDistributedAssignments.filter((assignment) => assignment.status === "Not Started")
+            : currentShiftAssignments.filter((assignment) => assignment.status === status);
 
           return (
             <section key={status}>
