@@ -309,8 +309,9 @@ export async function reconcileDistributionAssignments(
             normalizeDistributionCollectorHrCode(candidate.collector_hr_code) === existingHrCode
           )
         : [];
-      if (matchingRows.length === 1) {
-        eligibleRows.push(matchingRows[0]);
+      const matchingRow = matchingRows[0];
+      if (matchingRows.length === 1 && matchingRow) {
+        eligibleRows.push(matchingRow);
         result.skipped += candidates.length - 1;
         result.skippedReasons.duplicate_logical_assignment =
           (result.skippedReasons.duplicate_logical_assignment ?? 0) + candidates.length - 1;
