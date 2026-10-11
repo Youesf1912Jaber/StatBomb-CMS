@@ -141,6 +141,7 @@ async function createOrUpdateAssignment(
   assignments: AssignmentRow[],
   skippedReasons: Record<string, number>,
   allowExistingCollectorUpdate: boolean,
+  assignmentOverride: AssignmentRow | null = null,
 ): Promise<"inserted" | "updated" | "restored" | "skipped"> {
   const planned = planDistributionAssignment(row, profiles, matches, assignments, {
     allowExistingCollectorUpdate,
@@ -163,7 +164,9 @@ async function createOrUpdateAssignment(
     return "skipped";
   }
 
-  const { plan } = planned;
+  const plan = planned.plan.existing || !assignmentOverride
+    ? planned.plan
+    : { ...planned.plan, existing: assignmentOverride };
   if (!plan.existing) {
     const { data, error } = await supabase.rpc("create_assignment", {
       p_match_id: plan.match.id,
@@ -192,11 +195,11 @@ async function createOrUpdateAssignment(
     changed = true;
   }
 
-  if (assignment.sla !== plan.sla) {
+  if (assignment.task !== plan.task || assignment.half !== plan.half || assignment.sla !== plan.sla) {
     const { data, error } = await supabase.rpc("update_assignment", {
       p_assignment_id: assignment.id,
-      p_task: assignment.task,
-      p_half: assignment.half,
+      p_task: plan.task,
+      p_half: plan.half,
       p_sla: plan.sla,
       p_notes: assignment.notes,
     });
@@ -276,6 +279,37 @@ export async function reconcileDistributionAssignments(
 
   const RECONCILIATION_BATCH_SIZE = 8;
   const eligibleRows: DistributionMatchRow[] = [];
+  const assignmentOverridesByRowNumber = new Map<number, AssignmentRow>();
+  const rowCountsByMatchCollector = new Map<string, number>();
+  const assignmentsByMatchCollector = new Map<string, AssignmentRow[]>();
+  const profilesByHrCode = new Map(
+    (profilesResult.data ?? []).flatMap((profile) => {
+      const code = normalizeDistributionCollectorHrCode(profile.hr_code);
+      return code ? [[code, profile] as const] : [];
+    }),
+  );
+  const matchesByExternalId = new Map(
+    matches.flatMap((match) => {
+      const id = normalizeMatchId(match.external_id);
+      return id ? [[id, match] as const] : [];
+    }),
+  );
+  for (const row of distributionRows) {
+    const matchId = normalizeMatchId(row.match_id);
+    const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
+    if (!matchId || !hrCode) continue;
+    const key = `${matchId}|${hrCode}`;
+    rowCountsByMatchCollector.set(key, (rowCountsByMatchCollector.get(key) ?? 0) + 1);
+  }
+  for (const assignment of assignments) {
+    const match = matches.find((candidate) => candidate.id === assignment.match_id);
+    const profile = (profilesResult.data ?? []).find((candidate) => candidate.id === assignment.collector_id);
+    const matchId = match ? normalizeMatchId(match.external_id) : null;
+    const hrCode = normalizeDistributionCollectorHrCode(profile?.hr_code);
+    if (!matchId || !hrCode) continue;
+    const key = `${matchId}|${hrCode}`;
+    assignmentsByMatchCollector.set(key, [...(assignmentsByMatchCollector.get(key) ?? []), assignment]);
+  }
   const handledAmbiguousKeys = new Set<string>();
   for (const row of distributionRows) {
     const logicalKey = distributionRowLogicalKey(row);
@@ -323,6 +357,28 @@ export async function reconcileDistributionAssignments(
       continue;
     }
 
+    const matchId = normalizeMatchId(row.match_id);
+    const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
+    const profile = hrCode ? profilesByHrCode.get(hrCode) : undefined;
+    const match = matchId ? matchesByExternalId.get(matchId) : undefined;
+    if (match && profile && matchId && hrCode && !assignmentsByLogicalKey.has(logicalKey)) {
+      const matchCollectorKey = `${matchId}|${hrCode}`;
+      const existingForCollector = assignmentsByMatchCollector.get(matchCollectorKey) ?? [];
+      const targetConflict = assignments.some((candidate) =>
+        candidate.match_id === match.id &&
+        candidate.task === normalizeDistributionTask(row.task) &&
+        candidate.half === normalizeDistributionHalf(row.half) &&
+        !existingForCollector.some((existing) => existing.id === candidate.id)
+      );
+      if (
+        rowCountsByMatchCollector.get(matchCollectorKey) === 1 &&
+        existingForCollector.length === 1 &&
+        !targetConflict
+      ) {
+        const existingAssignment = existingForCollector[0];
+        if (existingAssignment) assignmentOverridesByRowNumber.set(row.raw_row_number, existingAssignment);
+      }
+    }
     eligibleRows.push(row);
   }
 
@@ -337,6 +393,7 @@ export async function reconcileDistributionAssignments(
         assignments,
         result.skippedReasons,
         (logicalKeyCounts.get(distributionRowLogicalKey(row) ?? "") ?? 0) === 1,
+        assignmentOverridesByRowNumber.get(row.raw_row_number) ?? null,
       )
     ));
 
