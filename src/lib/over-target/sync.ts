@@ -208,7 +208,7 @@ function toUpdate(
     sheet_row_number: occurrence.source_row_number,
     sheet_tab: OVER_TARGET_SHEET_TAB,
     sheet_gid: OVER_TARGET_SHEET_GID,
-    sheet_sync_status: existing.source === OVER_TARGET_APP_SOURCE ? existing.sheet_sync_status : "imported",
+    sheet_sync_status: existing.source === OVER_TARGET_APP_SOURCE ? "synced" : "imported",
     sheet_synced_at: now,
     last_sheet_error: null,
     source_present: true,
@@ -249,11 +249,10 @@ async function updateMatchedRows(
 
   for (let i = 0; i < changed.length; i += WRITE_CHUNK_SIZE) {
     const chunk = changed.slice(i, i + WRITE_CHUNK_SIZE);
-    const results = await Promise.all(chunk.map(async ({ id, update }) => {
+    await Promise.all(chunk.map(async ({ id, update }) => {
       const { error } = await client.from("over_target").update(update).eq("id", id);
       if (error) throw error;
     }));
-    void results;
   }
   return changed.length;
 }
