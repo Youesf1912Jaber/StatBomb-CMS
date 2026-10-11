@@ -89,10 +89,12 @@ export function findAssignmentByLogicalKey(
   matchId: string,
   task: string,
   half: string,
+  collectorId?: string,
+  allowCollectorChange = true,
 ): AssignmentRow | undefined {
   const canonicalTask = canonicalizeTask(task);
   const normalizedHalf = normalizeHalf(half);
-  return assignments.find((candidate) =>
+  const candidates = assignments.filter((candidate) =>
     candidate.match_id === matchId &&
     (
       canonicalizeTask(candidate.task) === canonicalTask ||
@@ -100,6 +102,20 @@ export function findAssignmentByLogicalKey(
     ) &&
     normalizeHalf(candidate.half) === normalizedHalf
   );
+
+  // Match the same collector first. A match can legitimately be assigned to
+  // multiple collectors for the same task/half, so never grab another
+  // collector's row just because it appears first in the database.
+  if (collectorId) {
+    const exact = candidates.find((candidate) => candidate.collector_id === collectorId);
+    if (exact) return exact;
+  }
+
+  // Only treat a different collector as a reassignment when the row is
+  // unambiguous. If multiple collector assignments exist, create a separate
+  // assignment instead of stealing one from another collector.
+  if (!allowCollectorChange || candidates.length !== 1) return undefined;
+  return candidates[0];
 }
 
 export function reconcileDistributionPresence(input: {
