@@ -269,12 +269,12 @@ export async function reconcileDistributionAssignments(
   for (const row of distributionRows) {
     const logicalKey = distributionRowLogicalKey(row);
     const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
-    const rowKey = logicalKey && hrCode ? `${logicalKey}|${hrCode}` : null;
     if (!logicalKey || !hrCode) {
       result.skipped += 1;
       result.skippedReasons.invalid_identity = (result.skippedReasons.invalid_identity ?? 0) + 1;
       continue;
     }
+    const rowKey = `${logicalKey}|${hrCode}`;
     if (rowKeyCounts.get(rowKey) !== 1) {
       result.skipped += 1;
       result.skippedReasons.duplicate_same_collector_row = (result.skippedReasons.duplicate_same_collector_row ?? 0) + 1;
