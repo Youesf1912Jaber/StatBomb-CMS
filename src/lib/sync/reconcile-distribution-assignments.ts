@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { planDistributionAssignment } from "@/lib/distribution-assignments";
 import { fetchAllMatches } from "@/lib/match-master-preview";
 import { normalizeDistributionCollectorHrCode, type DistributionMatchRow, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
-import { distributionRowLogicalKey } from "@/lib/sync/reconcile";
+import { assignmentLogicalKey, distributionRowLogicalKey } from "@/lib/sync/reconcile";
 import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
 import type { AssignmentRow, Database, ProfileRow } from "@/types/database.types";
 
@@ -261,11 +261,22 @@ export async function reconcileDistributionAssignments(
     }
   }
 
-  // Rows for the same match/task/half may be valid when assigned to different
-  // collectors. Only duplicate the exact same collector-specific row is
-  // ambiguous; do not discard assignments simply because the collector differs.
+  // The database intentionally enforces one assignment per Match + Task + Half.
+  // When the Sheet contains competing rows for that identity, only process the
+  // row belonging to the already-assigned collector. If no current assignment
+  // disambiguates the rows, skip them rather than arbitrarily assigning a
+  // collector or crashing the entire refresh with a unique-constraint error.
+  const assignmentsByLogicalKey = new Map<string, AssignmentRow>();
+  for (const assignment of assignments) {
+    const match = matches.find((candidate) => candidate.id === assignment.match_id);
+    if (!match) continue;
+    const key = assignmentLogicalKey(assignment, String(match.external_id));
+    if (key) assignmentsByLogicalKey.set(key, assignment);
+  }
+
   const RECONCILIATION_BATCH_SIZE = 8;
   const eligibleRows: DistributionMatchRow[] = [];
+  const handledAmbiguousKeys = new Set<string>();
   for (const row of distributionRows) {
     const logicalKey = distributionRowLogicalKey(row);
     const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
@@ -280,6 +291,41 @@ export async function reconcileDistributionAssignments(
       result.skippedReasons.duplicate_same_collector_row = (result.skippedReasons.duplicate_same_collector_row ?? 0) + 1;
       continue;
     }
+
+    if ((logicalKeyCounts.get(logicalKey) ?? 0) > 1) {
+      if (handledAmbiguousKeys.has(logicalKey)) {
+        result.skipped += 1;
+        result.skippedReasons.duplicate_logical_assignment = (result.skippedReasons.duplicate_logical_assignment ?? 0) + 1;
+        continue;
+      }
+      handledAmbiguousKeys.add(logicalKey);
+      const existing = assignmentsByLogicalKey.get(logicalKey);
+      const existingProfile = existing
+        ? (profilesResult.data ?? []).find((profile) => profile.id === existing.collector_id)
+        : undefined;
+      const existingHrCode = normalizeDistributionCollectorHrCode(existingProfile?.hr_code);
+      const candidates = distributionRows.filter((candidate) =>
+        distributionRowLogicalKey(candidate) === logicalKey &&
+        normalizeDistributionCollectorHrCode(candidate.collector_hr_code) !== null
+      );
+      const matchingRows = existingHrCode
+        ? candidates.filter((candidate) =>
+            normalizeDistributionCollectorHrCode(candidate.collector_hr_code) === existingHrCode
+          )
+        : [];
+      if (matchingRows.length === 1 && matchingRows[0] === row) {
+        eligibleRows.push(row);
+        result.skipped += candidates.length - 1;
+        result.skippedReasons.duplicate_logical_assignment =
+          (result.skippedReasons.duplicate_logical_assignment ?? 0) + candidates.length - 1;
+      } else {
+        result.skipped += candidates.length;
+        result.skippedReasons.duplicate_logical_assignment =
+          (result.skippedReasons.duplicate_logical_assignment ?? 0) + candidates.length;
+      }
+      continue;
+    }
+
     eligibleRows.push(row);
   }
 
