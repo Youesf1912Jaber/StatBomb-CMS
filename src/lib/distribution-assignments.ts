@@ -216,7 +216,14 @@ export function planDistributionAssignment(
   const sla = toSla(row.sla, row.shift_date ?? row.match_date);
   if (!sla) return { ok: false, conflict: false, reason: "Distribution SLA must be a valid date/time." };
 
-  const existing = findAssignmentByLogicalKey(assignments, match.id, task, half);
+  const existing = findAssignmentByLogicalKey(
+    assignments,
+    match.id,
+    task,
+    half,
+    collector.id,
+    options.allowExistingCollectorUpdate ?? true,
+  );
   if (existing && existing.collector_id !== collector.id && !options.allowExistingCollectorUpdate) {
     return {
       ok: false,
