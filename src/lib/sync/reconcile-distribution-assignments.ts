@@ -313,6 +313,7 @@ export async function reconcileDistributionAssignments(
     distributionRows,
     assignments: currentAssignments,
     matches,
+    profiles: profilesResult.data ?? [],
   });
 
   result.present = presence.presentAssignmentIds.length;
