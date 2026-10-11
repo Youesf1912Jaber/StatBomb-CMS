@@ -361,11 +361,11 @@ export async function reconcileDistributionAssignments(
     }
 
     const matchId = normalizeMatchId(row.match_id);
-    const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
-    const profile = hrCode ? profilesByHrCode.get(hrCode) : undefined;
+    const rowHrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
+    const profile = rowHrCode ? profilesByHrCode.get(rowHrCode) : undefined;
     const match = matchId ? matchesByExternalId.get(matchId) : undefined;
-    if (match && profile && matchId && hrCode && !assignmentsByLogicalKey.has(logicalKey)) {
-      const matchCollectorKey = `${matchId}|${hrCode}`;
+    if (match && profile && matchId && rowHrCode && !assignmentsByLogicalKey.has(logicalKey)) {
+      const matchCollectorKey = `${matchId}|${rowHrCode}`;
       const existingForCollector = assignmentsByMatchCollector.get(matchCollectorKey) ?? [];
       const targetConflict = assignments.some((candidate) =>
         candidate.match_id === match.id &&
