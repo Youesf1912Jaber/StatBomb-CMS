@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 import { planDistributionAssignment } from "@/lib/distribution-assignments";
 import { fetchAllMatches } from "@/lib/match-master-preview";
 import { normalizeDistributionCollectorHrCode, normalizeMatchId, normalizeDistributionTask, normalizeDistributionHalf, type DistributionMatchRow, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
@@ -153,9 +154,19 @@ async function syncAssignmentStatusFromDistribution(
     return { assignment, changed: false };
   }
 
-  const { data, error } = await supabase
+  // The refresh route is admin-authenticated, but the caller's anon-key client
+  // may be blocked by assignment UPDATE RLS policies. Use the server-only
+  // service-role client for this narrowly scoped, server-validated sync write.
+  const serviceClient = createServiceRoleClient();
+  const now = new Date().toISOString();
+  const statusFields = desiredStatus === "Completed"
+    ? { status: desiredStatus, completed_at: assignment.completed_at ?? now, started_at: assignment.started_at ?? now }
+    : desiredStatus === "In Progress"
+      ? { status: desiredStatus, completed_at: null, started_at: assignment.started_at ?? now }
+      : { status: desiredStatus, completed_at: null, started_at: null };
+  const { data, error } = await serviceClient
     .from("assignments")
-    .update({ status: desiredStatus })
+    .update(statusFields)
     .eq("id", assignment.id)
     .select("*")
     .single();
