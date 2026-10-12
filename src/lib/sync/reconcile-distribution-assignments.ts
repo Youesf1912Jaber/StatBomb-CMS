@@ -169,8 +169,20 @@ async function syncAssignmentStatusFromDistribution(
     .update(statusFields)
     .eq("id", assignment.id)
     .select("*")
-    .single();
+    .maybeSingle();
   if (error) throw error;
+
+  // A row can disappear between reconciliation's initial read and this write.
+  // Do not fail the entire Distribution refresh for that race; the next refresh
+  // will reconcile the current set of rows again.
+  if (!data) {
+    console.warn("Distribution status sync skipped: assignment no longer exists", {
+      assignmentId: assignment.id,
+      matchId: row.match_id,
+    });
+    return { assignment, changed: false };
+  }
+
   return { assignment: data, changed: true };
 }
 
