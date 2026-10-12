@@ -6,7 +6,7 @@ import { fetchAllMatches } from "@/lib/match-master-preview";
 import { normalizeDistributionCollectorHrCode, normalizeMatchId, normalizeDistributionTask, normalizeDistributionHalf, type DistributionMatchRow, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 import { assignmentLogicalKey, distributionRowLogicalKey } from "@/lib/sync/reconcile";
 import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
-import type { AssignmentRow, Database, ProfileRow } from "@/types/database.types";
+import type { AssignmentRow, AssignmentStatus, Database, ProfileRow } from "@/types/database.types";
 
 type Client = SupabaseClient<Database>;
 
@@ -133,6 +133,36 @@ function throwRpcError(row: DistributionMatchRow, operation: string, error: unkn
   throw diagnostic;
 }
 
+function assignmentStatusFromDistribution(value: string | null): AssignmentStatus | null {
+  const normalized = (value ?? "").trim().toLowerCase().replace(/\\s+/g, " ");
+  if (!normalized) return "Not Started";
+  if (normalized === "complete" || normalized === "completed") return "Completed";
+  if (normalized === "in progress" || normalized === "in-progress") return "In Progress";
+  if (normalized === "not started" || normalized === "not-started") return "Not Started";
+  // Leave unfamiliar sheet values alone instead of accidentally resetting an assignment.
+  return null;
+}
+
+async function syncAssignmentStatusFromDistribution(
+  supabase: Client,
+  assignment: AssignmentRow,
+  row: DistributionMatchRow,
+): Promise<{ assignment: AssignmentRow; changed: boolean }> {
+  const desiredStatus = assignmentStatusFromDistribution(row.status);
+  if (!desiredStatus || assignment.status === desiredStatus) {
+    return { assignment, changed: false };
+  }
+
+  const { data, error } = await supabase
+    .from("assignments")
+    .update({ status: desiredStatus })
+    .eq("id", assignment.id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return { assignment: data, changed: true };
+}
+
 async function createOrUpdateAssignment(
   supabase: Client,
   row: DistributionMatchRow,
@@ -178,7 +208,8 @@ async function createOrUpdateAssignment(
       p_shift_date: plan.shiftDate,
     });
     if (error) throwRpcError(row, "create_assignment", error);
-    assignments.push(data);
+    const statusSync = await syncAssignmentStatusFromDistribution(supabase, data, row);
+    assignments.push(statusSync.assignment);
     return "inserted";
   }
 
@@ -218,6 +249,12 @@ async function createOrUpdateAssignment(
     assignment = data;
     changed = true;
   }
+
+  // Distribution's Status cell is the source of truth during refresh:
+  // Complete -> Completed, In Progress -> In Progress, blank -> Not Started.
+  const statusSync = await syncAssignmentStatusFromDistribution(supabase, assignment, row);
+  assignment = statusSync.assignment;
+  changed = changed || statusSync.changed;
 
   const index = assignments.findIndex((candidate) => candidate.id === assignment.id);
   if (index >= 0) assignments[index] = assignment;
