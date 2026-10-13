@@ -588,7 +588,9 @@ export async function reconcileDistributionAssignments(
   const presenceStartedAt = Date.now();
   // The assignments array is already updated as rows are inserted/changed.
   // Re-fetching every page here adds several extra Supabase round trips each run.
-  const presence = await persistReconciledDistributionPresence(serviceClient, {
+  // Keep the authenticated admin client for this RPC because the deployed
+  // function's EXECUTE grant is currently scoped to authenticated callers.
+  const presence = await persistReconciledDistributionPresence(supabase, {
     distributionRows,
     assignments,
     matches,
