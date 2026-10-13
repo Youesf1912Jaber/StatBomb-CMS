@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { planDistributionAssignment } from "@/lib/distribution-assignments";
+import { planDistributionAssignment, type DistributionAssignmentLookupIndexes } from "@/lib/distribution-assignments";
 import { fetchAllMatches } from "@/lib/match-master-preview";
 import { normalizeDistributionCollectorHrCode, normalizeMatchId, normalizeDistributionTask, normalizeDistributionHalf, type DistributionMatchRow, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 import { assignmentLogicalKey, distributionRowLogicalKey } from "@/lib/sync/reconcile";
@@ -189,6 +189,7 @@ async function createOrUpdateAssignment(
   profiles: ProfileRow[],
   matches: Awaited<ReturnType<typeof fetchAllMatches>>,
   assignments: AssignmentRow[],
+  lookupIndexes: DistributionAssignmentLookupIndexes,
   skippedReasons: Record<string, number>,
   allowExistingCollectorUpdate: boolean,
   serviceClient: Client,
@@ -197,7 +198,7 @@ async function createOrUpdateAssignment(
 ): Promise<"inserted" | "updated" | "restored" | "skipped"> {
   const planned = planDistributionAssignment(row, profiles, matches, assignments, {
     allowExistingCollectorUpdate,
-  });
+  }, lookupIndexes);
   if (!planned.ok) {
     const reason = planned.reason.startsWith("Match ID was not found")
       ? "match_not_found"
@@ -366,6 +367,8 @@ export async function reconcileDistributionAssignments(
   const assignmentOverridesByRowNumber = new Map<number, AssignmentRow>();
   const rowCountsByMatchCollector = new Map<string, number>();
   const assignmentsByMatchCollector = new Map<string, AssignmentRow[]>();
+  const assignmentsByMatchTaskHalf = new Map<string, AssignmentRow[]>();
+  const assignmentsByExactMatchTaskHalf = new Map<string, AssignmentRow[]>();
   const assignmentIndexById = new Map(assignments.map((assignment, index) => [assignment.id, index] as const));
   const profiles = profilesResult.data ?? [];
   const profilesById = new Map(profiles.map((profile) => [profile.id, profile] as const));
@@ -381,6 +384,11 @@ export async function reconcileDistributionAssignments(
       return id ? [[id, match] as const] : [];
     }),
   );
+  const lookupIndexes: DistributionAssignmentLookupIndexes = {
+    matchesByExternalId,
+    profilesByHrCode,
+    assignmentsByMatchTaskHalf,
+  };
   for (const row of distributionRows) {
     const matchId = normalizeMatchId(row.match_id);
     const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
@@ -399,6 +407,24 @@ export async function reconcileDistributionAssignments(
     if (group) group.push(assignment);
     else assignmentsByMatchCollector.set(key, [assignment]);
 
+    const taskKeys = new Set([
+      normalizeDistributionTask(assignment.task),
+      normalizeDistributionTask(assignment.raw_task_value),
+    ].filter(Boolean));
+    for (const taskKey of taskKeys) {
+      const identityKey = `${assignment.match_id}|${taskKey}|${normalizeDistributionHalf(assignment.half)}`;
+      const identityGroup = assignmentsByMatchTaskHalf.get(identityKey);
+      if (identityGroup) {
+        if (!identityGroup.some((candidate) => candidate.id === assignment.id)) identityGroup.push(assignment);
+      } else {
+        assignmentsByMatchTaskHalf.set(identityKey, [assignment]);
+      }
+    }
+
+    const exactIdentityKey = `${assignment.match_id}|${assignment.task}|${assignment.half}`;
+    const exactGroup = assignmentsByExactMatchTaskHalf.get(exactIdentityKey);
+    if (exactGroup) exactGroup.push(assignment);
+    else assignmentsByExactMatchTaskHalf.set(exactIdentityKey, [assignment]);
   }
   const handledAmbiguousKeys = new Set<string>();
   for (const row of distributionRows) {
@@ -451,10 +477,8 @@ export async function reconcileDistributionAssignments(
     if (match && profile && matchId && rowHrCode && !assignmentsByLogicalKey.has(logicalKey)) {
       const matchCollectorKey = `${matchId}|${rowHrCode}`;
       const existingForCollector = assignmentsByMatchCollector.get(matchCollectorKey) ?? [];
-      const targetConflict = assignments.some((candidate) =>
-        candidate.match_id === match.id &&
-        candidate.task === normalizeDistributionTask(row.task) &&
-        candidate.half === normalizeDistributionHalf(row.half) &&
+      const targetIdentityKey = `${match.id}|${normalizeDistributionTask(row.task)}|${normalizeDistributionHalf(row.half)}`;
+      const targetConflict = (assignmentsByExactMatchTaskHalf.get(targetIdentityKey) ?? []).some((candidate) =>
         !existingForCollector.some((existing) => existing.id === candidate.id)
       );
       if (
@@ -478,6 +502,7 @@ export async function reconcileDistributionAssignments(
         profilesResult.data ?? [],
         matches,
         assignments,
+        lookupIndexes,
         result.skippedReasons,
         (logicalKeyCounts.get(distributionRowLogicalKey(row) ?? "") ?? 0) === 1,
         serviceClient,
