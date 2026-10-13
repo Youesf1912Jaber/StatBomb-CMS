@@ -333,11 +333,16 @@ export async function reconcileDistributionAssignments(
 ): Promise<DistributionAssignmentReconciliation> {
   const refreshStartedAt = Date.now();
   const loadStartedAt = Date.now();
+  // This function is only called by the admin-authenticated refresh route.
+  // Read-only reconciliation loads use service role to bypass per-row RLS
+  // policies (notably is_admin() checks); user-bound RPCs below still use the
+  // authenticated client so the database's own authorization checks remain.
+  const serviceClient = createServiceRoleClient();
   const [distributionRows, profilesResult, matches, loadedAssignments] = await Promise.all([
     readDistributionRowsForPreview(),
-    supabase.from("profiles").select("*"),
-    fetchAllMatches(supabase),
-    fetchAllAssignments(supabase),
+    serviceClient.from("profiles").select("*"),
+    fetchAllMatches(serviceClient),
+    fetchAllAssignments(serviceClient),
   ]);
   if (profilesResult.error) throw profilesResult.error;
   const loadDurationMs = Date.now() - loadStartedAt;
@@ -390,7 +395,6 @@ export async function reconcileDistributionAssignments(
   // Each eligible row may perform several Supabase RPCs. Keep enough work in
   // flight to avoid hundreds of serial network waves without flooding PostgREST.
   const RECONCILIATION_BATCH_SIZE = 32;
-  const serviceClient = createServiceRoleClient();
   const rowsByLogicalKey = new Map<string, DistributionMatchRow[]>();
   for (const row of distributionRows) {
     const key = distributionRowLogicalKey(row);
