@@ -277,6 +277,7 @@ async function createOrUpdateAssignment(
   assignment = statusSync.assignment;
   changed = changed || statusSync.changed;
 
+  assignmentsById.set(assignment.id, assignment);
   const index = assignments.findIndex((candidate) => candidate.id === assignment.id);
   if (index >= 0) assignments[index] = assignment;
 
@@ -348,7 +349,9 @@ export async function reconcileDistributionAssignments(
     if (key) assignmentsByLogicalKey.set(key, assignment);
   }
 
-  const RECONCILIATION_BATCH_SIZE = 8;
+  // Each eligible row may perform several Supabase RPCs. Keep enough work in
+  // flight to avoid hundreds of serial network waves without flooding PostgREST.
+  const RECONCILIATION_BATCH_SIZE = 32;
   const serviceClient = createServiceRoleClient();
   const rowsByLogicalKey = new Map<string, DistributionMatchRow[]>();
   for (const row of distributionRows) {
@@ -362,6 +365,8 @@ export async function reconcileDistributionAssignments(
   const assignmentOverridesByRowNumber = new Map<number, AssignmentRow>();
   const rowCountsByMatchCollector = new Map<string, number>();
   const assignmentsByMatchCollector = new Map<string, AssignmentRow[]>();
+  const assignmentsById = new Map(assignments.map((assignment) => [assignment.id, assignment] as const));
+  const assignmentsByMatchTaskHalf = new Map<string, AssignmentRow[]>();
   const profiles = profilesResult.data ?? [];
   const profilesById = new Map(profiles.map((profile) => [profile.id, profile] as const));
   const profilesByHrCode = new Map(
@@ -393,6 +398,11 @@ export async function reconcileDistributionAssignments(
     const group = assignmentsByMatchCollector.get(key);
     if (group) group.push(assignment);
     else assignmentsByMatchCollector.set(key, [assignment]);
+
+    const identityKey = `${assignment.match_id}|${assignment.task}|${assignment.half}`;
+    const identityGroup = assignmentsByMatchTaskHalf.get(identityKey);
+    if (identityGroup) identityGroup.push(assignment);
+    else assignmentsByMatchTaskHalf.set(identityKey, [assignment]);
   }
   const handledAmbiguousKeys = new Set<string>();
   for (const row of distributionRows) {
@@ -445,12 +455,10 @@ export async function reconcileDistributionAssignments(
     if (match && profile && matchId && rowHrCode && !assignmentsByLogicalKey.has(logicalKey)) {
       const matchCollectorKey = `${matchId}|${rowHrCode}`;
       const existingForCollector = assignmentsByMatchCollector.get(matchCollectorKey) ?? [];
-      const targetConflict = assignments.some((candidate) =>
-        candidate.match_id === match.id &&
-        candidate.task === normalizeDistributionTask(row.task) &&
-        candidate.half === normalizeDistributionHalf(row.half) &&
-        !existingForCollector.some((existing) => existing.id === candidate.id)
-      );
+      const targetIdentityKey = `${match.id}|${normalizeDistributionTask(row.task)}|${normalizeDistributionHalf(row.half)}`;
+      const targetCandidates = assignmentsByMatchTaskHalf.get(targetIdentityKey) ?? [];
+      const existingCollectorIds = new Set(existingForCollector.map((existing) => existing.id));
+      const targetConflict = targetCandidates.some((candidate) => !existingCollectorIds.has(candidate.id));
       if (
         rowCountsByMatchCollector.get(matchCollectorKey) === 1 &&
         existingForCollector.length === 1 &&
