@@ -144,6 +144,27 @@ function assignmentStatusFromDistribution(value: string | null): AssignmentStatu
   return null;
 }
 
+function refreshAssignmentLookupIndex(
+  indexes: DistributionAssignmentLookupIndexes,
+  assignment: AssignmentRow,
+): void {
+  for (const [key, candidates] of indexes.assignmentsByMatchTaskHalf) {
+    const filtered = candidates.filter((candidate) => candidate.id !== assignment.id);
+    if (filtered.length === 0) indexes.assignmentsByMatchTaskHalf.delete(key);
+    else if (filtered.length !== candidates.length) indexes.assignmentsByMatchTaskHalf.set(key, filtered);
+  }
+
+  const taskKeys = new Set([
+    normalizeDistributionTask(assignment.task),
+    normalizeDistributionTask(assignment.raw_task_value),
+  ].filter(Boolean));
+  for (const taskKey of taskKeys) {
+    const key = `${assignment.match_id}|${taskKey}|${normalizeDistributionHalf(assignment.half)}`;
+    const candidates = indexes.assignmentsByMatchTaskHalf.get(key) ?? [];
+    indexes.assignmentsByMatchTaskHalf.set(key, [...candidates, assignment]);
+  }
+}
+
 async function syncAssignmentStatusFromDistribution(
   serviceClient: Client,
   assignment: AssignmentRow,
@@ -234,6 +255,7 @@ async function createOrUpdateAssignment(
     const statusSync = await syncAssignmentStatusFromDistribution(serviceClient, data, row);
     assignmentIndexById.set(statusSync.assignment.id, assignments.length);
     assignments.push(statusSync.assignment);
+    refreshAssignmentLookupIndex(lookupIndexes, statusSync.assignment);
     return "inserted";
   }
 
@@ -282,6 +304,7 @@ async function createOrUpdateAssignment(
 
   const index = assignmentIndexById.get(assignment.id);
   if (index !== undefined) assignments[index] = assignment;
+  refreshAssignmentLookupIndex(lookupIndexes, assignment);
 
   if (!plan.existing.distribution_present) return "restored";
   if (!changed) skippedReasons.already_up_to_date = (skippedReasons.already_up_to_date ?? 0) + 1;
