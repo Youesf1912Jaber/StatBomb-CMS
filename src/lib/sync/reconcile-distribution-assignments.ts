@@ -135,7 +135,7 @@ function throwRpcError(row: DistributionMatchRow, operation: string, error: unkn
 }
 
 function assignmentStatusFromDistribution(value: string | null): AssignmentStatus | null {
-  const normalized = (value ?? "").trim().toLowerCase().replace(/\\s+/g, " ");
+  const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   if (!normalized) return "Not Started";
   if (normalized === "complete" || normalized === "completed") return "Completed";
   if (normalized === "in progress" || normalized === "in-progress") return "In Progress";
