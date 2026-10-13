@@ -1009,7 +1009,7 @@ export async function readDistributionRowsForPreview(): Promise<DistributionMatc
     const text = String(value ?? "").trim();
     return text || null;
   };
-  const spreadsheetError = /^#(?:N\\/A|REF!|VALUE!|ERROR!|DIV\\/0!|NAME\\?|NUM!|NULL!)$/i;
+  const spreadsheetError = /^#(?:N\/A|REF!|VALUE!|ERROR!|DIV\/0!|NAME\?|NUM!|NULL!)$/i;
   return matrix.slice(1).flatMap((row, index): DistributionMatchRow[] => {
     const rawMatchId = asText(row[indexes.id]);
     // Blank and formula-error template rows cannot represent assignments.
