@@ -134,6 +134,16 @@ function throwRpcError(row: DistributionMatchRow, operation: string, error: unkn
   throw diagnostic;
 }
 
+function sameTimestamp(left: string | null | undefined, right: string | null | undefined): boolean {
+  if (left == null || right == null) return left === right;
+  const leftTime = Date.parse(left);
+  const rightTime = Date.parse(right);
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) {
+    return leftTime === rightTime;
+  }
+  return left === right;
+}
+
 function assignmentStatusFromDistribution(value: string | null): AssignmentStatus | null {
   const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   if (!normalized) return "Not Started";
@@ -285,7 +295,10 @@ async function createOrUpdateAssignment(
     changed = true;
   }
 
-  if (assignment.task !== plan.task || assignment.half !== plan.half || assignment.sla !== plan.sla) {
+  // PostgreSQL timestamps may serialize with an offset while sheet parsing
+  // returns ISO strings ending in Z. Compare actual instants, not string forms,
+  // to avoid calling update_assignment for thousands of unchanged SLAs.
+  if (assignment.task !== plan.task || assignment.half !== plan.half || !sameTimestamp(assignment.sla, plan.sla)) {
     const { data, error } = await supabase.rpc("update_assignment", {
       p_assignment_id: assignment.id,
       p_task: plan.task,
