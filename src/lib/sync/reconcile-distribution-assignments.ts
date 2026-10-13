@@ -292,6 +292,8 @@ async function createOrUpdateAssignment(
 export async function reconcileDistributionAssignments(
   supabase: Client,
 ): Promise<DistributionAssignmentReconciliation> {
+  const refreshStartedAt = Date.now();
+  const loadStartedAt = Date.now();
   const [distributionRows, profilesResult, matches, loadedAssignments] = await Promise.all([
     readDistributionRowsForPreview(),
     supabase.from("profiles").select("*"),
@@ -299,6 +301,16 @@ export async function reconcileDistributionAssignments(
     fetchAllAssignments(supabase),
   ]);
   if (profilesResult.error) throw profilesResult.error;
+  const loadDurationMs = Date.now() - loadStartedAt;
+  console.info("Distribution refresh phase", {
+    phase: "load_source_data",
+    durationMs: loadDurationMs,
+    distributionRows: distributionRows.length,
+    profiles: profilesResult.data?.length ?? 0,
+    matches: matches.length,
+    assignments: loadedAssignments.length,
+  });
+  const reconciliationStartedAt = Date.now();
 
   const assignments = [...loadedAssignments];
   const result: DistributionAssignmentReconciliation = {
@@ -478,6 +490,16 @@ export async function reconcileDistributionAssignments(
     if (firstError !== undefined) throw firstError;
   }
 
+  console.info("Distribution refresh phase", {
+    phase: "reconcile_rows",
+    durationMs: Date.now() - reconciliationStartedAt,
+    eligibleRows: eligibleRows.length,
+    inserted: result.inserted,
+    updated: result.updated,
+    restored: result.restored,
+    skipped: result.skipped,
+  });
+  const presenceStartedAt = Date.now();
   const currentAssignments = await fetchAllAssignments(supabase);
   const presence = await persistReconciledDistributionPresence(supabase, {
     distributionRows,
@@ -488,5 +510,19 @@ export async function reconcileDistributionAssignments(
 
   result.present = presence.presentAssignmentIds.length;
   result.missing = presence.missingAssignmentIds.length;
+  console.info("Distribution refresh phase", {
+    phase: "persist_presence",
+    durationMs: Date.now() - presenceStartedAt,
+    present: result.present,
+    missing: result.missing,
+  });
+  console.info("Distribution refresh completed", {
+    totalDurationMs: Date.now() - refreshStartedAt,
+    distributionRows: distributionRows.length,
+    inserted: result.inserted,
+    updated: result.updated,
+    restored: result.restored,
+    skipped: result.skipped,
+  });
   return result;
 }
