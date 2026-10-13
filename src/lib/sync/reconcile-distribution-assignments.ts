@@ -397,16 +397,6 @@ export async function reconcileDistributionAssignments(
     rowCountsByMatchCollector.set(key, (rowCountsByMatchCollector.get(key) ?? 0) + 1);
   }
   for (const assignment of assignments) {
-    const match = matchesById.get(assignment.match_id);
-    const profile = profilesById.get(assignment.collector_id);
-    const matchId = match ? normalizeMatchId(match.external_id) : null;
-    const hrCode = normalizeDistributionCollectorHrCode(profile?.hr_code);
-    if (!matchId || !hrCode) continue;
-    const key = `${matchId}|${hrCode}`;
-    const group = assignmentsByMatchCollector.get(key);
-    if (group) group.push(assignment);
-    else assignmentsByMatchCollector.set(key, [assignment]);
-
     const taskKeys = new Set([
       normalizeDistributionTask(assignment.task),
       normalizeDistributionTask(assignment.raw_task_value),
@@ -425,6 +415,17 @@ export async function reconcileDistributionAssignments(
     const exactGroup = assignmentsByExactMatchTaskHalf.get(exactIdentityKey);
     if (exactGroup) exactGroup.push(assignment);
     else assignmentsByExactMatchTaskHalf.set(exactIdentityKey, [assignment]);
+
+    const match = matchesById.get(assignment.match_id);
+    const profile = profilesById.get(assignment.collector_id);
+    const matchId = match ? normalizeMatchId(match.external_id) : null;
+    const hrCode = normalizeDistributionCollectorHrCode(profile?.hr_code);
+    if (!matchId || !hrCode) continue;
+    const key = `${matchId}|${hrCode}`;
+    const group = assignmentsByMatchCollector.get(key);
+    if (group) group.push(assignment);
+    else assignmentsByMatchCollector.set(key, [assignment]);
+
   }
   const handledAmbiguousKeys = new Set<string>();
   for (const row of distributionRows) {
