@@ -185,21 +185,30 @@ export function isAssignableCollectorTarget(
  * used by create_assignment. Names are display-only; HR-Code is the sole
  * collector identity input.
  */
+export type DistributionAssignmentLookupIndexes = {
+  matchesByExternalId: Map<string, MatchRow>;
+  profilesByHrCode: Map<string, ProfileRow>;
+  assignmentsByMatchTaskHalf: Map<string, AssignmentRow[]>;
+};
+
 export function planDistributionAssignment(
   row: DistributionMatchRow,
   profiles: ProfileRow[],
   matches: MatchRow[],
   assignments: AssignmentRow[],
   options: { allowExistingCollectorUpdate?: boolean } = {},
+  lookupIndexes?: DistributionAssignmentLookupIndexes,
 ): DistributionAssignmentPlanResult {
   const externalId = normalizeMatchId(row.match_id);
   if (!externalId) return { ok: false, conflict: false, reason: "Distribution row has no valid Match ID." };
-  const match = matches.find((candidate) => normalizeMatchId(candidate.external_id) === externalId);
+  const match = lookupIndexes?.matchesByExternalId.get(externalId)
+    ?? matches.find((candidate) => normalizeMatchId(candidate.external_id) === externalId);
   if (!match) return { ok: false, conflict: false, reason: "Match ID was not found in Supabase matches." };
 
   const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
   const collector = hrCode
-    ? profiles.find((candidate) => normalizeDistributionCollectorHrCode(candidate.hr_code) === hrCode)
+    ? lookupIndexes?.profilesByHrCode.get(hrCode)
+      ?? profiles.find((candidate) => normalizeDistributionCollectorHrCode(candidate.hr_code) === hrCode)
     : undefined;
   if (!collector) return { ok: false, conflict: false, reason: "HR-Code does not resolve to a Supabase profile." };
   if (!isAssignableCollectorTarget(collector)) {
@@ -216,8 +225,10 @@ export function planDistributionAssignment(
   const sla = toSla(row.sla, row.shift_date ?? row.match_date);
   if (!sla) return { ok: false, conflict: false, reason: "Distribution SLA must be a valid date/time." };
 
+  const identityKey = `${match.id}|${task}|${half}`;
+  const indexedCandidates = lookupIndexes?.assignmentsByMatchTaskHalf.get(identityKey);
   const existing = findAssignmentByLogicalKey(
-    assignments,
+    indexedCandidates ?? assignments,
     match.id,
     task,
     half,
