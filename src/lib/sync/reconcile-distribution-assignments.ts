@@ -192,6 +192,7 @@ async function createOrUpdateAssignment(
   skippedReasons: Record<string, number>,
   allowExistingCollectorUpdate: boolean,
   serviceClient: Client,
+  assignmentIndexById: Map<string, number>,
   assignmentOverride: AssignmentRow | null = null,
 ): Promise<"inserted" | "updated" | "restored" | "skipped"> {
   const planned = planDistributionAssignment(row, profiles, matches, assignments, {
@@ -230,6 +231,7 @@ async function createOrUpdateAssignment(
     });
     if (error) throwRpcError(row, "create_assignment", error);
     const statusSync = await syncAssignmentStatusFromDistribution(serviceClient, data, row);
+    assignmentIndexById.set(statusSync.assignment.id, assignments.length);
     assignments.push(statusSync.assignment);
     return "inserted";
   }
@@ -277,9 +279,8 @@ async function createOrUpdateAssignment(
   assignment = statusSync.assignment;
   changed = changed || statusSync.changed;
 
-  assignmentsById.set(assignment.id, assignment);
-  const index = assignments.findIndex((candidate) => candidate.id === assignment.id);
-  if (index >= 0) assignments[index] = assignment;
+  const index = assignmentIndexById.get(assignment.id);
+  if (index !== undefined) assignments[index] = assignment;
 
   if (!plan.existing.distribution_present) return "restored";
   if (!changed) skippedReasons.already_up_to_date = (skippedReasons.already_up_to_date ?? 0) + 1;
@@ -365,7 +366,7 @@ export async function reconcileDistributionAssignments(
   const assignmentOverridesByRowNumber = new Map<number, AssignmentRow>();
   const rowCountsByMatchCollector = new Map<string, number>();
   const assignmentsByMatchCollector = new Map<string, AssignmentRow[]>();
-  const assignmentsById = new Map(assignments.map((assignment) => [assignment.id, assignment] as const));
+  const assignmentIndexById = new Map(assignments.map((assignment, index) => [assignment.id, index] as const));
   const assignmentsByMatchTaskHalf = new Map<string, AssignmentRow[]>();
   const profiles = profilesResult.data ?? [];
   const profilesById = new Map(profiles.map((profile) => [profile.id, profile] as const));
@@ -483,6 +484,7 @@ export async function reconcileDistributionAssignments(
         result.skippedReasons,
         (logicalKeyCounts.get(distributionRowLogicalKey(row) ?? "") ?? 0) === 1,
         serviceClient,
+        assignmentIndexById,
         assignmentOverridesByRowNumber.get(row.raw_row_number) ?? null,
       )
     ));
