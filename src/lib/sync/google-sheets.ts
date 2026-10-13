@@ -1009,21 +1009,28 @@ export async function readDistributionRowsForPreview(): Promise<DistributionMatc
     const text = String(value ?? "").trim();
     return text || null;
   };
-  return matrix.slice(1).map((row, index) => ({
-    match_id: normalizeMatchId(row[indexes.id] ?? null) ?? "",
-    collector_hr_code: asText(row[indexes.hrCode]),
-    collector_name: asText(row[indexes.collectorName]),
-    task: asText(row[indexes.task]),
-    half: asText(row[indexes.half]),
-    status: indexes.status >= 0 ? asText(row[indexes.status]) : null,
-    sla: indexes.sla >= 0 ? asText(row[indexes.sla]) : null,
-    shift_date: indexes.shiftDate >= 0 ? asText(row[indexes.shiftDate]) : null,
-    match_date: indexes.matchDate >= 0 ? asText(row[indexes.matchDate]) : null,
-    kick_off_time: indexes.kickOffTime >= 0 ? asText(row[indexes.kickOffTime]) : null,
-    hyper_care_notes: indexes.hyperCareNotes >= 0 ? asText(row[indexes.hyperCareNotes]) : null,
-    review_events: indexes.reviewEvents >= 0 ? asText(row[indexes.reviewEvents]) : null,
-    raw_row_number: index + 2,
-  }));
+  const spreadsheetError = /^#(?:N\\/A|REF!|VALUE!|ERROR!|DIV\\/0!|NAME\\?|NUM!|NULL!)$/i;
+  return matrix.slice(1).flatMap((row, index): DistributionMatchRow[] => {
+    const rawMatchId = asText(row[indexes.id]);
+    // Blank and formula-error template rows cannot represent assignments.
+    // Ignore them before reconciliation to avoid thousands of futile lookups.
+    if (!rawMatchId || spreadsheetError.test(rawMatchId)) return [];
+    return [{
+      match_id: normalizeMatchId(rawMatchId) ?? rawMatchId,
+      collector_hr_code: asText(row[indexes.hrCode]),
+      collector_name: asText(row[indexes.collectorName]),
+      task: asText(row[indexes.task]),
+      half: asText(row[indexes.half]),
+      status: indexes.status >= 0 ? asText(row[indexes.status]) : null,
+      sla: indexes.sla >= 0 ? asText(row[indexes.sla]) : null,
+      shift_date: indexes.shiftDate >= 0 ? asText(row[indexes.shiftDate]) : null,
+      match_date: indexes.matchDate >= 0 ? asText(row[indexes.matchDate]) : null,
+      kick_off_time: indexes.kickOffTime >= 0 ? asText(row[indexes.kickOffTime]) : null,
+      hyper_care_notes: indexes.hyperCareNotes >= 0 ? asText(row[indexes.hyperCareNotes]) : null,
+      review_events: indexes.reviewEvents >= 0 ? asText(row[indexes.reviewEvents]) : null,
+      raw_row_number: index + 2,
+    }];
+  });
 }
 
 
