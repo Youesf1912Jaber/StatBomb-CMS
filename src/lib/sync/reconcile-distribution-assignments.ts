@@ -145,7 +145,7 @@ function assignmentStatusFromDistribution(value: string | null): AssignmentStatu
 }
 
 async function syncAssignmentStatusFromDistribution(
-  supabase: Client,
+  serviceClient: Client,
   assignment: AssignmentRow,
   row: DistributionMatchRow,
 ): Promise<{ assignment: AssignmentRow; changed: boolean }> {
@@ -154,10 +154,7 @@ async function syncAssignmentStatusFromDistribution(
     return { assignment, changed: false };
   }
 
-  // The refresh route is admin-authenticated, but the caller's anon-key client
-  // may be blocked by assignment UPDATE RLS policies. Use the server-only
-  // service-role client for this narrowly scoped, server-validated sync write.
-  const serviceClient = createServiceRoleClient();
+  // Reuse the service-role client created once for the refresh.
   const now = new Date().toISOString();
   const statusFields = desiredStatus === "Completed"
     ? { status: desiredStatus, completed_at: assignment.completed_at ?? now, started_at: assignment.started_at ?? now }
@@ -194,6 +191,7 @@ async function createOrUpdateAssignment(
   assignments: AssignmentRow[],
   skippedReasons: Record<string, number>,
   allowExistingCollectorUpdate: boolean,
+  serviceClient: Client,
   assignmentOverride: AssignmentRow | null = null,
 ): Promise<"inserted" | "updated" | "restored" | "skipped"> {
   const planned = planDistributionAssignment(row, profiles, matches, assignments, {
@@ -231,7 +229,7 @@ async function createOrUpdateAssignment(
       p_shift_date: plan.shiftDate,
     });
     if (error) throwRpcError(row, "create_assignment", error);
-    const statusSync = await syncAssignmentStatusFromDistribution(supabase, data, row);
+    const statusSync = await syncAssignmentStatusFromDistribution(serviceClient, data, row);
     assignments.push(statusSync.assignment);
     return "inserted";
   }
@@ -275,7 +273,7 @@ async function createOrUpdateAssignment(
 
   // Distribution's Status cell is the source of truth during refresh:
   // Complete -> Completed, In Progress -> In Progress, blank -> Not Started.
-  const statusSync = await syncAssignmentStatusFromDistribution(supabase, assignment, row);
+  const statusSync = await syncAssignmentStatusFromDistribution(serviceClient, assignment, row);
   assignment = statusSync.assignment;
   changed = changed || statusSync.changed;
 
@@ -339,6 +337,15 @@ export async function reconcileDistributionAssignments(
   }
 
   const RECONCILIATION_BATCH_SIZE = 8;
+  const serviceClient = createServiceRoleClient();
+  const rowsByLogicalKey = new Map<string, DistributionMatchRow[]>();
+  for (const row of distributionRows) {
+    const key = distributionRowLogicalKey(row);
+    if (!key) continue;
+    const group = rowsByLogicalKey.get(key);
+    if (group) group.push(row);
+    else rowsByLogicalKey.set(key, [row]);
+  }
   const eligibleRows: DistributionMatchRow[] = [];
   const assignmentOverridesByRowNumber = new Map<number, AssignmentRow>();
   const rowCountsByMatchCollector = new Map<string, number>();
@@ -371,7 +378,9 @@ export async function reconcileDistributionAssignments(
     const hrCode = normalizeDistributionCollectorHrCode(profile?.hr_code);
     if (!matchId || !hrCode) continue;
     const key = `${matchId}|${hrCode}`;
-    assignmentsByMatchCollector.set(key, [...(assignmentsByMatchCollector.get(key) ?? []), assignment]);
+    const group = assignmentsByMatchCollector.get(key);
+    if (group) group.push(assignment);
+    else assignmentsByMatchCollector.set(key, [assignment]);
   }
   const handledAmbiguousKeys = new Set<string>();
   for (const row of distributionRows) {
@@ -393,12 +402,9 @@ export async function reconcileDistributionAssignments(
       if (handledAmbiguousKeys.has(logicalKey)) continue;
       handledAmbiguousKeys.add(logicalKey);
       const existing = assignmentsByLogicalKey.get(logicalKey);
-      const existingProfile = existing
-        ? (profilesResult.data ?? []).find((profile) => profile.id === existing.collector_id)
-        : undefined;
+      const existingProfile = existing ? profilesById.get(existing.collector_id) : undefined;
       const existingHrCode = normalizeDistributionCollectorHrCode(existingProfile?.hr_code);
-      const candidates = distributionRows.filter((candidate) =>
-        distributionRowLogicalKey(candidate) === logicalKey &&
+      const candidates = (rowsByLogicalKey.get(logicalKey) ?? []).filter((candidate) =>
         normalizeDistributionCollectorHrCode(candidate.collector_hr_code) !== null
       );
       const matchingRows = existingHrCode
@@ -456,6 +462,7 @@ export async function reconcileDistributionAssignments(
         assignments,
         result.skippedReasons,
         (logicalKeyCounts.get(distributionRowLogicalKey(row) ?? "") ?? 0) === 1,
+        serviceClient,
         assignmentOverridesByRowNumber.get(row.raw_row_number) ?? null,
       )
     ));
