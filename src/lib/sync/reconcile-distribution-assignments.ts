@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { planDistributionAssignment } from "@/lib/distribution-assignments";
+import { planDistributionAssignment, type DistributionAssignmentLookupIndexes } from "@/lib/distribution-assignments";
 import { fetchAllMatches } from "@/lib/match-master-preview";
 import { normalizeDistributionCollectorHrCode, normalizeMatchId, normalizeDistributionTask, normalizeDistributionHalf, type DistributionMatchRow, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 import { assignmentLogicalKey, distributionRowLogicalKey } from "@/lib/sync/reconcile";
@@ -134,8 +134,18 @@ function throwRpcError(row: DistributionMatchRow, operation: string, error: unkn
   throw diagnostic;
 }
 
+function sameTimestamp(left: string | null | undefined, right: string | null | undefined): boolean {
+  if (left == null || right == null) return left === right;
+  const leftTime = Date.parse(left);
+  const rightTime = Date.parse(right);
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) {
+    return leftTime === rightTime;
+  }
+  return left === right;
+}
+
 function assignmentStatusFromDistribution(value: string | null): AssignmentStatus | null {
-  const normalized = (value ?? "").trim().toLowerCase().replace(/\\s+/g, " ");
+  const normalized = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   if (!normalized) return "Not Started";
   if (normalized === "complete" || normalized === "completed") return "Completed";
   if (normalized === "in progress" || normalized === "in-progress") return "In Progress";
@@ -144,8 +154,41 @@ function assignmentStatusFromDistribution(value: string | null): AssignmentStatu
   return null;
 }
 
+function assignmentIndexKeys(assignment: AssignmentRow): string[] {
+  const taskKeys = new Set([
+    normalizeDistributionTask(assignment.task),
+    normalizeDistributionTask(assignment.raw_task_value),
+  ].filter(Boolean));
+  return [...taskKeys].map(
+    (taskKey) => `${assignment.match_id}|${taskKey}|${normalizeDistributionHalf(assignment.half)}`,
+  );
+}
+
+function refreshAssignmentLookupIndex(
+  indexes: DistributionAssignmentLookupIndexes,
+  assignment: AssignmentRow,
+  previousAssignment?: AssignmentRow,
+): void {
+  // Remove only old identity keys for this assignment; scanning every map
+  // entry here made the overall refresh quadratic as thousands of rows changed.
+  for (const key of previousAssignment ? assignmentIndexKeys(previousAssignment) : []) {
+    const candidates = indexes.assignmentsByMatchTaskHalf.get(key);
+    if (!candidates) continue;
+    const filtered = candidates.filter((candidate) => candidate.id !== assignment.id);
+    if (filtered.length === 0) indexes.assignmentsByMatchTaskHalf.delete(key);
+    else if (filtered.length !== candidates.length) indexes.assignmentsByMatchTaskHalf.set(key, filtered);
+  }
+
+  for (const key of assignmentIndexKeys(assignment)) {
+    const candidates = indexes.assignmentsByMatchTaskHalf.get(key) ?? [];
+    if (!candidates.some((candidate) => candidate.id === assignment.id)) {
+      indexes.assignmentsByMatchTaskHalf.set(key, [...candidates, assignment]);
+    }
+  }
+}
+
 async function syncAssignmentStatusFromDistribution(
-  supabase: Client,
+  serviceClient: Client,
   assignment: AssignmentRow,
   row: DistributionMatchRow,
 ): Promise<{ assignment: AssignmentRow; changed: boolean }> {
@@ -154,10 +197,7 @@ async function syncAssignmentStatusFromDistribution(
     return { assignment, changed: false };
   }
 
-  // The refresh route is admin-authenticated, but the caller's anon-key client
-  // may be blocked by assignment UPDATE RLS policies. Use the server-only
-  // service-role client for this narrowly scoped, server-validated sync write.
-  const serviceClient = createServiceRoleClient();
+  // Reuse the service-role client created once for the refresh.
   const now = new Date().toISOString();
   const statusFields = desiredStatus === "Completed"
     ? { status: desiredStatus, completed_at: assignment.completed_at ?? now, started_at: assignment.started_at ?? now }
@@ -192,13 +232,16 @@ async function createOrUpdateAssignment(
   profiles: ProfileRow[],
   matches: Awaited<ReturnType<typeof fetchAllMatches>>,
   assignments: AssignmentRow[],
+  lookupIndexes: DistributionAssignmentLookupIndexes,
   skippedReasons: Record<string, number>,
   allowExistingCollectorUpdate: boolean,
+  serviceClient: Client,
+  assignmentIndexById: Map<string, number>,
   assignmentOverride: AssignmentRow | null = null,
 ): Promise<"inserted" | "updated" | "restored" | "skipped"> {
   const planned = planDistributionAssignment(row, profiles, matches, assignments, {
     allowExistingCollectorUpdate,
-  });
+  }, lookupIndexes);
   if (!planned.ok) {
     const reason = planned.reason.startsWith("Match ID was not found")
       ? "match_not_found"
@@ -231,12 +274,15 @@ async function createOrUpdateAssignment(
       p_shift_date: plan.shiftDate,
     });
     if (error) throwRpcError(row, "create_assignment", error);
-    const statusSync = await syncAssignmentStatusFromDistribution(supabase, data, row);
+    const statusSync = await syncAssignmentStatusFromDistribution(serviceClient, data, row);
+    assignmentIndexById.set(statusSync.assignment.id, assignments.length);
     assignments.push(statusSync.assignment);
+    refreshAssignmentLookupIndex(lookupIndexes, statusSync.assignment);
     return "inserted";
   }
 
   let assignment = plan.existing;
+  const previousAssignment = plan.existing;
   let changed = false;
   if (assignment.collector_id !== plan.collector.id) {
     const { data, error } = await supabase.rpc("reassign_assignment", {
@@ -249,7 +295,10 @@ async function createOrUpdateAssignment(
     changed = true;
   }
 
-  if (assignment.task !== plan.task || assignment.half !== plan.half || assignment.sla !== plan.sla) {
+  // PostgreSQL timestamps may serialize with an offset while sheet parsing
+  // returns ISO strings ending in Z. Compare actual instants, not string forms,
+  // to avoid calling update_assignment for thousands of unchanged SLAs.
+  if (assignment.task !== plan.task || assignment.half !== plan.half || !sameTimestamp(assignment.sla, plan.sla)) {
     const { data, error } = await supabase.rpc("update_assignment", {
       p_assignment_id: assignment.id,
       p_task: plan.task,
@@ -275,12 +324,13 @@ async function createOrUpdateAssignment(
 
   // Distribution's Status cell is the source of truth during refresh:
   // Complete -> Completed, In Progress -> In Progress, blank -> Not Started.
-  const statusSync = await syncAssignmentStatusFromDistribution(supabase, assignment, row);
+  const statusSync = await syncAssignmentStatusFromDistribution(serviceClient, assignment, row);
   assignment = statusSync.assignment;
   changed = changed || statusSync.changed;
 
-  const index = assignments.findIndex((candidate) => candidate.id === assignment.id);
-  if (index >= 0) assignments[index] = assignment;
+  const index = assignmentIndexById.get(assignment.id);
+  if (index !== undefined) assignments[index] = assignment;
+  refreshAssignmentLookupIndex(lookupIndexes, assignment, previousAssignment);
 
   if (!plan.existing.distribution_present) return "restored";
   if (!changed) skippedReasons.already_up_to_date = (skippedReasons.already_up_to_date ?? 0) + 1;
@@ -294,13 +344,30 @@ async function createOrUpdateAssignment(
 export async function reconcileDistributionAssignments(
   supabase: Client,
 ): Promise<DistributionAssignmentReconciliation> {
+  const refreshStartedAt = Date.now();
+  const loadStartedAt = Date.now();
+  // This function is only called by the admin-authenticated refresh route.
+  // Read-only reconciliation loads use service role to bypass per-row RLS
+  // policies (notably is_admin() checks); user-bound RPCs below still use the
+  // authenticated client so the database's own authorization checks remain.
+  const serviceClient = createServiceRoleClient();
   const [distributionRows, profilesResult, matches, loadedAssignments] = await Promise.all([
     readDistributionRowsForPreview(),
-    supabase.from("profiles").select("*"),
-    fetchAllMatches(supabase),
-    fetchAllAssignments(supabase),
+    serviceClient.from("profiles").select("*"),
+    fetchAllMatches(serviceClient),
+    fetchAllAssignments(serviceClient),
   ]);
   if (profilesResult.error) throw profilesResult.error;
+  const loadDurationMs = Date.now() - loadStartedAt;
+  console.info("Distribution refresh phase", {
+    phase: "load_source_data",
+    durationMs: loadDurationMs,
+    distributionRows: distributionRows.length,
+    profiles: profilesResult.data?.length ?? 0,
+    matches: matches.length,
+    assignments: loadedAssignments.length,
+  });
+  const reconciliationStartedAt = Date.now();
 
   const assignments = [...loadedAssignments];
   const result: DistributionAssignmentReconciliation = {
@@ -338,11 +405,24 @@ export async function reconcileDistributionAssignments(
     if (key) assignmentsByLogicalKey.set(key, assignment);
   }
 
-  const RECONCILIATION_BATCH_SIZE = 8;
+  // Each eligible row may perform several Supabase RPCs. Keep enough work in
+  // flight to avoid hundreds of serial network waves without flooding PostgREST.
+  const RECONCILIATION_BATCH_SIZE = 32;
+  const rowsByLogicalKey = new Map<string, DistributionMatchRow[]>();
+  for (const row of distributionRows) {
+    const key = distributionRowLogicalKey(row);
+    if (!key) continue;
+    const group = rowsByLogicalKey.get(key);
+    if (group) group.push(row);
+    else rowsByLogicalKey.set(key, [row]);
+  }
   const eligibleRows: DistributionMatchRow[] = [];
   const assignmentOverridesByRowNumber = new Map<number, AssignmentRow>();
   const rowCountsByMatchCollector = new Map<string, number>();
   const assignmentsByMatchCollector = new Map<string, AssignmentRow[]>();
+  const assignmentsByMatchTaskHalf = new Map<string, AssignmentRow[]>();
+  const assignmentsByExactMatchTaskHalf = new Map<string, AssignmentRow[]>();
+  const assignmentIndexById = new Map(assignments.map((assignment, index) => [assignment.id, index] as const));
   const profiles = profilesResult.data ?? [];
   const profilesById = new Map(profiles.map((profile) => [profile.id, profile] as const));
   const profilesByHrCode = new Map(
@@ -357,6 +437,11 @@ export async function reconcileDistributionAssignments(
       return id ? [[id, match] as const] : [];
     }),
   );
+  const lookupIndexes: DistributionAssignmentLookupIndexes = {
+    matchesByExternalId,
+    profilesByHrCode,
+    assignmentsByMatchTaskHalf,
+  };
   for (const row of distributionRows) {
     const matchId = normalizeMatchId(row.match_id);
     const hrCode = normalizeDistributionCollectorHrCode(row.collector_hr_code);
@@ -365,13 +450,35 @@ export async function reconcileDistributionAssignments(
     rowCountsByMatchCollector.set(key, (rowCountsByMatchCollector.get(key) ?? 0) + 1);
   }
   for (const assignment of assignments) {
+    const taskKeys = new Set([
+      normalizeDistributionTask(assignment.task),
+      normalizeDistributionTask(assignment.raw_task_value),
+    ].filter(Boolean));
+    for (const taskKey of taskKeys) {
+      const identityKey = `${assignment.match_id}|${taskKey}|${normalizeDistributionHalf(assignment.half)}`;
+      const identityGroup = assignmentsByMatchTaskHalf.get(identityKey);
+      if (identityGroup) {
+        if (!identityGroup.some((candidate) => candidate.id === assignment.id)) identityGroup.push(assignment);
+      } else {
+        assignmentsByMatchTaskHalf.set(identityKey, [assignment]);
+      }
+    }
+
+    const exactIdentityKey = `${assignment.match_id}|${assignment.task}|${assignment.half}`;
+    const exactGroup = assignmentsByExactMatchTaskHalf.get(exactIdentityKey);
+    if (exactGroup) exactGroup.push(assignment);
+    else assignmentsByExactMatchTaskHalf.set(exactIdentityKey, [assignment]);
+
     const match = matchesById.get(assignment.match_id);
     const profile = profilesById.get(assignment.collector_id);
     const matchId = match ? normalizeMatchId(match.external_id) : null;
     const hrCode = normalizeDistributionCollectorHrCode(profile?.hr_code);
     if (!matchId || !hrCode) continue;
     const key = `${matchId}|${hrCode}`;
-    assignmentsByMatchCollector.set(key, [...(assignmentsByMatchCollector.get(key) ?? []), assignment]);
+    const group = assignmentsByMatchCollector.get(key);
+    if (group) group.push(assignment);
+    else assignmentsByMatchCollector.set(key, [assignment]);
+
   }
   const handledAmbiguousKeys = new Set<string>();
   for (const row of distributionRows) {
@@ -393,12 +500,9 @@ export async function reconcileDistributionAssignments(
       if (handledAmbiguousKeys.has(logicalKey)) continue;
       handledAmbiguousKeys.add(logicalKey);
       const existing = assignmentsByLogicalKey.get(logicalKey);
-      const existingProfile = existing
-        ? (profilesResult.data ?? []).find((profile) => profile.id === existing.collector_id)
-        : undefined;
+      const existingProfile = existing ? profilesById.get(existing.collector_id) : undefined;
       const existingHrCode = normalizeDistributionCollectorHrCode(existingProfile?.hr_code);
-      const candidates = distributionRows.filter((candidate) =>
-        distributionRowLogicalKey(candidate) === logicalKey &&
+      const candidates = (rowsByLogicalKey.get(logicalKey) ?? []).filter((candidate) =>
         normalizeDistributionCollectorHrCode(candidate.collector_hr_code) !== null
       );
       const matchingRows = existingHrCode
@@ -427,10 +531,8 @@ export async function reconcileDistributionAssignments(
     if (match && profile && matchId && rowHrCode && !assignmentsByLogicalKey.has(logicalKey)) {
       const matchCollectorKey = `${matchId}|${rowHrCode}`;
       const existingForCollector = assignmentsByMatchCollector.get(matchCollectorKey) ?? [];
-      const targetConflict = assignments.some((candidate) =>
-        candidate.match_id === match.id &&
-        candidate.task === normalizeDistributionTask(row.task) &&
-        candidate.half === normalizeDistributionHalf(row.half) &&
+      const targetIdentityKey = `${match.id}|${normalizeDistributionTask(row.task)}|${normalizeDistributionHalf(row.half)}`;
+      const targetConflict = (assignmentsByExactMatchTaskHalf.get(targetIdentityKey) ?? []).some((candidate) =>
         !existingForCollector.some((existing) => existing.id === candidate.id)
       );
       if (
@@ -454,8 +556,11 @@ export async function reconcileDistributionAssignments(
         profilesResult.data ?? [],
         matches,
         assignments,
+        lookupIndexes,
         result.skippedReasons,
         (logicalKeyCounts.get(distributionRowLogicalKey(row) ?? "") ?? 0) === 1,
+        serviceClient,
+        assignmentIndexById,
         assignmentOverridesByRowNumber.get(row.raw_row_number) ?? null,
       )
     ));
@@ -471,15 +576,42 @@ export async function reconcileDistributionAssignments(
     if (firstError !== undefined) throw firstError;
   }
 
-  const currentAssignments = await fetchAllAssignments(supabase);
+  console.info("Distribution refresh phase", {
+    phase: "reconcile_rows",
+    durationMs: Date.now() - reconciliationStartedAt,
+    eligibleRows: eligibleRows.length,
+    inserted: result.inserted,
+    updated: result.updated,
+    restored: result.restored,
+    skipped: result.skipped,
+  });
+  const presenceStartedAt = Date.now();
+  // The assignments array is already updated as rows are inserted/changed.
+  // Re-fetching every page here adds several extra Supabase round trips each run.
+  // Keep the authenticated admin client for this RPC because the deployed
+  // function's EXECUTE grant is currently scoped to authenticated callers.
   const presence = await persistReconciledDistributionPresence(supabase, {
     distributionRows,
-    assignments: currentAssignments,
+    assignments,
     matches,
     profiles: profilesResult.data ?? [],
   });
 
   result.present = presence.presentAssignmentIds.length;
   result.missing = presence.missingAssignmentIds.length;
+  console.info("Distribution refresh phase", {
+    phase: "persist_presence",
+    durationMs: Date.now() - presenceStartedAt,
+    present: result.present,
+    missing: result.missing,
+  });
+  console.info("Distribution refresh completed", {
+    totalDurationMs: Date.now() - refreshStartedAt,
+    distributionRows: distributionRows.length,
+    inserted: result.inserted,
+    updated: result.updated,
+    restored: result.restored,
+    skipped: result.skipped,
+  });
   return result;
 }
