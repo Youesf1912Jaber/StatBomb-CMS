@@ -144,24 +144,36 @@ function assignmentStatusFromDistribution(value: string | null): AssignmentStatu
   return null;
 }
 
+function assignmentIndexKeys(assignment: AssignmentRow): string[] {
+  const taskKeys = new Set([
+    normalizeDistributionTask(assignment.task),
+    normalizeDistributionTask(assignment.raw_task_value),
+  ].filter(Boolean));
+  return [...taskKeys].map(
+    (taskKey) => `${assignment.match_id}|${taskKey}|${normalizeDistributionHalf(assignment.half)}`,
+  );
+}
+
 function refreshAssignmentLookupIndex(
   indexes: DistributionAssignmentLookupIndexes,
   assignment: AssignmentRow,
+  previousAssignment?: AssignmentRow,
 ): void {
-  for (const [key, candidates] of indexes.assignmentsByMatchTaskHalf) {
+  // Remove only old identity keys for this assignment; scanning every map
+  // entry here made the overall refresh quadratic as thousands of rows changed.
+  for (const key of previousAssignment ? assignmentIndexKeys(previousAssignment) : []) {
+    const candidates = indexes.assignmentsByMatchTaskHalf.get(key);
+    if (!candidates) continue;
     const filtered = candidates.filter((candidate) => candidate.id !== assignment.id);
     if (filtered.length === 0) indexes.assignmentsByMatchTaskHalf.delete(key);
     else if (filtered.length !== candidates.length) indexes.assignmentsByMatchTaskHalf.set(key, filtered);
   }
 
-  const taskKeys = new Set([
-    normalizeDistributionTask(assignment.task),
-    normalizeDistributionTask(assignment.raw_task_value),
-  ].filter(Boolean));
-  for (const taskKey of taskKeys) {
-    const key = `${assignment.match_id}|${taskKey}|${normalizeDistributionHalf(assignment.half)}`;
+  for (const key of assignmentIndexKeys(assignment)) {
     const candidates = indexes.assignmentsByMatchTaskHalf.get(key) ?? [];
-    indexes.assignmentsByMatchTaskHalf.set(key, [...candidates, assignment]);
+    if (!candidates.some((candidate) => candidate.id === assignment.id)) {
+      indexes.assignmentsByMatchTaskHalf.set(key, [...candidates, assignment]);
+    }
   }
 }
 
@@ -260,6 +272,7 @@ async function createOrUpdateAssignment(
   }
 
   let assignment = plan.existing;
+  const previousAssignment = plan.existing;
   let changed = false;
   if (assignment.collector_id !== plan.collector.id) {
     const { data, error } = await supabase.rpc("reassign_assignment", {
@@ -304,7 +317,7 @@ async function createOrUpdateAssignment(
 
   const index = assignmentIndexById.get(assignment.id);
   if (index !== undefined) assignments[index] = assignment;
-  refreshAssignmentLookupIndex(lookupIndexes, assignment);
+  refreshAssignmentLookupIndex(lookupIndexes, assignment, previousAssignment);
 
   if (!plan.existing.distribution_present) return "restored";
   if (!changed) skippedReasons.already_up_to_date = (skippedReasons.already_up_to_date ?? 0) + 1;
@@ -556,10 +569,11 @@ export async function reconcileDistributionAssignments(
     skipped: result.skipped,
   });
   const presenceStartedAt = Date.now();
-  const currentAssignments = await fetchAllAssignments(supabase);
-  const presence = await persistReconciledDistributionPresence(supabase, {
+  // The assignments array is already updated as rows are inserted/changed.
+  // Re-fetching every page here adds several extra Supabase round trips each run.
+  const presence = await persistReconciledDistributionPresence(serviceClient, {
     distributionRows,
-    assignments: currentAssignments,
+    assignments,
     matches,
     profiles: profilesResult.data ?? [],
   });
