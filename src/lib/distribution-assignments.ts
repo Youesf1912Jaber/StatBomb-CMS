@@ -224,7 +224,7 @@ export function planDistributionAssignment(
     return { ok: false, conflict: false, reason: "Distribution half is invalid." };
   }
 
-  const rawSla = row.sla?.replace(/\\u00a0/g, " ").trim() ?? "";
+  const rawSla = row.sla?.trim() ?? "";
   const parsedSla = toSla(row.sla, row.shift_date ?? row.match_date);
   const fallbackShiftDate = toShiftDate(row.shift_date) ?? toShiftDate(row.match_date);
   // SLA is optional metadata in Distribution. A row with a complete assignment
