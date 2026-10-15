@@ -370,7 +370,7 @@ export async function reconcileDistributionAssignments(
     const externalId = normalizeMatchId(row.match_id);
     if (!externalId || knownMatchIds.has(externalId) || placeholders.has(externalId)) continue;
     const matchDate = normalizeMatchMasterDate(row.match_date) ?? normalizeMatchMasterDate(row.shift_date);
-    if (!matchDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(matchDate)) continue;
+    if (!matchDate || !/^\d{4}-\d{2}-\d{2}$/.test(matchDate)) continue;
     const kickoff = normalizeMatchMasterKickoff(row.kick_off_time);
     placeholders.set(externalId, {
       external_id: externalId,
