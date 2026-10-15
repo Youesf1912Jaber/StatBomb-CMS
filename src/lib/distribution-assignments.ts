@@ -99,7 +99,7 @@ function parseDistributionDateTime(value: string | null): ParsedCivilDateTime | 
     /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/i
   );
   if (iso) {
-    return {
+    const parts = {
       year: Number(iso[1]),
       month: Number(iso[2]),
       day: Number(iso[3]),
@@ -107,6 +107,15 @@ function parseDistributionDateTime(value: string | null): ParsedCivilDateTime | 
       minute: Number(iso[5] ?? 0),
       second: Number(iso[6] ?? 0),
     };
+    // Never let an impossible ISO-looking date (for example 2025-18-12)
+    // reach PostgreSQL. It is malformed data, not a valid ISO date.
+    if (
+      !isValidCivilDate(parts.year, parts.month, parts.day) ||
+      parts.hour < 0 || parts.hour > 23 ||
+      parts.minute < 0 || parts.minute > 59 ||
+      parts.second < 0 || parts.second > 59
+    ) return null;
+    return parts;
   }
 
   const combined = text.match(
@@ -128,13 +137,19 @@ function parseDistributionDateTime(value: string | null): ParsedCivilDateTime | 
     return { year: first, month: second, day: third, ...time };
   }
   if (thirdToken.length === 4) {
-    // For Distribution SLA with 4-digit year at end, explicitly interpret as MM/DD/YYYY
-    // first token = MONTH, second token = DAY
-    const month = first;
-    const day = second;
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
-      return null;
+    // Distribution has both US-style SLA dates (M/D/YYYY) and D/M/YYYY
+    // values in older rows. Resolve unambiguous values by bounds; retain MDY
+    // for ambiguous values to match the current sheet's normal formatting.
+    let month: number;
+    let day: number;
+    if (first > 12 && second <= 12) {
+      day = first;
+      month = second;
+    } else {
+      month = first;
+      day = second;
     }
+    if (!isValidCivilDate(third, month, day)) return null;
     return { year: third, month, day, ...time };
   }
   return null;
