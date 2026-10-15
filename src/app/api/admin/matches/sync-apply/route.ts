@@ -72,7 +72,7 @@ export async function POST(request: Request) {
 
     const plan = buildMatchMasterApplyPlan(sourceRows, currentMatches);
     const invalidRows = [...plan.invalidMetadata];
-    const inserts = plan.candidates.flatMap((candidate) => {
+    const inserts = plan.candidates.filter((candidate) => candidate.result !== "UPDATE_PLACEHOLDER").flatMap((candidate) => {
       const row = insertRow(candidate.source);
       if (!row) {
         const previewRow = {
@@ -97,6 +97,33 @@ export async function POST(request: Request) {
     const service = createServiceRoleClient();
     const applied: { external_id: string; sourceRow: number; result: string }[] = [];
     const failed: { external_id: string; error: string }[] = [];
+
+    // Replace only app-created placeholders. Real Match Master records are
+    // never overwritten by this path.
+    for (const candidate of plan.candidates.filter((item) => item.result === "UPDATE_PLACEHOLDER")) {
+      const row = insertRow(candidate.source);
+      if (!row) {
+        failed.push({ external_id: candidate.source.match_id, error: "Match Master metadata is incomplete." });
+        continue;
+      }
+      const existing = currentMatches.find((match) => match.external_id === row.external_id);
+      if (!existing || existing.home_team !== "Pending Match Master" || existing.away_team !== "Pending Match Master") {
+        failed.push({ external_id: row.external_id, error: "Placeholder changed since preview; refresh the preview." });
+        continue;
+      }
+      const { data: updated, error: updateError } = await service
+        .from("matches")
+        .update(row)
+        .eq("id", existing.id)
+        .select("*")
+        .maybeSingle();
+      if (updateError || !updated || updated.home_team !== row.home_team || updated.away_team !== row.away_team ||
+        updated.competition !== row.competition || updated.match_date !== row.match_date) {
+        failed.push({ external_id: row.external_id, error: updateError?.message ?? "Updated match failed verification." });
+        continue;
+      }
+      applied.push({ external_id: row.external_id, sourceRow: candidate.retainedSourceRow, result: "UPDATED_PLACEHOLDER" });
+    }
 
     async function verifyInserted(item: (typeof inserts)[number]): Promise<void> {
       const { data: actual, error: verifyError } = await service
