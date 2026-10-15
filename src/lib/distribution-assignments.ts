@@ -224,8 +224,22 @@ export function planDistributionAssignment(
     return { ok: false, conflict: false, reason: "Distribution half is invalid." };
   }
 
-  const sla = toSla(row.sla, row.shift_date ?? row.match_date);
-  if (!sla) return { ok: false, conflict: false, reason: "Distribution SLA must be a valid date/time." };
+  const rawSla = row.sla?.replace(/\\u00a0/g, " ").trim() ?? "";
+  const parsedSla = toSla(row.sla, row.shift_date ?? row.match_date);
+  const fallbackShiftDate = toShiftDate(row.shift_date) ?? toShiftDate(row.match_date);
+  // SLA is optional metadata in Distribution. A row with a complete assignment
+  // identity must still appear on the dashboard when the SLA cell is blank.
+  // Use the end of the shift day as a conservative deadline so the assignment
+  // does not become overdue immediately; malformed non-empty SLA values remain
+  // invalid and are still rejected.
+  const fallbackDateParts = fallbackShiftDate
+    ? parseDistributionDateTime(fallbackShiftDate)
+    : null;
+  const fallbackSla = fallbackDateParts
+    ? fromCivil({ ...fallbackDateParts, hour: 23, minute: 59, second: 59 })
+    : null;
+  const sla = parsedSla ?? (!rawSla ? fallbackSla : null);
+  if (!sla) return { ok: false, conflict: false, reason: "Distribution SLA must be a valid date/time, or a valid shift/match date when SLA is blank." };
 
   const identityKey = `${match.id}|${task}|${half}`;
   const indexedCandidates = lookupIndexes?.assignmentsByMatchTaskHalf.get(identityKey);
