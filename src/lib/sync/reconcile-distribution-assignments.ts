@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { planDistributionAssignment, type DistributionAssignmentLookupIndexes } from "@/lib/distribution-assignments";
-import { fetchAllMatches } from "@/lib/match-master-preview";
+import { fetchAllMatches, normalizeMatchMasterDate, normalizeMatchMasterKickoff } from "@/lib/match-master-preview";
 import { normalizeDistributionCollectorHrCode, normalizeMatchId, normalizeDistributionTask, normalizeDistributionHalf, type DistributionMatchRow, readDistributionRowsForPreview } from "@/lib/sync/google-sheets";
 import { assignmentLogicalKey, distributionRowLogicalKey } from "@/lib/sync/reconcile";
 import { persistReconciledDistributionPresence } from "@/lib/sync/persist-distribution-presence";
@@ -351,13 +351,43 @@ export async function reconcileDistributionAssignments(
   // policies (notably is_admin() checks); user-bound RPCs below still use the
   // authenticated client so the database's own authorization checks remain.
   const serviceClient = createServiceRoleClient();
-  const [distributionRows, profilesResult, matches, loadedAssignments] = await Promise.all([
+  const [distributionRows, profilesResult, initialMatches, loadedAssignments] = await Promise.all([
     readDistributionRowsForPreview(),
     serviceClient.from("profiles").select("*"),
     fetchAllMatches(serviceClient),
     fetchAllAssignments(serviceClient),
   ]);
   if (profilesResult.error) throw profilesResult.error;
+
+  // Distribution is the assignment source of truth. If a valid assignment row
+  // arrives before Match Master metadata, create a clearly-marked placeholder
+  // match so the collector assignment is not lost. Match Master Apply replaces
+  // these placeholder fields when the real metadata becomes available.
+  let matches = initialMatches;
+  const knownMatchIds = new Set(matches.map((match) => normalizeMatchId(match.external_id)).filter(Boolean));
+  const placeholders = new Map<string, { external_id: string; home_team: string; away_team: string; competition: null; match_date: string; kickoff_time: string | null; official_website_url: null }>();
+  for (const row of distributionRows) {
+    const externalId = normalizeMatchId(row.match_id);
+    if (!externalId || knownMatchIds.has(externalId) || placeholders.has(externalId)) continue;
+    const matchDate = normalizeMatchMasterDate(row.match_date) ?? normalizeMatchMasterDate(row.shift_date);
+    if (!matchDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(matchDate)) continue;
+    const kickoff = normalizeMatchMasterKickoff(row.kick_off_time);
+    placeholders.set(externalId, {
+      external_id: externalId,
+      home_team: "Pending Match Master",
+      away_team: "Pending Match Master",
+      competition: null,
+      match_date: matchDate,
+      kickoff_time: kickoff ? `${matchDate}T${kickoff}` : null,
+      official_website_url: null,
+    });
+  }
+  if (placeholders.size) {
+    const { error: placeholderError } = await serviceClient.from("matches").insert([...placeholders.values()]);
+    if (placeholderError && placeholderError.code !== "23505") throw placeholderError;
+    matches = await fetchAllMatches(serviceClient);
+    console.info("Distribution placeholder matches created", { attempted: placeholders.size });
+  }
   const loadDurationMs = Date.now() - loadStartedAt;
   console.info("Distribution refresh phase", {
     phase: "load_source_data",
