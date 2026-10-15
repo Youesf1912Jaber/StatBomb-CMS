@@ -1012,15 +1012,34 @@ export async function readDistributionRowsForPreview(): Promise<DistributionMatc
   const spreadsheetError = /^#(?:N\/A|REF!|VALUE!|ERROR!|DIV\/0!|NAME\?|NUM!|NULL!)$/i;
   return matrix.slice(1).flatMap((row, index): DistributionMatchRow[] => {
     const rawMatchId = asText(row[indexes.id]);
-    // Blank and formula-error template rows cannot represent assignments.
-    // Ignore them before reconciliation to avoid thousands of futile lookups.
-    if (!rawMatchId || spreadsheetError.test(rawMatchId)) return [];
+    const matchId = normalizeMatchId(rawMatchId);
+    const hrCode = asText(row[indexes.hrCode]);
+    const collectorName = asText(row[indexes.collectorName]);
+    const task = asText(row[indexes.task]);
+    const half = asText(row[indexes.half]);
+
+    // A row is an actual distribution only when all five identity fields
+    // are present and valid. Distribution contains many formula/template
+    // rows (including #N/A collector names); don't reconcile those into the
+    // dashboard or count them as missing/invalid assignments.
+    if (
+      !matchId ||
+      !hrCode ||
+      spreadsheetError.test(hrCode) ||
+      !collectorName ||
+      spreadsheetError.test(collectorName) ||
+      !task ||
+      spreadsheetError.test(task) ||
+      !half ||
+      spreadsheetError.test(half)
+    ) return [];
+
     return [{
-      match_id: normalizeMatchId(rawMatchId) ?? rawMatchId,
-      collector_hr_code: asText(row[indexes.hrCode]),
-      collector_name: asText(row[indexes.collectorName]),
-      task: asText(row[indexes.task]),
-      half: asText(row[indexes.half]),
+      match_id: matchId,
+      collector_hr_code: hrCode,
+      collector_name: collectorName,
+      task,
+      half,
       status: indexes.status >= 0 ? asText(row[indexes.status]) : null,
       sla: indexes.sla >= 0 ? asText(row[indexes.sla]) : null,
       shift_date: indexes.shiftDate >= 0 ? asText(row[indexes.shiftDate]) : null,
