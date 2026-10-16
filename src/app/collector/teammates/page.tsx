@@ -1,6 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCollectorTeammates } from "@/lib/assignments/queries";
 
+function toWhatsAppNumber(phone: string) {
+  // wa.me expects digits only, with the international country code and no "+".
+  let digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+
+  // The roster stores Egyptian mobile numbers without the country code.
+  if (digits.length === 10 && digits.startsWith("1")) digits = `20${digits}`;
+  return digits;
+}
+
 export default async function MyTeammatesPage() {
   const supabase = createClient();
   const teammates = await getCollectorTeammates(supabase);
@@ -28,36 +39,46 @@ export default async function MyTeammatesPage() {
           <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(110px,0.8fr)_minmax(130px,1fr)_minmax(100px,0.8fr)] gap-4 bg-pitch-900 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-chalk-300 sm:grid">
             <span>Collector name</span>
             <span>HR-Code</span>
-            <span>Phone</span>
+            <span>WhatsApp</span>
             <span>Team</span>
           </div>
           <ul className="divide-y divide-pitch-800">
-            {teammates.map((teammate) => (
-              <li key={teammate.id} className="grid gap-2 bg-pitch-950 px-4 py-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(110px,0.8fr)_minmax(130px,1fr)_minmax(100px,0.8fr)] sm:items-center sm:gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-chalk-50">{teammate.full_name || "Unnamed collector"}</p>
-                  <p className="mt-1 text-xs text-chalk-400 sm:hidden">Collector</p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-chalk-400 sm:hidden">HR-Code</p>
-                  <p className="break-words font-mono text-sm text-chalk-200">{teammate.hr_code || "—"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] text-chalk-400 sm:hidden">Phone</p>
-                  {teammate.phone ? (
-                    <a className="text-sm text-chalk-200 underline decoration-pitch-600 underline-offset-2 hover:text-clock-amber" href={`tel:${teammate.phone}`}>
-                      {teammate.phone}
-                    </a>
-                  ) : (
-                    <p className="text-sm text-chalk-400">—</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-[11px] text-chalk-400 sm:hidden">Team</p>
-                  <p className="text-sm text-chalk-200">{teammate.team || "—"}</p>
-                </div>
-              </li>
-            ))}
+            {teammates.map((teammate) => {
+              const whatsappNumber = teammate.phone ? toWhatsAppNumber(teammate.phone) : "";
+              return (
+                <li key={teammate.id} className="grid gap-2 bg-pitch-950 px-4 py-4 sm:grid-cols-[minmax(0,1.5fr)_minmax(110px,0.8fr)_minmax(130px,1fr)_minmax(100px,0.8fr)] sm:items-center sm:gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-chalk-50">{teammate.full_name || "Unnamed collector"}</p>
+                    <p className="mt-1 text-xs text-chalk-400 sm:hidden">Collector</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-chalk-400 sm:hidden">HR-Code</p>
+                    <p className="break-words font-mono text-sm text-chalk-200">{teammate.hr_code || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-chalk-400 sm:hidden">WhatsApp message</p>
+                    {whatsappNumber ? (
+                      <a
+                        className="inline-flex items-center gap-2 text-sm text-clock-amber underline decoration-pitch-600 underline-offset-2 hover:text-chalk-50"
+                        href={`https://wa.me/${whatsappNumber}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Message ${teammate.full_name || "teammate"} on WhatsApp`}
+                      >
+                        <span aria-hidden="true">▣</span>
+                        <span>{teammate.phone}</span>
+                      </a>
+                    ) : (
+                      <p className="text-sm text-chalk-400">—</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-chalk-400 sm:hidden">Team</p>
+                    <p className="text-sm text-chalk-200">{teammate.team || "—"}</p>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
