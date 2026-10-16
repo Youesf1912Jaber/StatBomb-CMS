@@ -92,33 +92,33 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
         </div>
         <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
           <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">Task</dt>
-          <dd className="mt-0.5 text-chalk-50">{assignment.task}</dd>
+          <dd className="mt-1 break-words font-medium leading-5 text-chalk-50">{assignment.task}</dd>
         </div>
         <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
           <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">Half</dt>
-          <dd className="mt-0.5 text-chalk-50">{assignment.half}</dd>
+          <dd className="mt-1 break-words font-medium leading-5 text-chalk-50">{assignment.half}</dd>
         </div>
-        <div>
-          <dt className="text-chalk-200">Status</dt>
-          <dd className="mt-0.5 text-chalk-50">{assignment.status}</dd>
+        <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
+          <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">Status</dt>
+          <dd className="mt-1 break-words font-medium leading-5 text-chalk-50">{assignment.status}</dd>
         </div>
-        <div>
-          <dt className="text-chalk-200">Shift Date</dt>
-          <dd className="mt-0.5 text-chalk-50">{formatDateOnly(assignment.shift_date)}</dd>
+        <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
+          <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">Shift Date</dt>
+          <dd className="mt-1 break-words font-medium leading-5 text-chalk-50">{formatDateOnly(assignment.shift_date)}</dd>
         </div>
-        <div>
-          <dt className="text-chalk-200">SLA</dt>
+        <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
+          <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">SLA</dt>
           <dd className="mt-1 break-words font-medium leading-5">
             <SlaCountdown sla={assignment.sla} status={assignment.status} />
           </dd>
         </div>
-        <div>
-          <dt className="text-chalk-200">Started</dt>
-          <dd className="mt-0.5 text-chalk-50">{formatTimestamp(assignment.started_at)}</dd>
+        <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
+          <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">Started</dt>
+          <dd className="mt-1 break-words font-medium leading-5 text-chalk-50">{formatTimestamp(assignment.started_at)}</dd>
         </div>
-        <div>
-          <dt className="text-chalk-200">Completed</dt>
-          <dd className="mt-0.5 text-chalk-50">{formatTimestamp(assignment.completed_at)}</dd>
+        <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
+          <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">Completed</dt>
+          <dd className="mt-1 break-words font-medium leading-5 text-chalk-50">{formatTimestamp(assignment.completed_at)}</dd>
         </div>
       </dl>
 
