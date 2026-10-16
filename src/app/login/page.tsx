@@ -35,7 +35,7 @@ export default function LoginPage() {
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(105deg,rgba(2,20,19,0.87)_0%,rgba(2,29,27,0.78)_48%,rgba(2,19,18,0.84)_100%)]" />
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_15%_80%,rgba(14,110,94,0.28),transparent_45%)]" />
 
-      <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.8fr)] lg:gap-16">
+      <div className="mx-auto grid w-full max-w-7xl items-center gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(600px,1.15fr)] lg:gap-10 xl:gap-14">
         <section className="max-w-2xl text-white">
           <div className="inline-flex items-center gap-3 rounded-full border border-white/20 bg-black/20 px-4 py-2 backdrop-blur-sm">
             <span className="grid h-9 w-9 place-items-center rounded-full border border-clock-amber/70 text-sm font-bold text-clock-amber">SB</span>
@@ -72,9 +72,9 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <section className="mx-auto grid w-full max-w-2xl grid-cols-1 items-stretch gap-3 sm:gap-4 xl:grid-cols-[minmax(145px,0.7fr)_minmax(330px,1.3fr)]">
-          <div className="group relative hidden min-h-[520px] overflow-hidden rounded-2xl border border-white/15 bg-[#031f1d] shadow-2xl shadow-black/25 xl:block">
-            <Image src="/images/football/login-stadium-ball.jpg" alt="A football stadium entrance ready for matchday" fill priority sizes="(min-width: 1280px) 220px, 0px" className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.03]" />
+        <section className="mx-auto grid w-full max-w-3xl grid-cols-1 items-stretch gap-4 sm:gap-5 xl:grid-cols-[minmax(340px,1.05fr)_minmax(240px,0.8fr)]">
+          <div className="group relative order-2 hidden min-h-[480px] overflow-hidden rounded-2xl border border-white/15 bg-[#031f1d] shadow-2xl shadow-black/25 xl:block">
+            <Image src="/images/football/login-stadium-ball.jpg" alt="A football stadium entrance ready for matchday" fill priority sizes="(min-width: 1280px) 220px, 0px" className="object-cover object-[center_58%] transition-transform duration-700 group-hover:scale-[1.03]" />
             <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021a19] via-[#021a19]/25 to-black/10" />
             <div className="absolute inset-x-4 bottom-5 z-10">
               <span className="inline-flex items-center gap-2 rounded-full border border-clock-amber/40 bg-black/35 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-clock-amber backdrop-blur">
@@ -85,7 +85,7 @@ export default function LoginPage() {
               <p className="mt-2 text-xs leading-5 text-white/70">Your assignments. Your focus. Every detail counts.</p>
             </div>
           </div>
-          <form action={formAction} className="rounded-2xl border border-white/15 bg-[#031f1d]/95 p-6 shadow-2xl shadow-black/35 backdrop-blur-xl sm:p-8">
+          <form action={formAction} className="order-1 rounded-2xl border border-white/15 bg-[#031f1d]/95 p-6 shadow-2xl shadow-black/35 backdrop-blur-xl sm:p-8">
             <div className="mb-7">
               <div className="mb-5 h-1 w-14 rounded-full bg-clock-amber" />
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-pitch-500">Matchday access</p>
