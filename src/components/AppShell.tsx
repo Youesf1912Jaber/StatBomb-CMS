@@ -82,30 +82,30 @@ export function AppShell({
         profileId={profileId}
         collectorName={userLabel}
       />
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-pitch-700 bg-pitch-900 px-4 py-6 lg:flex">
-        <div className="mb-8 flex items-start justify-between gap-2 px-2">
+      <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col overflow-y-auto border-r border-[#15534b] bg-[#032b27] px-4 py-6 shadow-[8px_0_30px_rgba(0,0,0,0.16)] lg:flex">
+        <div className="mb-8 flex items-start justify-between gap-2 border-b border-[#15534b] px-2 pb-5">
           <div>
-            <p className="font-mono text-[11px] uppercase tracking-widest text-pitch-500">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[#65b8a7]">
               StatBomb
             </p>
-            <p className="mt-1 font-display text-lg text-chalk-50">Console</p>
+            <p className="mt-1 font-display text-xl text-white">Console</p>
           </div>
           <NotificationBell href={notificationsHref} unreadCount={unreadCount} />
         </div>
-        <nav className="flex flex-1 flex-col gap-1">
+        <nav className="flex flex-1 flex-col gap-1.5">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-[8px] px-3 py-2 text-sm text-chalk-200 transition-colors hover:bg-pitch-800 hover:text-chalk-50"
+              className="rounded-lg border border-transparent px-3 py-2.5 text-[13px] font-medium text-[#d3e5df] transition-colors hover:border-[#1b5c52] hover:bg-[#0a4039] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e3c36b]"
             >
               {item.label}
             </Link>
           ))}
         </nav>
-        <div className="border-t border-pitch-700 pt-4">
-          <p className="truncate text-sm text-chalk-50">{userLabel}</p>
-          <p className="font-mono text-xs uppercase tracking-wide text-pitch-500">
+        <div className="mt-5 border-t border-[#15534b] px-2 pt-4">
+          <p className="truncate text-sm font-semibold text-white">{userLabel}</p>
+          <p className="mt-1 font-mono text-xs uppercase tracking-[0.14em] text-[#65b8a7]">
             {roleLabel}
           </p>
         </div>
