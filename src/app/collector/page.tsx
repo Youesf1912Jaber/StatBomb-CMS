@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import {
@@ -45,12 +46,14 @@ const MATCH_CARD_PHOTOS = [
   },
 ] as const;
 
+const DEFAULT_MATCH_CARD_PHOTO = MATCH_CARD_PHOTOS[0]!;
+
 function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
   const halfNumber = a.half.match(/\d+/)?.[0] ?? (a.half === "Full Match" ? "FM" : "00");
   const photoSeed = String(a.match.external_id ?? a.id)
     .split("")
     .reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  const matchPhoto = MATCH_CARD_PHOTOS[photoSeed % MATCH_CARD_PHOTOS.length];
+  const matchPhoto = MATCH_CARD_PHOTOS[photoSeed % MATCH_CARD_PHOTOS.length] ?? DEFAULT_MATCH_CARD_PHOTO;
   const statusTone =
     a.status === "Completed"
       ? "border-emerald-300/30 bg-emerald-300/10 text-chalk-50"
@@ -66,12 +69,13 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
       className="group relative isolate flex min-h-[322px] flex-col overflow-hidden rounded-xl border border-pitch-700 bg-gradient-to-br from-pitch-800 via-pitch-900 to-pitch-950 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-clock-amber hover:shadow-xl hover:shadow-black/15"
     >
       <div className="relative -mx-4 -mt-4 mb-4 h-32 overflow-hidden border-b border-white/10 bg-pitch-950">
-        <img
+        <Image
           src={matchPhoto.src}
           alt={matchPhoto.alt}
-          loading="lazy"
-          decoding="async"
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+          fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+          unoptimized
+          className="object-cover transition-transform duration-700 group-hover:scale-105"
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021A19]/90 via-[#021A19]/15 to-[#021A19]/10" />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021A19]/45 via-transparent to-transparent" />
