@@ -106,7 +106,7 @@ export default function LoginPage() {
             <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-clock-amber" />
             Matchday starts here
           </span>
-          <p className="mt-4 max-w-xl font-display text-3xl leading-tight text-white xl:text-4xl 2xl:text-5xl">Step onto the pitch.</p>
+          <p className="mt-4 max-w-xl font-display text-3xl leading-tight text-white xl:text-4xl 2xl:text-5xl">Step into the pitch.</p>
           <p className="mt-3 max-w-md text-sm leading-6 text-white/75 xl:text-base">Your assignments. Your focus. Every detail counts.</p>
         </div>
       </section>
