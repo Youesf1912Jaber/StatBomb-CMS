@@ -89,13 +89,13 @@ export function AdminAssignmentActions({ assignmentId, status }: AdminAssignment
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-col gap-2">
+    <div className="min-w-[104px] space-y-1.5">
+      <div className="flex flex-col gap-1.5">
         <button
           type="button"
           onClick={confirmHide}
           disabled={isPending}
-          className="rounded-card border border-pitch-700 px-3 py-1.5 text-xs font-semibold text-chalk-50 transition-colors hover:border-clock-amber disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-lg border border-pitch-600 bg-pitch-900/70 px-2.5 py-2 text-[11px] font-semibold leading-tight text-chalk-50 transition-colors hover:border-clock-amber hover:bg-pitch-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Remove from Dashboard
         </button>
@@ -107,7 +107,7 @@ export function AdminAssignmentActions({ assignmentId, status }: AdminAssignment
             setPendingAction("remove-sheet");
           }}
           disabled={isPending}
-          className="rounded-card border border-clock-red/70 px-3 py-1.5 text-xs font-semibold text-clock-red transition-colors hover:border-clock-red disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-lg border border-clock-red/50 bg-clock-red/5 px-2.5 py-2 text-[11px] font-semibold leading-tight text-clock-red transition-colors hover:border-clock-red hover:bg-clock-red/10 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Remove from Sheet
         </button>
@@ -116,7 +116,7 @@ export function AdminAssignmentActions({ assignmentId, status }: AdminAssignment
             type="button"
             onClick={confirmComplete}
             disabled={isPending}
-            className="rounded-card border border-clock-amber bg-clock-amber/10 px-3 py-1.5 text-xs font-semibold text-clock-amber transition-colors hover:bg-clock-amber/20 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg border border-clock-amber/50 bg-clock-amber/10 px-2.5 py-2 text-[11px] font-semibold leading-tight text-clock-amber transition-colors hover:bg-clock-amber/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Mark Complete
           </button>
