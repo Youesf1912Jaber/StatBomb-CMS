@@ -18,6 +18,7 @@ const OK: AssignmentActionState = { error: null, errorCode: null };
 async function distributionStatusUpdateForAssignment(
   supabase: ReturnType<typeof createClient>,
   assignmentId: string,
+  status: DistributionStatusUpdate["status"],
 ): Promise<DistributionStatusUpdate> {
   const { data: assignment, error: assignmentError } = await supabase
     .from("assignments")
@@ -38,24 +39,28 @@ async function distributionStatusUpdateForAssignment(
     collectorHrCode: collector.hr_code ?? "",
     task: assignment.raw_task_value ?? assignment.task,
     half: assignment.half,
-    status: "Complete",
+    status,
   };
 }
 
-async function syncAssignmentCompletionToSheet(
+async function syncAssignmentStatusToSheet(
   supabase: ReturnType<typeof createClient>,
   assignmentId: string,
+  status: DistributionStatusUpdate["status"],
 ): Promise<string | null> {
   try {
-    const update = await distributionStatusUpdateForAssignment(supabase, assignmentId);
+    const update = await distributionStatusUpdateForAssignment(supabase, assignmentId, status);
     await updateDistributionStatuses([update]);
     return null;
   } catch (error) {
-    console.error("Assignment completed in app but Distribution status sync failed", {
+    console.error("Assignment status changed in app but Distribution status sync failed", {
       assignmentId,
+      status,
       error,
     });
-    return "Assignment was completed in the app, but its Google Sheets Status could not be updated. Check the Distribution row and retry after fixing the sheet connection.";
+    return status === "In Progress"
+      ? "Work started in the app, but the Google Sheets Status could not be updated to In Progress. Check the Distribution row and sheet connection."
+      : "Assignment was completed in the app, but its Google Sheets Status could not be updated. Check the Distribution row and retry after fixing the sheet connection.";
   }
 }
 
@@ -151,9 +156,10 @@ export async function startWork(assignmentId: string): Promise<AssignmentActionS
     return { error: appError.message, errorCode: appError.code };
   }
 
+  const warning = await syncAssignmentStatusToSheet(supabase, assignmentId, "In Progress");
   revalidatePath(`/collector/assignments/${assignmentId}`);
   revalidatePath("/collector");
-  return OK;
+  return { ...OK, warning };
 }
 
 /**
@@ -171,7 +177,7 @@ export async function completeWork(assignmentId: string): Promise<AssignmentActi
     return { error: appError.message, errorCode: appError.code };
   }
 
-  const warning = await syncAssignmentCompletionToSheet(supabase, assignmentId);
+  const warning = await syncAssignmentStatusToSheet(supabase, assignmentId, "Complete");
   revalidatePath(`/collector/assignments/${assignmentId}`);
   revalidatePath("/collector");
   return { ...OK, warning };
