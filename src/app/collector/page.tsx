@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import {
@@ -17,36 +18,97 @@ import { SlaCountdown } from "@/components/SlaCountdown";
 import { AssignmentTable } from "@/components/AssignmentTable";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
 
+const MATCH_CARD_PHOTOS = [
+  {
+    src: "/images/football/stadium-wide.jpg",
+    alt: "Wide view of a football stadium and pitch",
+    label: "STADIUM VIEW",
+  },
+  {
+    src: "/images/football/match-action-1.jpg",
+    alt: "Football action on the pitch",
+    label: "MATCH ACTION",
+  },
+  {
+    src: "/images/football/goalkeeper-save.jpg",
+    alt: "Goalkeeper making a save",
+    label: "GOALKEEPER",
+  },
+  {
+    src: "/images/football/match-action-2.jpg",
+    alt: "Football players contesting the ball",
+    label: "ON THE PITCH",
+  },
+  {
+    src: "/images/football/team-celebration.jpg",
+    alt: "Football team celebrating together",
+    label: "TEAM MOMENT",
+  },
+] as const;
+
+const DEFAULT_MATCH_CARD_PHOTO = MATCH_CARD_PHOTOS[0]!;
+
 function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
+  const halfNumber = a.half.match(/\d+/)?.[0] ?? (a.half === "Full Match" ? "FM" : "00");
+  const photoSeed = String(a.match.external_id ?? a.id)
+    .split("")
+    .reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  const matchPhoto = MATCH_CARD_PHOTOS[photoSeed % MATCH_CARD_PHOTOS.length] ?? DEFAULT_MATCH_CARD_PHOTO;
+  const statusTone =
+    a.status === "Completed"
+      ? "border-emerald-300/30 bg-emerald-300/10 text-chalk-50"
+      : a.status === "In Progress"
+        ? "border-sky-300/30 bg-sky-300/10 text-chalk-50"
+        : a.status === "Overdue"
+          ? "border-red-300/30 bg-red-300/10 text-chalk-50"
+          : "border-chalk-200/20 bg-pitch-950/40 text-chalk-100";
+
   return (
     <Link
       href={`/collector/assignments/${a.id}`}
-      className="block rounded-card border border-pitch-700 bg-pitch-900 px-4 py-3 transition-colors hover:border-clock-amber"
+      className="group relative isolate flex min-h-[322px] flex-col overflow-hidden rounded-xl border border-pitch-700 bg-gradient-to-br from-pitch-800 via-pitch-900 to-pitch-950 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-clock-amber hover:shadow-xl hover:shadow-black/15"
     >
-      <p className="text-sm text-chalk-50">
-        {a.match.home_team} vs {a.match.away_team}
-      </p>
-
-      <p className="mt-1 text-xs text-chalk-200">
-        Task: {a.task} &nbsp;·&nbsp; Half: {a.half}
-      </p>
-
-      <p className="mt-1 text-xs text-chalk-300">
-        {new Date(a.match.match_date).toLocaleDateString()} &nbsp;·&nbsp;{" "}
-        {a.match.kickoff_time
-          ? new Date(a.match.kickoff_time).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "—"}
-      </p>
-
-      <p className="mt-1 text-xs text-chalk-300">
-        Status: {a.status}
-      </p>
-
-      <div className="mt-2">
-        <SlaCountdown sla={a.sla} status={a.status} />
+      <div className="relative -mx-4 -mt-4 mb-4 h-36 overflow-hidden border-b border-white/10 bg-pitch-950 sm:h-40">
+        <Image
+          src={matchPhoto.src}
+          alt={matchPhoto.alt}
+          fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+          className="object-cover object-center transition-transform duration-700 group-hover:scale-105"
+        />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021A19]/90 via-[#021A19]/15 to-[#021A19]/10" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021A19]/45 via-transparent to-transparent" />
+        <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/90">{matchPhoto.label}</span>
+          <span className="rounded-full border border-white/25 bg-black/30 px-2 py-1 text-[9px] uppercase tracking-wide text-white/85 backdrop-blur-sm">Local image</span>
+        </div>
+      </div>
+      <div className="flex items-start justify-between gap-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Matchday locker</span>
+        <span className={`rounded-full border px-2 py-1 text-[10px] font-medium leading-none ${statusTone}`}>{a.status}</span>
+      </div>
+      <div aria-hidden="true" className="pointer-events-none absolute right-3 top-3 z-10 flex h-14 min-w-14 items-center justify-center rounded-xl border border-[#E8C977]/60 bg-[#021A19]/90 px-3 font-mono text-3xl font-bold leading-none text-[#F2D37C] shadow-lg shadow-black/40 ring-1 ring-black/20">{halfNumber.padStart(2, "0")}</div>
+      <h3 className="relative mt-5 max-w-[88%] text-base font-semibold leading-snug text-chalk-50 transition-colors group-hover:text-clock-amber">
+        {a.match.home_team} <span className="text-chalk-200">vs</span> {a.match.away_team}
+      </h3>
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-chalk-200">
+        <span className="rounded-md border border-pitch-600/60 bg-pitch-950/40 px-2 py-1">{a.half}</span>
+        <span className="rounded-md border border-pitch-600/60 bg-pitch-950/40 px-2 py-1">{a.task}</span>
+      </div>
+      <div className="mt-auto pt-4">
+        <div className="flex items-center justify-between gap-3 border-t border-white/[0.08] pt-3 text-xs text-chalk-200">
+          <span>Match ID <strong className="ml-1 font-mono text-chalk-50">{a.match.external_id}</strong></span>
+          <span className="text-right">
+            {a.match.kickoff_time
+              ? new Date(a.match.kickoff_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              : "Kick-off —"}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3 text-xs text-chalk-200">
+          <span>{new Date(a.match.match_date).toLocaleDateString()}</span>
+          <span className="text-right font-medium text-clock-amber transition-transform group-hover:translate-x-0.5">Open assignment →</span>
+        </div>
+        <div className="mt-2"><SlaCountdown sla={a.sla} status={a.status} /></div>
       </div>
     </Link>
   );
@@ -140,16 +202,84 @@ export default async function CollectorDashboardPage() {
       new Date(a.sla).getTime() <= nowMs
   );
 
+  const matchdayStats = [
+    { label: "Today’s work", value: todaysWork.length, note: "Shift assignments" },
+    { label: "In progress", value: inProgress.length, note: "On the pitch now" },
+    { label: "Completed today", value: completedToday.length, note: "Full-time" },
+    { label: "SLA attention", value: slaAttention.length, note: "Needs attention" },
+  ];
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-2xl text-chalk-50">
-          Welcome, {firstName}
-        </h1>
+      <section className="relative isolate overflow-hidden rounded-2xl border border-pitch-700 bg-[#032927] shadow-2xl shadow-black/10">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 -z-20 bg-cover bg-center"
+          style={{
+            backgroundImage: 'url("/images/football/tactics-background.jpg")',
+          }}
+        />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-[#021A19] via-[#021A19]/90 to-[#021A19]/35" />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-[#021A19]/90 via-transparent to-[#021A19]/10" />
+        <div aria-hidden="true" className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-[#E8C977] via-[#3A8B7A] to-transparent" />
 
-        <p className="mt-1 text-sm text-chalk-200">
-          Here&apos;s what&apos;s on your plate.
-        </p>
+        <div className="grid gap-7 p-5 sm:p-7 md:grid-cols-[minmax(0,1fr)_220px] md:items-end md:p-9">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-[#021A19]/70 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-chalk-100 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#E8C977] shadow-[0_0_10px_rgba(218,186,105,0.9)]" />
+              Arqam Football Operations · Matchday
+            </div>
+            <h1 className="mt-5 font-display text-3xl leading-tight text-white sm:text-4xl lg:text-5xl">
+              Welcome to your
+              <span className="block text-[#E8C977]">locker room, {firstName}.</span>
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-white/85 sm:text-base">
+              Your shift. Your matches. Your next play.
+              Everything you need to get matchday work done is right here.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a href="#locker-room" className="inline-flex items-center gap-2 rounded-lg bg-[#E8C977] px-4 py-2.5 text-sm font-semibold text-[#052221] transition hover:brightness-105">
+                Open my lockers <span aria-hidden="true">↓</span>
+              </a>
+              <span className="text-xs text-white/75">Matchday · {today}</span>
+            </div>
+            <p className="mt-5 text-[10px] text-white/55">
+              Football visuals are stored locally with the app.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-white/20 bg-[#021A19]/75 p-4 text-white shadow-xl backdrop-blur-md sm:max-w-xs md:justify-self-end">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Your shift board</p>
+            <p className="mt-3 font-display text-3xl">{currentAssignments.filter((a) => a.status !== "Completed").length}</p>
+            <p className="mt-1 text-sm text-chalk-100">active assignments</p>
+            <div className="mt-4 flex items-center justify-between border-t border-white/15 pt-3 text-xs text-chalk-200">
+              <span>Currently in progress</span>
+              <strong className="font-mono text-[#E8C977]">{inProgress.length}</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="Matchday overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {matchdayStats.map((stat, index) => (
+          <div key={stat.label} className="relative overflow-hidden rounded-xl border border-pitch-700 bg-pitch-900/85 p-4">
+            <div aria-hidden="true" className={index === 3 ? "absolute inset-y-0 left-0 w-1 bg-clock-red" : index === 1 ? "absolute inset-y-0 left-0 w-1 bg-sky-400" : "absolute inset-y-0 left-0 w-1 bg-clock-amber"} />
+            <p className="pl-2 text-xs text-chalk-200">{stat.label}</p>
+            <p className="pl-2 pt-2 font-mono text-3xl font-semibold tracking-tight text-chalk-50">{stat.value}</p>
+            <p className="pl-2 pt-1 text-[11px] text-chalk-200">{stat.note}</p>
+          </div>
+        ))}
+      </section>
+
+      <div id="locker-room" className="space-y-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-pitch-500">The squad room</p>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="font-display text-2xl text-chalk-50">Your matchday lockers</h2>
+            <p className="mt-1 text-sm text-chalk-200">Every card is one of your real assignments. Open a locker to see details and start work.</p>
+          </div>
+          <span className="rounded-full border border-pitch-700 bg-pitch-900/75 px-3 py-1.5 font-mono text-xs text-chalk-100">{currentDistribution.length} assigned</span>
+        </div>
       </div>
 
       <Section

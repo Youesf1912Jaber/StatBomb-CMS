@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import type { DeductionRow } from "@/types/database.types";
 
@@ -8,14 +9,38 @@ interface DeductionsTableProps {
   showCollector?: boolean;
 }
 
-type VisualKind = "yellow" | "red" | "assist" | "substitution" | "tactics" | "other";
+type EventKind =
+  | "wrong-yellow-card"
+  | "missing-yellow-card"
+  | "extra-yellow-card"
+  | "wrong-red-card"
+  | "missing-red-card"
+  | "extra-assist"
+  | "missing-assist"
+  | "wrong-substitution"
+  | "extra-substitution"
+  | "missing-substitution"
+  | "wrong-tactical-shift"
+  | "extra-tactical-shift"
+  | "missing-tactical-shift"
+  | "wrong-formation"
+  | "foul-not-bad-behaviour"
+  | "bad-behaviour-not-foul"
+  | "extra-goal"
+  | "missing-goal"
+  | "wrong-goal-scorer"
+  | "wrong-own-goal-scorer"
+  | "extra-player-in-lineup"
+  | "missing-player-in-lineup"
+  | "wrong-player-in-lineup-played"
+  | "wrong-player-in-lineup-not-played"
+  | "other";
 
 interface EventVisual {
-  kind: VisualKind;
-  symbol: string;
-  accent: string;
+  kind: EventKind;
   title: string;
   description: string;
+  accent: string;
 }
 
 function display(value: string | null | undefined): string {
@@ -42,104 +67,115 @@ function formatDate(value: string | null, raw: string | null): string {
 }
 
 function getEventVisual(event: string | null): EventVisual {
-  const value = (event ?? "").toLowerCase();
+  const value = (event ?? "").toLowerCase().replace(/[_–—]/g, " ").replace(/\s+/g, " ").trim();
+  const has = (...terms: string[]) => terms.some((term) => value.includes(term));
+  const visual = (kind: EventKind, title: string, description: string, accent: string): EventVisual => ({
+    kind,
+    title,
+    description,
+    accent,
+  });
 
-  if (value.includes("yellow card")) {
-    return {
-      kind: "yellow",
-      symbol: "▰",
-      accent: "#facc15",
-      title: "Yellow card",
-      description: value.includes("missing") ? "Card not recorded" : value.includes("extra") ? "Extra card recorded" : "Card record needs review",
-    };
+  // Lineup-specific cases must be checked before generic player/goal terms.
+  if (has("wrong own goal", "wrong own-goal", "own goal scorer", "own-goal scorer")) {
+    return visual("wrong-own-goal-scorer", "Own-goal scorer", "Own goal attributed to the wrong player", "#fb4b4b");
   }
-  if (value.includes("red card")) {
-    return {
-      kind: "red",
-      symbol: "▰",
-      accent: "#fb4b4b",
-      title: "Red card",
-      description: value.includes("missing") ? "Card not recorded" : value.includes("extra") ? "Extra card recorded" : "Card record needs review",
-    };
+  if (has("wrong player in lineup", "wrong player in line up", "incorrect player in lineup")) {
+    const didPlay = has("not played", "did not play", "didn't play", "didnt play", "non-playing");
+    return didPlay
+      ? visual("wrong-player-in-lineup-not-played", "Lineup player", "Incorrect player listed despite not playing", "#fb923c")
+      : visual("wrong-player-in-lineup-played", "Lineup player", "Incorrect player listed for a player who played", "#fb923c");
   }
-  if (value.includes("assist")) {
-    return {
-      kind: "assist",
-      symbol: "↗",
-      accent: "#43dfa0",
-      title: "Assist",
-      description: value.includes("missing") ? "Assist not recorded" : value.includes("extra") ? "Extra assist recorded" : "Assist record needs review",
-    };
+  if (has("extra player in lineup", "extra player in line up", "additional player in lineup")) {
+    return visual("extra-player-in-lineup", "Extra lineup player", "An additional player was listed in the lineup", "#fb923c");
   }
-  if (value.includes("substitution") || value.includes("sub")) {
-    return {
-      kind: "substitution",
-      symbol: "↕",
-      accent: "#fb923c",
-      title: "Substitution",
-      description: value.includes("missing") ? "Substitution not recorded" : value.includes("extra") ? "Extra substitution recorded" : "Player change needs review",
-    };
+  if (has("missing player in lineup", "missing player in line up", "player missing from lineup")) {
+    return visual("missing-player-in-lineup", "Missing lineup player", "A player is missing from the recorded lineup", "#fb923c");
   }
-  if (value.includes("tactical") || value.includes("formation") || value.includes("shift")) {
-    return {
-      kind: "tactics",
-      symbol: "⌘",
-      accent: "#38bdf8",
-      title: value.includes("formation") ? "Formation" : "Tactical board",
-      description: value.includes("missing") ? "Tactical detail not recorded" : "Tactical data needs review",
-    };
+
+  if (has("foul not bad behaviour", "foul not bad behavior", "foul instead of bad behaviour", "foul instead of bad behavior")) {
+    return visual("foul-not-bad-behaviour", "Foul / conduct", "A foul was recorded instead of misconduct", "#38bdf8");
   }
-  return {
-    kind: "other",
-    symbol: "!",
-    accent: "#d6b45d",
-    title: "Match review",
-    description: "This event needs a closer look",
-  };
+  if (has("bad behaviour not foul", "bad behavior not foul", "bad behaviour instead of foul", "bad behavior instead of foul")) {
+    return visual("bad-behaviour-not-foul", "Misconduct", "Misconduct was recorded instead of a foul", "#fb923c");
+  }
+
+  if (has("wrong goal scorer", "incorrect goal scorer", "wrong scorer")) {
+    return visual("wrong-goal-scorer", "Goal scorer", "Goal attributed to the wrong player", "#43dfa0");
+  }
+  if (has("missing goal", "goal missing", "goal not recorded", "unrecorded goal")) {
+    return visual("missing-goal", "Missing goal", "A goal was not recorded", "#43dfa0");
+  }
+  if (has("extra goal", "additional goal")) {
+    return visual("extra-goal", "Extra goal", "An additional goal was recorded incorrectly", "#43dfa0");
+  }
+
+  if (has("yellow card")) {
+    if (has("missing")) return visual("missing-yellow-card", "Yellow card", "Yellow card not recorded", "#facc15");
+    if (has("extra")) return visual("extra-yellow-card", "Yellow card", "An extra yellow card was recorded", "#facc15");
+    return visual("wrong-yellow-card", "Yellow card", "Incorrect yellow card recorded", "#facc15");
+  }
+  if (has("red card")) {
+    if (has("missing")) return visual("missing-red-card", "Red card", "Red card not recorded", "#fb4b4b");
+    return visual("wrong-red-card", "Red card", has("extra") ? "Extra red card recorded" : "Incorrect red card recorded", "#fb4b4b");
+  }
+  if (has("assist")) {
+    if (has("missing")) return visual("missing-assist", "Assist", "Assist not recorded", "#43dfa0");
+    return visual("extra-assist", "Assist", has("extra") ? "Extra assist recorded" : "Assist record needs review", "#43dfa0");
+  }
+  if (has("substitution", "sub")) {
+    if (has("missing")) return visual("missing-substitution", "Substitution", "Substitution not recorded", "#fb923c");
+    if (has("extra")) return visual("extra-substitution", "Substitution", "Extra substitution recorded", "#fb923c");
+    return visual("wrong-substitution", "Substitution", "Incorrect substitution recorded", "#fb923c");
+  }
+  if (has("tactical", "shift")) {
+    if (has("missing")) return visual("missing-tactical-shift", "Tactical shift", "Tactical shift not recorded", "#38bdf8");
+    if (has("extra")) return visual("extra-tactical-shift", "Tactical shift", "Extra tactical shift recorded", "#38bdf8");
+    return visual("wrong-tactical-shift", "Tactical shift", "Incorrect tactical shift recorded", "#38bdf8");
+  }
+  if (has("formation")) {
+    return visual("wrong-formation", "Formation", "Incorrect formation recorded", "#38bdf8");
+  }
+  return visual("other", "Match review", "This event needs a closer look", "#d6b45d");
+}
+function statusLabel(event: string): string {
+  const value = event.toLowerCase();
+  if (value.includes("missing")) return "Missing";
+  if (value.includes("extra")) return "Extra";
+  if (value.includes("wrong") || value.includes("incorrect")) return "Incorrect";
+  return "Review";
 }
 
 function EventArtwork({ visual }: { visual: EventVisual }) {
+  const imagePath = visual.kind === "other"
+    ? null
+    : `/images/football/deductions/${visual.kind}.webp`;
+
   return (
     <div
       aria-hidden="true"
-      className="relative flex h-full min-h-[112px] w-full shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 sm:min-h-[136px] sm:w-36"
-      style={{
-        background: `radial-gradient(circle at 72% 18%, ${visual.accent}30, transparent 42%), linear-gradient(145deg, #082d28, #031613 72%)`,
-      }}
+      className="relative h-36 w-full shrink-0 overflow-hidden rounded-xl border border-white/10 bg-pitch-950 sm:h-[156px] sm:w-44 lg:w-48"
+      style={{ boxShadow: `inset 0 0 0 1px ${visual.accent}22` }}
     >
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/20" />
-        <div className="absolute left-1/2 top-1/2 aspect-square w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20" />
-        <div className="absolute inset-x-3 top-3 bottom-3 rounded border border-white/10" />
-      </div>
-      {visual.kind === "yellow" || visual.kind === "red" ? (
-        <div
-          className="relative h-16 w-11 rotate-12 rounded-md shadow-[0_8px_24px_rgba(0,0,0,0.35)] sm:h-[76px] sm:w-[50px]"
-          style={{ background: visual.accent, boxShadow: `0 0 28px ${visual.accent}35` }}
-        >
-          <div className="absolute inset-1 rounded border border-black/10" />
-        </div>
-      ) : visual.kind === "tactics" ? (
-        <div className="relative h-16 w-24 rotate-[-5deg] rounded border-2 border-white/45 bg-[#0b3028] shadow-lg sm:h-[76px] sm:w-28">
-          <div className="absolute inset-y-0 left-1/2 border-l border-white/40" />
-          <div className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/45" />
-          <span className="absolute left-3 top-3 text-xs font-bold" style={{ color: visual.accent }}>×</span>
-          <span className="absolute right-4 top-5 text-xs font-bold" style={{ color: visual.accent }}>●</span>
-          <span className="absolute bottom-3 left-7 text-xs font-bold" style={{ color: visual.accent }}>↗</span>
-          <span className="absolute bottom-3 right-3 text-xs font-bold" style={{ color: visual.accent }}>×</span>
-        </div>
+      {imagePath ? (
+        <Image
+          src={imagePath}
+          alt=""
+          fill
+          sizes="(max-width: 640px) 100vw, 192px"
+          className="object-cover object-center transition-transform duration-500 group-hover:scale-[1.04]"
+        />
       ) : (
-        <div
-          className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-black/20 text-4xl font-semibold shadow-lg sm:h-[76px] sm:w-[76px]"
-          style={{ color: visual.accent }}
-        >
-          {visual.symbol}
+        <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_70%_20%,rgba(214,180,93,0.24),transparent_42%),linear-gradient(145deg,#082d28,#031613)]">
+          <span className="font-display text-5xl text-clock-amber">!</span>
         </div>
       )}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#021311]/80 via-[#021311]/10 to-transparent" />
       <span
-        className="absolute bottom-2 left-2 rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-white/80"
+        className="absolute bottom-2 left-2 rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-white shadow-md backdrop-blur-sm"
+        style={{ borderColor: `${visual.accent}bb`, backgroundColor: `${visual.accent}25` }}
       >
-        Match incident
+        {visual.title}
       </span>
     </div>
   );
@@ -173,9 +209,7 @@ export function DeductionsTable({ deductions, showCollector = false }: Deduction
         row.review_date ?? "",
         row.review_date_raw ?? "",
         row.link ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
+      ].join(" ").toLowerCase();
       return haystack.includes(q);
     });
   }, [deductions, query]);
@@ -193,31 +227,18 @@ export function DeductionsTable({ deductions, showCollector = false }: Deduction
           />
         </label>
         <div className="flex items-center gap-2 text-sm">
-          <span className="rounded-full border border-pitch-700 bg-pitch-800 px-3 py-1.5 font-semibold text-chalk-50">
-            {filtered.length} shown
-          </span>
+          <span className="rounded-full border border-pitch-700 bg-pitch-800 px-3 py-1.5 font-semibold text-chalk-50">{filtered.length} shown</span>
           <span className="text-chalk-300">of {deductions.length} deductions</span>
         </div>
       </div>
 
       {filtered.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-pitch-700 px-4 py-10 text-center text-sm text-chalk-200">
-          No deductions found. Try another search.
-        </p>
+        <p className="rounded-2xl border border-dashed border-pitch-700 px-4 py-10 text-center text-sm text-chalk-200">No deductions found. Try another search.</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {filtered.map((row) => {
             const visual = getEventVisual(row.event);
             const event = row.event ?? "";
-            const eventLower = event.toLowerCase();
-            const statusLabel = eventLower.includes("missing")
-              ? "Missing event"
-              : eventLower.includes("extra")
-                ? "Extra event"
-                : eventLower.includes("wrong")
-                  ? "Incorrect event"
-                  : "Review required";
-
             return (
               <article
                 key={row.id}
@@ -232,7 +253,7 @@ export function DeductionsTable({ deductions, showCollector = false }: Deduction
                         className="rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]"
                         style={{ color: visual.accent, borderColor: `${visual.accent}55`, backgroundColor: `${visual.accent}12` }}
                       >
-                        {statusLabel}
+                        {statusLabel(event)}
                       </span>
                       <span className="text-[11px] text-chalk-400">{row.source_present ? "Current source" : "Historical source"}</span>
                     </div>
@@ -260,11 +281,7 @@ export function DeductionsTable({ deductions, showCollector = false }: Deduction
                     {showCollector && <span className="text-chalk-300">HR-Code: <strong className="font-mono text-chalk-100">{display(row.hr_code)}</strong></span>}
                     {showCollector && <span className="text-chalk-300">Squad: <strong className="text-chalk-100">{display(row.squad)}</strong></span>}
                     {showCollector && <span className="text-chalk-300">Side: <strong className="text-chalk-100">{display(row.side)}</strong></span>}
-                    {row.link && (
-                      <a href={row.link} target="_blank" rel="noopener noreferrer" className="ml-auto font-semibold text-clock-amber hover:underline">
-                        Open source ↗
-                      </a>
-                    )}
+                    {row.link && <a href={row.link} target="_blank" rel="noopener noreferrer" className="ml-auto font-semibold text-clock-amber hover:underline">Open source ↗</a>}
                   </div>
                 )}
               </article>

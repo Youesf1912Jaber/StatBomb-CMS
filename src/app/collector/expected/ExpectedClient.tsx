@@ -122,9 +122,10 @@ export function CollectorExpectedClient() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl text-chalk-50">My Expected</h1>
-          <p className="mt-1 text-sm text-chalk-200">
-            Only Expected rows matching your HR-Code. Newest weeks appear first. Values are read-only.
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-clock-amber">Collector workspace</p>
+          <h1 className="mt-1 font-display text-2xl text-chalk-50">My Expected</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-chalk-200">
+            Your weekly schedule and Annual Spare balances matched to your HR-Code. Newest weeks appear first; all values are read-only.
           </p>
         </div>
         <button
@@ -133,14 +134,14 @@ export function CollectorExpectedClient() {
             void loadWeeks("refresh");
             void loadBalance();
           }}
-          disabled={loading || refreshing}
+          disabled={loading || refreshing || balanceLoading}
           className="rounded-card border border-clock-amber bg-clock-amber/10 px-4 py-2 text-sm font-semibold text-clock-amber transition-colors hover:bg-clock-amber/20 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {refreshing ? "Refreshing..." : "Refresh Expected"}
         </button>
       </div>
 
-      <section className="rounded-card border border-pitch-700 bg-pitch-900 p-5">
+      <section className="rounded-card border border-pitch-700 bg-gradient-to-br from-pitch-900 to-pitch-800/70 p-5 shadow-sm">
         <h2 className="font-display text-lg text-chalk-50">My Annual Spare</h2>
         <p className="mt-1 text-sm text-chalk-200">
           Your current Annual Spare balances from the Annual Spare Google Sheet. Values are shown exactly as read.
@@ -203,7 +204,7 @@ export function CollectorExpectedClient() {
           const dates = weekdayDates(week);
           const row = week.collectors[0];
           return (
-            <section key={week.week_id} className="space-y-4 rounded-card border border-pitch-700 bg-pitch-900 p-5">
+            <section key={week.week_id} className="space-y-4 rounded-card border border-pitch-700 bg-pitch-900 p-5 shadow-sm transition-colors hover:border-pitch-600">
               <div>
                 <h2 className="font-display text-lg text-chalk-50">
                   {displayExpectedDate(week.start_date)} – {displayExpectedDate(week.end_date)}
