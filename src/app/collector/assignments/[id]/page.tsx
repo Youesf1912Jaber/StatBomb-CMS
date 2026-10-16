@@ -44,15 +44,15 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
   const hyperCare = await getHyperCareForMatch(assignment.match.home_team, assignment.match.away_team);
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="w-full max-w-none space-y-6">
       <section className="relative isolate min-h-[250px] overflow-hidden rounded-2xl border border-pitch-700 bg-[#021a19] shadow-xl shadow-black/15 sm:min-h-[290px]">
         <Image
-          src="/images/football/stadium-tunnel.webp"
+          src="/images/football/locker-room-hero.webp"
           alt="The tunnel opening onto a football pitch"
           fill
           priority
           sizes="(max-width: 768px) 100vw, 1200px"
-          className="object-cover"
+          className="object-cover object-center"
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021a19]/95 via-[#021a19]/70 to-[#021a19]/15" />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021a19]/90 via-transparent to-[#021a19]/15" />
@@ -85,17 +85,17 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
         </a>
       )}
 
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-card border border-pitch-700 bg-pitch-900 p-5 text-sm sm:grid-cols-3">
-        <div>
-          <dt className="text-chalk-200">Match ID</dt>
-          <dd className="mt-0.5 text-chalk-50">{assignment.match.external_id}</dd>
+      <dl className="grid grid-cols-1 gap-3 rounded-2xl border border-pitch-700 bg-pitch-950/90 p-4 shadow-lg shadow-black/10 sm:grid-cols-2 xl:grid-cols-4 sm:p-5">
+        <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
+          <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">Match ID</dt>
+          <dd className="mt-1 break-words font-medium leading-5 text-chalk-50">{assignment.match.external_id}</dd>
         </div>
-        <div>
-          <dt className="text-chalk-200">Task</dt>
+        <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
+          <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">Task</dt>
           <dd className="mt-0.5 text-chalk-50">{assignment.task}</dd>
         </div>
-        <div>
-          <dt className="text-chalk-200">Half</dt>
+        <div className="min-w-0 rounded-xl border border-pitch-700/80 bg-pitch-900/80 p-3.5">
+          <dt className="text-xs font-medium uppercase tracking-wide text-chalk-300">Half</dt>
           <dd className="mt-0.5 text-chalk-50">{assignment.half}</dd>
         </div>
         <div>
@@ -108,7 +108,7 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
         </div>
         <div>
           <dt className="text-chalk-200">SLA</dt>
-          <dd className="mt-0.5">
+          <dd className="mt-1 break-words font-medium leading-5">
             <SlaCountdown sla={assignment.sla} status={assignment.status} />
           </dd>
         </div>
