@@ -57,13 +57,13 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="relative isolate min-w-0 space-y-6 sm:space-y-8">
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center opacity-20" style={{ backgroundImage: 'url("/images/football/tactics-background.jpg")' }} />
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center opacity-20" style={{ backgroundImage: 'url("/images/football/pitch-background-tactical.webp")' }} />
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(180deg,rgba(1,22,20,0.68)_0%,rgba(1,22,20,0.88)_45%,rgba(1,22,20,0.96)_100%)]" />
       <section className="relative isolate overflow-hidden rounded-2xl border border-pitch-700 bg-pitch-950 shadow-xl shadow-black/20">
         <div
           aria-hidden="true"
           className="absolute inset-0 -z-20 bg-cover bg-center"
-          style={{ backgroundImage: 'url("/images/football/pitch-background-tactical.webp")' }}
+          style={{ backgroundImage: 'url("/images/football/tactics-background.jpg")' }}
         />
         <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(100deg,rgba(2,20,19,0.97)_0%,rgba(2,25,23,0.91)_52%,rgba(2,20,19,0.56)_100%)]" />
         <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_85%_20%,rgba(218,186,105,0.16),transparent_38%)]" />
