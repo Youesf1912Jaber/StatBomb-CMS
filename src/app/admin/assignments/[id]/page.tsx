@@ -53,7 +53,7 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
   const availableCollectors = allCollectors ?? [];
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       <div>
         <p className="font-mono text-xs uppercase tracking-widest text-pitch-500">
           {assignment.match.competition ?? "Match"}
@@ -151,67 +151,69 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
         </div>
       )}
 
-      <AdminAssignmentTaskTimers timers={taskTimers} />
+      <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-2">
+        <section className="min-w-0 rounded-card border border-pitch-700 bg-pitch-950/35 p-3 sm:p-4">
+          <AdminAssignmentTaskTimers timers={taskTimers} />
+        </section>
 
-      {collaborators.length > 1 && (
-        <div>
-          <h2 className="font-display text-lg text-chalk-50">All collectors on this match</h2>
-          <ul className="mt-2 divide-y divide-pitch-800 rounded-card border border-pitch-700">
-            {collaborators.map((c) => (
-              <li
-                key={c.assignment_id}
-                className={`flex items-center justify-between px-4 py-2.5 text-sm ${
-                  c.assignment_id === assignment.id ? "bg-pitch-900" : ""
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  {c.assignment_id ? (
-                    <Link
-                      href={`/admin/assignments/${c.assignment_id}`}
-                      className="text-chalk-50 underline decoration-pitch-500 underline-offset-2 transition-colors hover:text-clock-amber"
-                    >
-                      {c.full_name ?? "Unnamed collector"}
-                    </Link>
-                  ) : (
-                    <span className="text-chalk-50">
-                      {c.full_name ?? "Unnamed collector"}
+        <div className="min-w-0 space-y-5">
+          {collaborators.length > 1 && (
+            <section className="min-w-0">
+              <h2 className="font-display text-lg text-chalk-50">All collectors on this match</h2>
+              <ul className="mt-2 divide-y divide-pitch-800 overflow-hidden rounded-card border border-pitch-700">
+                {collaborators.map((c) => (
+                  <li
+                    key={c.assignment_id}
+                    className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm ${
+                      c.assignment_id === assignment.id ? "bg-pitch-900" : ""
+                    }`}
+                  >
+                    <span className="flex min-w-0 flex-wrap items-center gap-2">
+                      {c.assignment_id ? (
+                        <Link
+                          href={`/admin/assignments/${c.assignment_id}`}
+                          className="text-chalk-50 underline decoration-pitch-500 underline-offset-2 transition-colors hover:text-clock-amber"
+                        >
+                          {c.full_name ?? "Unnamed collector"}
+                        </Link>
+                      ) : (
+                        <span className="text-chalk-50">{c.full_name ?? "Unnamed collector"}</span>
+                      )}
+                      {c.assignment_id === assignment.id && (
+                        <span className="text-xs text-pitch-500">(Current)</span>
+                      )}
                     </span>
-                  )}
-            
-                  {c.assignment_id === assignment.id && (
-                    <span className="text-xs text-pitch-500">(Current)</span>
-                  )}
-                </span>
-            
-                <span className="text-chalk-200">
-                  {c.task} · {c.half} · {c.status}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+                    <span className="text-xs text-chalk-200 sm:text-right">
+                      {c.task} · {c.half} · {c.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-      <div>
-        <h2 className="font-display text-lg text-chalk-50">Activity History</h2>
-        {activityHistory.length === 0 ? (
-          <p className="mt-2 rounded-card border border-dashed border-pitch-700 px-4 py-6 text-sm text-chalk-200">
-            No activity history for this assignment.
-          </p>
-        ) : (
-          <div className="mt-2 space-y-2">
-            {activityHistory.map((log) => (
-              <div key={log.id} className="rounded-card border border-pitch-700 bg-pitch-900 p-3 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-chalk-50">{log.actionLabel}</span>
-                  <span className="text-chalk-200">{formatTimestamp(log.created_at)}</span>
-                </div>
-                <p className="mt-1 text-chalk-200">By {log.userName}</p>
-                <p className="mt-2 text-chalk-50">{log.changeSummary}</p>
+          <section className="min-w-0">
+            <h2 className="font-display text-lg text-chalk-50">Activity History</h2>
+            {activityHistory.length === 0 ? (
+              <p className="mt-2 rounded-card border border-dashed border-pitch-700 px-4 py-6 text-sm text-chalk-200">
+                No activity history for this assignment.
+              </p>
+            ) : (
+              <div className="mt-2 max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+                {activityHistory.map((log) => (
+                  <div key={log.id} className="rounded-card border border-pitch-700 bg-pitch-900 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-chalk-50">{log.actionLabel}</span>
+                      <span className="text-xs text-chalk-200">{formatTimestamp(log.created_at)}</span>
+                    </div>
+                    <p className="mt-1 text-chalk-200">By {log.userName}</p>
+                    <p className="mt-2 text-chalk-50">{log.changeSummary}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );
