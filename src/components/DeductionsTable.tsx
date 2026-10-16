@@ -12,6 +12,7 @@ interface DeductionsTableProps {
 type EventKind =
   | "wrong-yellow-card"
   | "missing-yellow-card"
+  | "extra-yellow-card"
   | "wrong-red-card"
   | "missing-red-card"
   | "extra-assist"
@@ -20,8 +21,19 @@ type EventKind =
   | "extra-substitution"
   | "missing-substitution"
   | "wrong-tactical-shift"
+  | "extra-tactical-shift"
   | "missing-tactical-shift"
   | "wrong-formation"
+  | "foul-not-bad-behaviour"
+  | "bad-behaviour-not-foul"
+  | "extra-goal"
+  | "missing-goal"
+  | "wrong-goal-scorer"
+  | "wrong-own-goal-scorer"
+  | "extra-player-in-lineup"
+  | "missing-player-in-lineup"
+  | "wrong-player-in-lineup-played"
+  | "wrong-player-in-lineup-not-played"
   | "other";
 
 interface EventVisual {
@@ -55,65 +67,77 @@ function formatDate(value: string | null, raw: string | null): string {
 }
 
 function getEventVisual(event: string | null): EventVisual {
-  const value = (event ?? "").toLowerCase();
-  if (value.includes("yellow card")) {
-    const kind = value.includes("missing") ? "missing-yellow-card" : "wrong-yellow-card";
-    return {
-      kind,
-      title: "Yellow card",
-      description: value.includes("missing") ? "Yellow card not recorded" : value.includes("extra") ? "Extra yellow card recorded" : "Incorrect yellow card recorded",
-      accent: "#facc15",
-    };
-  }
-  if (value.includes("red card")) {
-    const kind = value.includes("missing") ? "missing-red-card" : "wrong-red-card";
-    return {
-      kind,
-      title: "Red card",
-      description: value.includes("missing") ? "Red card not recorded" : value.includes("extra") ? "Extra red card recorded" : "Incorrect red card recorded",
-      accent: "#fb4b4b",
-    };
-  }
-  if (value.includes("assist")) {
-    return {
-      kind: value.includes("missing") ? "missing-assist" : "extra-assist",
-      title: "Assist",
-      description: value.includes("missing") ? "Assist not recorded" : value.includes("extra") ? "Extra assist recorded" : "Assist record needs review",
-      accent: "#43dfa0",
-    };
-  }
-  if (value.includes("substitution") || value.includes("sub")) {
-    return {
-      kind: value.includes("missing") ? "missing-substitution" : value.includes("extra") ? "extra-substitution" : "wrong-substitution",
-      title: "Substitution",
-      description: value.includes("missing") ? "Substitution not recorded" : value.includes("extra") ? "Extra substitution recorded" : "Incorrect substitution recorded",
-      accent: "#fb923c",
-    };
-  }
-  if (value.includes("tactical") || value.includes("shift")) {
-    return {
-      kind: value.includes("missing") ? "missing-tactical-shift" : "wrong-tactical-shift",
-      title: "Tactical shift",
-      description: value.includes("missing") ? "Tactical shift not recorded" : "Incorrect tactical shift recorded",
-      accent: "#38bdf8",
-    };
-  }
-  if (value.includes("formation")) {
-    return {
-      kind: "wrong-formation",
-      title: "Formation",
-      description: "Incorrect formation recorded",
-      accent: "#38bdf8",
-    };
-  }
-  return {
-    kind: "other",
-    title: "Match review",
-    description: "This event needs a closer look",
-    accent: "#d6b45d",
-  };
-}
+  const value = (event ?? "").toLowerCase().replace(/[_–—]/g, " ").replace(/\s+/g, " ").trim();
+  const has = (...terms: string[]) => terms.some((term) => value.includes(term));
+  const visual = (kind: EventKind, title: string, description: string, accent: string): EventVisual => ({
+    kind,
+    title,
+    description,
+    accent,
+  });
 
+  // Lineup-specific cases must be checked before generic player/goal terms.
+  if (has("wrong own goal", "wrong own-goal", "own goal scorer", "own-goal scorer")) {
+    return visual("wrong-own-goal-scorer", "Own-goal scorer", "Own goal attributed to the wrong player", "#fb4b4b");
+  }
+  if (has("wrong player in lineup", "wrong player in line up", "incorrect player in lineup")) {
+    const didPlay = has("not played", "did not play", "didn't play", "didnt play", "non-playing");
+    return didPlay
+      ? visual("wrong-player-in-lineup-not-played", "Lineup player", "Incorrect player listed despite not playing", "#fb923c")
+      : visual("wrong-player-in-lineup-played", "Lineup player", "Incorrect player listed for a player who played", "#fb923c");
+  }
+  if (has("extra player in lineup", "extra player in line up", "additional player in lineup")) {
+    return visual("extra-player-in-lineup", "Extra lineup player", "An additional player was listed in the lineup", "#fb923c");
+  }
+  if (has("missing player in lineup", "missing player in line up", "player missing from lineup")) {
+    return visual("missing-player-in-lineup", "Missing lineup player", "A player is missing from the recorded lineup", "#fb923c");
+  }
+
+  if (has("foul not bad behaviour", "foul not bad behavior", "foul instead of bad behaviour", "foul instead of bad behavior")) {
+    return visual("foul-not-bad-behaviour", "Foul / conduct", "A foul was recorded instead of misconduct", "#38bdf8");
+  }
+  if (has("bad behaviour not foul", "bad behavior not foul", "bad behaviour instead of foul", "bad behavior instead of foul")) {
+    return visual("bad-behaviour-not-foul", "Misconduct", "Misconduct was recorded instead of a foul", "#fb923c");
+  }
+
+  if (has("wrong goal scorer", "incorrect goal scorer", "wrong scorer")) {
+    return visual("wrong-goal-scorer", "Goal scorer", "Goal attributed to the wrong player", "#43dfa0");
+  }
+  if (has("missing goal", "goal missing", "goal not recorded", "unrecorded goal")) {
+    return visual("missing-goal", "Missing goal", "A goal was not recorded", "#43dfa0");
+  }
+  if (has("extra goal", "additional goal")) {
+    return visual("extra-goal", "Extra goal", "An additional goal was recorded incorrectly", "#43dfa0");
+  }
+
+  if (has("yellow card")) {
+    if (has("missing")) return visual("missing-yellow-card", "Yellow card", "Yellow card not recorded", "#facc15");
+    if (has("extra")) return visual("extra-yellow-card", "Yellow card", "An extra yellow card was recorded", "#facc15");
+    return visual("wrong-yellow-card", "Yellow card", "Incorrect yellow card recorded", "#facc15");
+  }
+  if (has("red card")) {
+    if (has("missing")) return visual("missing-red-card", "Red card", "Red card not recorded", "#fb4b4b");
+    return visual("wrong-red-card", "Red card", has("extra") ? "Extra red card recorded" : "Incorrect red card recorded", "#fb4b4b");
+  }
+  if (has("assist")) {
+    if (has("missing")) return visual("missing-assist", "Assist", "Assist not recorded", "#43dfa0");
+    return visual("extra-assist", "Assist", has("extra") ? "Extra assist recorded" : "Assist record needs review", "#43dfa0");
+  }
+  if (has("substitution", "sub")) {
+    if (has("missing")) return visual("missing-substitution", "Substitution", "Substitution not recorded", "#fb923c");
+    if (has("extra")) return visual("extra-substitution", "Substitution", "Extra substitution recorded", "#fb923c");
+    return visual("wrong-substitution", "Substitution", "Incorrect substitution recorded", "#fb923c");
+  }
+  if (has("tactical", "shift")) {
+    if (has("missing")) return visual("missing-tactical-shift", "Tactical shift", "Tactical shift not recorded", "#38bdf8");
+    if (has("extra")) return visual("extra-tactical-shift", "Tactical shift", "Extra tactical shift recorded", "#38bdf8");
+    return visual("wrong-tactical-shift", "Tactical shift", "Incorrect tactical shift recorded", "#38bdf8");
+  }
+  if (has("formation")) {
+    return visual("wrong-formation", "Formation", "Incorrect formation recorded", "#38bdf8");
+  }
+  return visual("other", "Match review", "This event needs a closer look", "#d6b45d");
+}
 function statusLabel(event: string): string {
   const value = event.toLowerCase();
   if (value.includes("missing")) return "Missing";
