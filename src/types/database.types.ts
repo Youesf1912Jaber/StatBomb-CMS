@@ -296,6 +296,20 @@ export type MatchCollaboratorRow = {
   status: AssignmentStatus;
 };
 
+export type MatchCollaboratorContactRow = MatchCollaboratorRow & {
+  hr_code: string | null;
+  phone: string | null;
+};
+
+export type CollectorTeammateRow = {
+  id: string;
+  full_name: string | null;
+  hr_code: string | null;
+  phone: string | null;
+  team: string | null;
+  status: string | null;
+};
+
 // Phase 5: sync table rows
 export type SyncRunRow = {
   id: string;
@@ -733,6 +747,14 @@ export interface Database {
       get_match_collaborators: {
         Args: { p_match_id: string };
         Returns: MatchCollaboratorRow[];
+      };
+      get_match_collaborators_contact: {
+        Args: { p_match_id: string };
+        Returns: MatchCollaboratorContactRow[];
+      };
+      get_collector_teammates: {
+        Args: Record<string, never>;
+        Returns: CollectorTeammateRow[];
       };
       // Service-role only (global SLA scanner); not callable from the client.
       evaluate_assignment_sla_states: {
