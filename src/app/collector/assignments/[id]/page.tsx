@@ -58,8 +58,8 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
     <div className="w-full max-w-none space-y-6">
       <section className="relative isolate min-h-[250px] overflow-hidden rounded-2xl border border-pitch-700 bg-[#021a19] shadow-xl shadow-black/15 sm:min-h-[290px]">
         <Image
-          src="/images/football/locker-room-hero.webp"
-          alt="The tunnel opening onto a football pitch"
+          src="/images/football/Teams%20Vs.png"
+          alt="Two football teams facing each other in a cinematic match-up"
           fill
           priority
           sizes="(max-width: 768px) 100vw, 1200px"
