@@ -166,7 +166,7 @@ export default async function CollectorDashboardPage() {
 
   return (
     <div className="space-y-8">
-      <section className="relative isolate overflow-hidden rounded-2xl border border-pitch-700 bg-pitch-950 shadow-2xl shadow-black/10">
+      <section className="relative isolate overflow-hidden rounded-2xl border border-pitch-700 bg-[#032927] shadow-2xl shadow-black/10">
         <div
           aria-hidden="true"
           className="absolute inset-0 -z-20 bg-cover bg-center"
@@ -174,26 +174,26 @@ export default async function CollectorDashboardPage() {
             backgroundImage: 'url("https://images.pexels.com/photos/30689707/pexels-photo-30689707.jpeg?auto=compress&cs=tinysrgb&w=1800")',
           }}
         />
-        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-pitch-950 via-pitch-950/90 to-pitch-950/40" />
-        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-pitch-950/90 via-transparent to-pitch-950/15" />
-        <div aria-hidden="true" className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-clock-amber via-pitch-500 to-transparent" />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-[#021A19] via-[#021A19]/90 to-[#021A19]/35" />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-[#021A19]/90 via-transparent to-[#021A19]/10" />
+        <div aria-hidden="true" className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-[#E8C977] via-[#3A8B7A] to-transparent" />
 
         <div className="grid gap-7 p-5 sm:p-7 md:grid-cols-[minmax(0,1fr)_220px] md:items-end md:p-9">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-pitch-950/55 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-chalk-100 backdrop-blur-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-clock-amber shadow-[0_0_10px_rgba(218,186,105,0.9)]" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-[#021A19]/70 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-chalk-100 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#E8C977] shadow-[0_0_10px_rgba(218,186,105,0.9)]" />
               Arqam Football Operations · Matchday
             </div>
             <h1 className="mt-5 font-display text-3xl leading-tight text-white sm:text-4xl lg:text-5xl">
               Welcome to your
-              <span className="block text-clock-amber">locker room, {firstName}.</span>
+              <span className="block text-[#E8C977]">locker room, {firstName}.</span>
             </h1>
             <p className="mt-4 max-w-xl text-sm leading-6 text-white/85 sm:text-base">
               Your shift. Your matches. Your next play.
               Everything you need to get matchday work done is right here.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <a href="#locker-room" className="inline-flex items-center gap-2 rounded-lg bg-clock-amber px-4 py-2.5 text-sm font-semibold text-ink transition hover:brightness-105">
+              <a href="#locker-room" className="inline-flex items-center gap-2 rounded-lg bg-[#E8C977] px-4 py-2.5 text-sm font-semibold text-[#052221] transition hover:brightness-105">
                 Open my lockers <span aria-hidden="true">↓</span>
               </a>
               <span className="text-xs text-white/75">Matchday · {today}</span>
@@ -208,13 +208,13 @@ export default async function CollectorDashboardPage() {
             </a>
           </div>
 
-          <div className="rounded-xl border border-white/20 bg-pitch-950/65 p-4 text-white shadow-xl backdrop-blur-md sm:max-w-xs md:justify-self-end">
+          <div className="rounded-xl border border-white/20 bg-[#021A19]/75 p-4 text-white shadow-xl backdrop-blur-md sm:max-w-xs md:justify-self-end">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Your shift board</p>
             <p className="mt-3 font-display text-3xl">{currentAssignments.filter((a) => a.status !== "Completed").length}</p>
             <p className="mt-1 text-sm text-chalk-100">active assignments</p>
             <div className="mt-4 flex items-center justify-between border-t border-white/15 pt-3 text-xs text-chalk-200">
               <span>Currently in progress</span>
-              <strong className="font-mono text-clock-amber">{inProgress.length}</strong>
+              <strong className="font-mono text-[#E8C977]">{inProgress.length}</strong>
             </div>
           </div>
         </div>
