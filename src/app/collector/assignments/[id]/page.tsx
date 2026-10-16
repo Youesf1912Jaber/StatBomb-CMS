@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
-import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } from "@/lib/assignments/queries";
+import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaboratorsWithContacts } from "@/lib/assignments/queries";
 import { getHyperCareForMatch } from "@/lib/hyper-care/lookup";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AssignmentWorkControls } from "@/components/AssignmentWorkControls";
@@ -37,7 +37,7 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
     notFound();
   }
 
-  const collaborators = await getMatchCollaborators(supabase, assignment.match_id);
+  const collaborators = await getMatchCollaboratorsWithContacts(supabase, assignment.match_id);
   const others = collaborators.filter((c) => c.collector_id !== profile.id);
   const taskTimers = await getAssignmentTaskTimers(supabase, assignment.id);
   const hyperCare = await getHyperCareForMatch(assignment.match.home_team, assignment.match.away_team);
@@ -138,8 +138,11 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
           <ul className="mt-2 divide-y divide-pitch-800 rounded-card border border-pitch-700">
             {others.map((c) => (
               <li key={c.assignment_id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span className="text-chalk-50">{c.full_name ?? "Unnamed collector"}</span>
-                <span className="text-chalk-200">
+                <div className="min-w-0">
+                  <p className="text-chalk-50">{c.full_name ?? "Unnamed collector"}</p>
+                  <p className="mt-1 text-xs text-chalk-300">HR-Code: {c.hr_code || "—"} · Phone: {c.phone || "—"}</p>
+                </div>
+                <span className="shrink-0 text-right text-xs text-chalk-200">
                   {c.task} · {c.half} · {c.status}
                 </span>
               </li>
