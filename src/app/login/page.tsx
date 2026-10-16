@@ -92,7 +92,7 @@ export default function LoginPage() {
 
       <section aria-label="Matchday stadium" className="relative hidden min-h-screen overflow-hidden border-l border-white/10 bg-[#031311] lg:block">
         <Image
-          src="/images/football/login-stadium-ball.jpg"
+          src="/images/football/login-stadium-tunnel.webp"
           alt="A dramatic stadium tunnel opening onto the football pitch"
           fill
           priority
