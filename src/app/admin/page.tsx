@@ -57,7 +57,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="relative isolate min-w-0 space-y-6 sm:space-y-8">
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center opacity-20" style={{ backgroundImage: 'url("/images/football/pitch-background-tactical.webp")' }} />
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center opacity-20" style={{ backgroundImage: 'url("/images/football/tactics-background.jpg")' }} />
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(180deg,rgba(1,22,20,0.68)_0%,rgba(1,22,20,0.88)_45%,rgba(1,22,20,0.96)_100%)]" />
       <section className="relative isolate overflow-hidden rounded-2xl border border-pitch-700 bg-pitch-950 shadow-xl shadow-black/20">
         <div
