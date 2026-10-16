@@ -82,10 +82,10 @@ export function AppShell({
         profileId={profileId}
         collectorName={userLabel}
       />
-      <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col overflow-y-auto border-r border-[#15534b] bg-[#032b27] px-4 py-6 shadow-[8px_0_30px_rgba(0,0,0,0.16)] lg:flex">
-        <div className="mb-8 flex items-start justify-between gap-2 border-b border-[#15534b] px-2 pb-5">
+      <aside className="relative z-20 sticky top-0 hidden h-screen w-56 shrink-0 flex-col overflow-y-auto border-r border-[#1b655a] bg-[#032b27] px-4 py-6 shadow-[10px_0_34px_rgba(0,0,0,0.32)] lg:flex">
+        <div className="mb-8 flex items-start justify-between gap-2 border-b border-[#1b655a] px-2 pb-5">
           <div>
-            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[#65b8a7]">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[#79c8b6]">
               StatBomb
             </p>
             <p className="mt-1 font-display text-xl text-white">Console</p>
@@ -97,13 +97,13 @@ export function AppShell({
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-lg border border-transparent px-3 py-2.5 text-[13px] font-medium text-[#d3e5df] transition-colors hover:border-[#1b5c52] hover:bg-[#0a4039] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e3c36b]"
+              className="rounded-lg border border-transparent px-3 py-2.5 text-[13px] font-medium text-[#e0eee9] transition-colors hover:border-[#287568] hover:bg-[#0b4940] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e3c36b]"
             >
               {item.label}
             </Link>
           ))}
         </nav>
-        <div className="mt-5 border-t border-[#15534b] px-2 pt-4">
+        <div className="mt-5 border-t border-[#1b655a] px-2 pt-4">
           <p className="truncate text-sm font-semibold text-white">{userLabel}</p>
           <p className="mt-1 font-mono text-xs uppercase tracking-[0.14em] text-[#65b8a7]">
             {roleLabel}
