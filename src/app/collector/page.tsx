@@ -68,13 +68,13 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
       href={`/collector/assignments/${a.id}`}
       className="group relative isolate flex min-h-[322px] flex-col overflow-hidden rounded-xl border border-pitch-700 bg-gradient-to-br from-pitch-800 via-pitch-900 to-pitch-950 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-clock-amber hover:shadow-xl hover:shadow-black/15"
     >
-      <div className="relative -mx-4 -mt-4 mb-4 h-32 overflow-hidden border-b border-white/10 bg-pitch-950">
+      <div className="relative -mx-4 -mt-4 mb-4 h-36 overflow-hidden border-b border-white/10 bg-pitch-950 sm:h-40">
         <Image
           src={matchPhoto.src}
           alt={matchPhoto.alt}
           fill
           sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-          className="object-cover transition-transform duration-700 group-hover:scale-105"
+          className="object-cover object-center transition-transform duration-700 group-hover:scale-105"
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021A19]/90 via-[#021A19]/15 to-[#021A19]/10" />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021A19]/45 via-transparent to-transparent" />
@@ -87,7 +87,7 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Matchday locker</span>
         <span className={`rounded-full border px-2 py-1 text-[10px] font-medium leading-none ${statusTone}`}>{a.status}</span>
       </div>
-      <div aria-hidden="true" className="pointer-events-none absolute right-8 top-10 font-mono text-6xl font-semibold leading-none text-white/[0.07]">{halfNumber.padStart(2, "0")}</div>
+      <div aria-hidden="true" className="pointer-events-none absolute right-3 top-3 z-10 flex h-14 min-w-14 items-center justify-center rounded-xl border border-[#E8C977]/60 bg-[#021A19]/90 px-3 font-mono text-3xl font-bold leading-none text-[#F2D37C] shadow-lg shadow-black/40 ring-1 ring-black/20">{halfNumber.padStart(2, "0")}</div>
       <h3 className="relative mt-5 max-w-[88%] text-base font-semibold leading-snug text-chalk-50 transition-colors group-hover:text-clock-amber">
         {a.match.home_team} <span className="text-chalk-200">vs</span> {a.match.away_team}
       </h3>
@@ -216,7 +216,7 @@ export default async function CollectorDashboardPage() {
           aria-hidden="true"
           className="absolute inset-0 -z-20 bg-cover bg-center"
           style={{
-            backgroundImage: 'url("/images/football/locker-room-hero.webp")',
+            backgroundImage: 'url("/images/football/tactics-background.jpg")',
           }}
         />
         <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-[#021A19] via-[#021A19]/90 to-[#021A19]/35" />
