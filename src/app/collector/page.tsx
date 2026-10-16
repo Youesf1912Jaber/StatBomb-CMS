@@ -47,6 +47,10 @@ const MATCH_CARD_PHOTOS = [
 
 function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
   const halfNumber = a.half.match(/\d+/)?.[0] ?? (a.half === "Full Match" ? "FM" : "00");
+  const photoSeed = String(a.match.external_id ?? a.id)
+    .split("")
+    .reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  const matchPhoto = MATCH_CARD_PHOTOS[photoSeed % MATCH_CARD_PHOTOS.length];
   const statusTone =
     a.status === "Completed"
       ? "border-emerald-300/30 bg-emerald-300/10 text-chalk-50"
