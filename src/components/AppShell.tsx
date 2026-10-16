@@ -40,7 +40,34 @@ export function AppShell({
   children,
 }: AppShellProps) {
   return (
-    <div className="min-h-screen lg:flex">
+    <>
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <svg
+          viewBox="0 0 1600 1000"
+          preserveAspectRatio="xMidYMid slice"
+          className="absolute h-full w-full text-pitch-600 opacity-[0.22]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+        >
+          <rect x="38" y="38" width="1524" height="924" rx="8" />
+          <path d="M800 38V962" />
+          <circle cx="800" cy="500" r="148" />
+          <circle cx="800" cy="500" r="4" fill="currentColor" stroke="none" />
+          <rect x="38" y="290" width="202" height="420" />
+          <rect x="38" y="390" width="76" height="220" />
+          <path d="M240 390 A112 112 0 0 1 240 610" />
+          <rect x="1360" y="290" width="202" height="420" />
+          <rect x="1486" y="390" width="76" height="220" />
+          <path d="M1360 390 A112 112 0 0 0 1360 610" />
+          <path d="M38 76 A38 38 0 0 0 76 38" />
+          <path d="M1524 38 A38 38 0 0 0 1562 76" />
+          <path d="M38 924 A38 38 0 0 0 76 962" />
+          <path d="M1524 962 A38 38 0 0 0 1562 924" />
+        </svg>
+        <div className="absolute inset-0 bg-gradient-to-b from-pitch-950/20 via-transparent to-pitch-950/20" />
+      </div>
+      <div className="relative z-10 min-h-screen lg:flex">
       <GlobalSlaAlerts
         assignments={slaAlertAssignments}
         role={role}
@@ -108,5 +135,6 @@ export function AppShell({
         <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
       </div>
     </div>
+    </>
   );
 }
