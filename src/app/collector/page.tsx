@@ -21,11 +21,11 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
   const halfNumber = a.half.match(/\d+/)?.[0] ?? "—";
   const statusTone =
     a.status === "Completed"
-      ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
+      ? "border-emerald-300/30 bg-emerald-300/10 text-chalk-50"
       : a.status === "In Progress"
-        ? "border-sky-300/30 bg-sky-300/10 text-sky-100"
+        ? "border-sky-300/30 bg-sky-300/10 text-chalk-50"
         : a.status === "Overdue"
-          ? "border-red-300/30 bg-red-300/10 text-red-100"
+          ? "border-red-300/30 bg-red-300/10 text-chalk-50"
           : "border-chalk-200/20 bg-pitch-950/40 text-chalk-100";
 
   return (
