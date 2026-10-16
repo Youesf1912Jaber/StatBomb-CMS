@@ -74,14 +74,13 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
           alt={matchPhoto.alt}
           fill
           sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-          unoptimized
           className="object-cover transition-transform duration-700 group-hover:scale-105"
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021A19]/90 via-[#021A19]/15 to-[#021A19]/10" />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021A19]/45 via-transparent to-transparent" />
         <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2">
           <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/90">{matchPhoto.label}</span>
-          <span className="rounded-full border border-white/25 bg-black/30 px-2 py-1 text-[9px] uppercase tracking-wide text-white/85 backdrop-blur-sm">Photo · Unsplash</span>
+          <span className="rounded-full border border-white/25 bg-black/30 px-2 py-1 text-[9px] uppercase tracking-wide text-white/85 backdrop-blur-sm">Local image</span>
         </div>
       </div>
       <div className="flex items-start justify-between gap-3">
@@ -217,7 +216,7 @@ export default async function CollectorDashboardPage() {
           aria-hidden="true"
           className="absolute inset-0 -z-20 bg-cover bg-center"
           style={{
-            backgroundImage: 'url("/images/football/locker-room-hero.jpg")',
+            backgroundImage: 'url("/images/football/locker-room-hero.webp")',
           }}
         />
         <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-[#021A19] via-[#021A19]/90 to-[#021A19]/35" />
@@ -244,14 +243,9 @@ export default async function CollectorDashboardPage() {
               </a>
               <span className="text-xs text-white/75">Matchday · {today}</span>
             </div>
-            <a
-              href="https://www.pexels.com/photo/inside-a-professional-football-locker-room-30689707/"
-              target="_blank"
-              rel="noreferrer"
-              className="mt-5 inline-block text-[10px] text-white/55 underline decoration-white/25 underline-offset-2 hover:text-white/85"
-            >
-              Locker-room photo · Pexels
-            </a>
+            <p className="mt-5 text-[10px] text-white/55">
+              Football visuals are stored locally with the app.
+            </p>
           </div>
 
           <div className="rounded-xl border border-white/20 bg-[#021A19]/75 p-4 text-white shadow-xl backdrop-blur-md sm:max-w-xs md:justify-self-end">
