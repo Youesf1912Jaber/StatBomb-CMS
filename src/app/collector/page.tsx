@@ -157,16 +157,89 @@ export default async function CollectorDashboardPage() {
       new Date(a.sla).getTime() <= nowMs
   );
 
+  const matchdayStats = [
+    { label: "Today’s work", value: todaysWork.length, note: "Shift assignments" },
+    { label: "In progress", value: inProgress.length, note: "On the pitch now" },
+    { label: "Completed today", value: completedToday.length, note: "Full-time" },
+    { label: "SLA attention", value: slaAttention.length, note: "Needs attention" },
+  ];
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-2xl text-chalk-50">
-          Welcome, {firstName}
-        </h1>
+      <section className="relative isolate overflow-hidden rounded-2xl border border-pitch-700 bg-pitch-950 shadow-2xl shadow-black/10">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 -z-20 bg-cover bg-center"
+          style={{
+            backgroundImage: 'url("https://images.pexels.com/photos/30689707/pexels-photo-30689707.jpeg?auto=compress&cs=tinysrgb&w=1800")',
+          }}
+        />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-pitch-950 via-pitch-950/90 to-pitch-950/40" />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-pitch-950/90 via-transparent to-pitch-950/15" />
+        <div aria-hidden="true" className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-clock-amber via-pitch-500 to-transparent" />
 
-        <p className="mt-1 text-sm text-chalk-200">
-          Here&apos;s what&apos;s on your plate.
-        </p>
+        <div className="grid gap-7 p-5 sm:p-7 md:grid-cols-[minmax(0,1fr)_220px] md:items-end md:p-9">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-pitch-950/55 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-chalk-100 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-clock-amber shadow-[0_0_10px_rgba(218,186,105,0.9)]" />
+              Arqam Football Operations · Matchday
+            </div>
+            <h1 className="mt-5 font-display text-3xl leading-tight text-white sm:text-4xl lg:text-5xl">
+              Welcome to your
+              <span className="block text-clock-amber">locker room, {firstName}.</span>
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-white/85 sm:text-base">
+              Your shift. Your matches. Your next play.
+              Everything you need to get matchday work done is right here.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a href="#locker-room" className="inline-flex items-center gap-2 rounded-lg bg-clock-amber px-4 py-2.5 text-sm font-semibold text-ink transition hover:brightness-105">
+                Open my lockers <span aria-hidden="true">↓</span>
+              </a>
+              <span className="text-xs text-white/75">Matchday · {today}</span>
+            </div>
+            <a
+              href="https://www.pexels.com/photo/inside-a-professional-football-locker-room-30689707/"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-5 inline-block text-[10px] text-white/55 underline decoration-white/25 underline-offset-2 hover:text-white/85"
+            >
+              Locker-room photo · Pexels
+            </a>
+          </div>
+
+          <div className="rounded-xl border border-white/20 bg-pitch-950/65 p-4 text-white shadow-xl backdrop-blur-md sm:max-w-xs md:justify-self-end">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Your shift board</p>
+            <p className="mt-3 font-display text-3xl">{currentAssignments.filter((a) => a.status !== "Completed").length}</p>
+            <p className="mt-1 text-sm text-chalk-100">active assignments</p>
+            <div className="mt-4 flex items-center justify-between border-t border-white/15 pt-3 text-xs text-chalk-200">
+              <span>Currently in progress</span>
+              <strong className="font-mono text-clock-amber">{inProgress.length}</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="Matchday overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {matchdayStats.map((stat, index) => (
+          <div key={stat.label} className="relative overflow-hidden rounded-xl border border-pitch-700 bg-pitch-900/85 p-4">
+            <div aria-hidden="true" className={index === 3 ? "absolute inset-y-0 left-0 w-1 bg-clock-red" : index === 1 ? "absolute inset-y-0 left-0 w-1 bg-sky-400" : "absolute inset-y-0 left-0 w-1 bg-clock-amber"} />
+            <p className="pl-2 text-xs text-chalk-200">{stat.label}</p>
+            <p className="pl-2 pt-2 font-mono text-3xl font-semibold tracking-tight text-chalk-50">{stat.value}</p>
+            <p className="pl-2 pt-1 text-[11px] text-chalk-200">{stat.note}</p>
+          </div>
+        ))}
+      </section>
+
+      <div id="locker-room" className="space-y-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-pitch-500">The squad room</p>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="font-display text-2xl text-chalk-50">Your matchday lockers</h2>
+            <p className="mt-1 text-sm text-chalk-200">Every card is one of your real assignments. Open a locker to see details and start work.</p>
+          </div>
+          <span className="rounded-full border border-pitch-700 bg-pitch-900/75 px-3 py-1.5 font-mono text-xs text-chalk-100">{currentDistribution.length} assigned</span>
+        </div>
       </div>
 
       <Section
