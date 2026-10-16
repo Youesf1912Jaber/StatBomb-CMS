@@ -45,7 +45,7 @@ export function AppShell({
         {role === "collector" ? (
           <div
             className="absolute inset-0 bg-cover bg-center opacity-[0.10]"
-            style={{ backgroundImage: 'url("/images/football/pitch-background-dark.jpg")' }}
+            style={{ backgroundImage: 'url("/images/football/pitch-background-dark.webp")' }}
           />
         ) : null}
         <svg
