@@ -56,12 +56,14 @@ export default async function AdminDashboardPage() {
   const notStartedCount = assignments.filter((a) => a.status === "Not Started").length;
 
   return (
-    <div className="min-w-0 space-y-6 sm:space-y-8">
+    <div className="relative isolate min-w-0 space-y-6 sm:space-y-8">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center opacity-20" style={{ backgroundImage: 'url("/images/football/pitch-background-tactical.webp")' }} />
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(180deg,rgba(1,22,20,0.68)_0%,rgba(1,22,20,0.88)_45%,rgba(1,22,20,0.96)_100%)]" />
       <section className="relative isolate overflow-hidden rounded-2xl border border-pitch-700 bg-pitch-950 shadow-xl shadow-black/20">
         <div
           aria-hidden="true"
           className="absolute inset-0 -z-20 bg-cover bg-center"
-          style={{ backgroundImage: 'url("/images/football/tactics-background.jpg")' }}
+          style={{ backgroundImage: 'url("/images/football/pitch-background-tactical.webp")' }}
         />
         <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(100deg,rgba(2,20,19,0.97)_0%,rgba(2,25,23,0.91)_52%,rgba(2,20,19,0.56)_100%)]" />
         <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_85%_20%,rgba(218,186,105,0.16),transparent_38%)]" />
@@ -106,14 +108,14 @@ export default async function AdminDashboardPage() {
         <SummaryCard label="Needs attention" value={overdueCount} note={`${notStartedCount.toLocaleString()} not started`} accent="bg-clock-red" />
       </section>
 
-      <section className="space-y-5">
-        <div className="flex flex-col gap-2 border-b border-pitch-700 pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <section className="space-y-5 rounded-2xl border border-pitch-700/70 bg-pitch-950/45 p-3 shadow-xl shadow-black/10 backdrop-blur-sm sm:p-5">
+        <div className="flex flex-col gap-3 border-b border-pitch-700 pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-clock-amber">Live operations</p>
-            <h2 className="mt-1 font-display text-2xl text-chalk-50">Current Shift</h2>
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-clock-amber">Live operations · Shift control</p>
+            <h2 className="mt-1 font-display text-2xl text-chalk-50 sm:text-3xl">Current Shift</h2>
             <p className="mt-1 text-sm text-chalk-200">Assignments scheduled for {currentShiftDate}.</p>
           </div>
-          <span className="w-fit rounded-full border border-pitch-700 bg-pitch-950/80 px-3 py-1.5 text-xs text-chalk-200">
+          <span className="inline-flex w-fit items-center rounded-full border border-clock-amber/30 bg-[#082b27] px-3 py-2 text-xs font-semibold tabular-nums text-chalk-100 shadow-sm">
             {currentShiftAssignments.length.toLocaleString()} scheduled today
           </span>
         </div>
@@ -126,10 +128,13 @@ export default async function AdminDashboardPage() {
             : currentShiftAssignments.filter((assignment) => assignment.status === status);
 
           return (
-            <section key={status} className="min-w-0 overflow-hidden rounded-xl border border-pitch-700/80 bg-pitch-950/45">
-              <div className="flex items-center justify-between gap-3 border-b border-pitch-700/80 bg-pitch-900/75 px-4 py-3">
-                <h3 className="font-display text-base text-chalk-50">{CURRENT_SHIFT_SECTION_LABELS[status]}</h3>
-                <span className="rounded-full border border-pitch-600 bg-pitch-950 px-2.5 py-1 text-xs font-semibold tabular-nums text-chalk-100">{statusAssignments.length.toLocaleString()}</span>
+            <section key={status} className="min-w-0 overflow-hidden rounded-xl border border-pitch-600/80 bg-[#031e1c]/90 shadow-lg shadow-black/10">
+              <div className="flex items-center justify-between gap-3 border-b border-pitch-700 bg-gradient-to-r from-pitch-800/90 to-pitch-900/70 px-4 py-3.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span aria-hidden="true" className={`h-8 w-1 shrink-0 rounded-full ${status === "Completed" ? "bg-emerald-400" : status === "In Progress" ? "bg-sky-400" : status === "Overdue" ? "bg-clock-red" : "bg-clock-amber"}`} />
+                  <h3 className="font-display text-base font-semibold text-chalk-50 sm:text-lg">{CURRENT_SHIFT_SECTION_LABELS[status]}</h3>
+                </div>
+                <span className={`shrink-0 rounded-lg border px-3 py-1.5 text-sm font-bold tabular-nums ${status === "Completed" ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : status === "In Progress" ? "border-sky-400/30 bg-sky-400/10 text-sky-200" : status === "Overdue" ? "border-clock-red/30 bg-clock-red/10 text-red-200" : "border-clock-amber/30 bg-clock-amber/10 text-clock-amber"}`}>{statusAssignments.length.toLocaleString()}</span>
               </div>
               <div className="p-2 sm:p-3">
                 <AssignmentTable
