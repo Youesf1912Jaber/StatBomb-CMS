@@ -18,35 +18,52 @@ import { AssignmentTable } from "@/components/AssignmentTable";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
 
 function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
+  const halfNumber = a.half.match(/\d+/)?.[0] ?? "—";
+  const statusTone =
+    a.status === "Completed"
+      ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
+      : a.status === "In Progress"
+        ? "border-sky-300/30 bg-sky-300/10 text-sky-100"
+        : a.status === "Overdue"
+          ? "border-red-300/30 bg-red-300/10 text-red-100"
+          : "border-chalk-200/20 bg-pitch-950/40 text-chalk-100";
+
   return (
     <Link
       href={`/collector/assignments/${a.id}`}
-      className="block rounded-card border border-pitch-700 bg-pitch-900 px-4 py-3 transition-colors hover:border-clock-amber"
+      className="group relative isolate flex min-h-[228px] flex-col overflow-hidden rounded-xl border border-pitch-700 bg-gradient-to-br from-pitch-800 via-pitch-900 to-pitch-950 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-clock-amber hover:shadow-xl hover:shadow-black/15"
     >
-      <p className="text-sm text-chalk-50">
-        {a.match.home_team} vs {a.match.away_team}
-      </p>
-
-      <p className="mt-1 text-xs text-chalk-200">
-        Task: {a.task} &nbsp;·&nbsp; Half: {a.half}
-      </p>
-
-      <p className="mt-1 text-xs text-chalk-300">
-        {new Date(a.match.match_date).toLocaleDateString()} &nbsp;·&nbsp;{" "}
-        {a.match.kickoff_time
-          ? new Date(a.match.kickoff_time).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "—"}
-      </p>
-
-      <p className="mt-1 text-xs text-chalk-300">
-        Status: {a.status}
-      </p>
-
-      <div className="mt-2">
-        <SlaCountdown sla={a.sla} status={a.status} />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-70">
+        <div className="absolute right-0 top-0 h-full w-24 border-l border-white/[0.06] bg-gradient-to-l from-white/[0.035] to-transparent" />
+        <div className="absolute right-5 top-16 h-14 w-1 rounded-full bg-clock-amber/45 shadow-[0_0_15px_rgba(218,186,105,0.16)]" />
+        <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-clock-amber/70 via-pitch-500/60 to-transparent opacity-70" />
+      </div>
+      <div className="flex items-start justify-between gap-3">
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Matchday locker</span>
+        <span className={`rounded-full border px-2 py-1 text-[10px] font-medium leading-none ${statusTone}`}>{a.status}</span>
+      </div>
+      <div aria-hidden="true" className="pointer-events-none absolute right-8 top-10 font-mono text-6xl font-semibold leading-none text-white/[0.07]">{halfNumber.padStart(2, "0")}</div>
+      <h3 className="relative mt-5 max-w-[88%] text-base font-semibold leading-snug text-chalk-50 transition-colors group-hover:text-clock-amber">
+        {a.match.home_team} <span className="text-chalk-200">vs</span> {a.match.away_team}
+      </h3>
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-chalk-200">
+        <span className="rounded-md border border-pitch-600/60 bg-pitch-950/40 px-2 py-1">{a.half}</span>
+        <span className="rounded-md border border-pitch-600/60 bg-pitch-950/40 px-2 py-1">{a.task}</span>
+      </div>
+      <div className="mt-auto pt-4">
+        <div className="flex items-center justify-between gap-3 border-t border-white/[0.08] pt-3 text-xs text-chalk-200">
+          <span>Match ID <strong className="ml-1 font-mono text-chalk-50">{a.match.external_id}</strong></span>
+          <span className="text-right">
+            {a.match.kickoff_time
+              ? new Date(a.match.kickoff_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              : "Kick-off —"}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3 text-xs text-chalk-200">
+          <span>{new Date(a.match.match_date).toLocaleDateString()}</span>
+          <span className="text-right font-medium text-clock-amber transition-transform group-hover:translate-x-0.5">Open assignment →</span>
+        </div>
+        <div className="mt-2"><SlaCountdown sla={a.sla} status={a.status} /></div>
       </div>
     </Link>
   );
