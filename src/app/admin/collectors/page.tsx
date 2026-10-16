@@ -13,9 +13,10 @@ export default function CollectorsPage() {
           <h1 className="mt-2 font-display text-3xl text-chalk-50 sm:text-4xl">Collectors <span className="text-pitch-300">control room.</span></h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-chalk-200">Manage team profiles, account access, roster synchronization, and bulk collector provisioning from one place.</p>
         </div>
-        <div className="relative hidden min-h-[170px] overflow-hidden rounded-xl border border-pitch-500/60 bg-[url('/images/pitch-background-tactical.webp')] bg-cover bg-center lg:block">
-          <div className="absolute inset-0 bg-gradient-to-br from-pitch-950/15 via-pitch-950/35 to-pitch-950/90" />
-          <div className="absolute inset-x-4 bottom-4 rounded-lg border border-pitch-400/30 bg-pitch-950/80 p-4 backdrop-blur-sm">
+        <div className="relative hidden min-h-[190px] overflow-hidden rounded-xl border border-pitch-500/60 bg-pitch-950 lg:block">
+          <img src="/images/football/Collectors%20control%20room.webp" alt="Collectors control room" className="absolute inset-0 h-full w-full object-cover object-center" />
+          <div className="absolute inset-0 bg-gradient-to-t from-pitch-950/95 via-pitch-950/15 to-pitch-950/10" />
+          <div className="absolute inset-x-3 bottom-3 rounded-lg border border-chalk-100/20 bg-pitch-950/85 p-3 shadow-xl shadow-black/30 backdrop-blur-sm">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-pitch-300">Collectors control room</p>
             <p className="mt-1 font-display text-xl text-chalk-50">People. Access. Matchday.</p>
           </div>
