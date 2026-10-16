@@ -57,7 +57,7 @@ function formatDate(value: string | null, raw: string | null): string {
 function getEventVisual(event: string | null): EventVisual {
   const value = (event ?? "").toLowerCase();
   if (value.includes("yellow card")) {
-    const kind = value.includes("missing") ? "missing-yellow-card" : "wrong-yellow-card";
+    const kind = value.includes("missing") ? "missing-yellow-card" : value.includes("extra") ? "wrong-yellow-card" : "wrong-yellow-card";
     return {
       kind,
       title: "Yellow card",
