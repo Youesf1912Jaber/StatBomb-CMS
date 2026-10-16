@@ -3,28 +3,42 @@ import type { HyperCareTeamSection } from "@/lib/hyper-care/parse";
 function Field({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
-    <div className="min-w-0">
-      <dt className="text-[11px] font-semibold uppercase tracking-[0.1em] text-chalk-300">{label}</dt>
-      <dd className="mt-1 break-words text-sm leading-5 text-chalk-50">{value}</dd>
+    <div className="min-w-0 rounded-lg border border-white/10 bg-black/15 p-3">
+      <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-chalk-300">{label}</dt>
+      <dd className="mt-1.5 break-words text-sm font-semibold leading-5 text-white">{value}</dd>
     </div>
   );
 }
 
 function TeamBlock({ section }: { section: HyperCareTeamSection }) {
   return (
-    <article className="relative min-w-0 overflow-hidden rounded-xl border border-pitch-700 bg-pitch-950/80">
-      <div aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-clock-amber to-pitch-500" />
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-pitch-700/80 px-4 py-3 pl-5 sm:px-5 sm:pl-6">
-        <h3 className="font-display text-base font-semibold text-chalk-50">{section.team_name}</h3>
-        <span className="rounded-full border border-pitch-600 bg-pitch-800 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-chalk-200">
-          Team details
+    <article className="relative min-w-0 overflow-hidden rounded-2xl border border-amber-400/40 bg-gradient-to-br from-[#123b35] via-pitch-900 to-[#071e1b] shadow-[0_12px_36px_rgba(0,0,0,0.24)]">
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-300 via-amber-500 to-emerald-400" />
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-black/15 px-4 py-4 sm:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-300/30 bg-amber-300/10 text-amber-200">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m16 0v-2a4 4 0 0 0-3-3.87M14 3.13a4 4 0 0 1 0 7.75M10 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-200">Flagged team</p>
+            <h3 className="mt-0.5 break-words font-display text-lg font-semibold text-white">{section.team_name}</h3>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-100">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.8)]" />
+          Hyper Care
         </span>
       </div>
-      <div className="grid grid-cols-1 gap-4 p-4 pl-5 sm:grid-cols-2 sm:p-5 sm:pl-6">
+      <div className="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:p-4">
         {section.customer_care && (
-          <section className="min-w-0">
-            <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-clock-amber">Customer Care</h4>
-            <dl className="grid grid-cols-1 gap-3">
+          <section className="min-w-0 rounded-xl border border-amber-300/30 bg-[#071f1c]/75 p-4">
+            <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-amber-200">
+              <span aria-hidden="true" className="h-5 w-1 rounded-full bg-amber-300" />
+              Customer Care
+            </h4>
+            <dl className="grid grid-cols-1 gap-2">
               <Field label="Review Type" value={section.customer_care.review_type} />
               <Field label="Review Events" value={section.customer_care.review_events} />
               <Field label="Completed by" value={section.customer_care.completed_by} />
@@ -32,16 +46,19 @@ function TeamBlock({ section }: { section: HyperCareTeamSection }) {
           </section>
         )}
         {section.team_request && (
-          <section className={`min-w-0 ${section.customer_care ? "border-t border-pitch-700 pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0" : ""}`}>
-            <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-clock-amber">Team Request</h4>
-            <dl className="grid grid-cols-1 gap-3">
+          <section className="min-w-0 rounded-xl border border-emerald-400/25 bg-[#071f1c]/75 p-4">
+            <h4 className="mb-3 flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-emerald-200">
+              <span aria-hidden="true" className="h-5 w-1 rounded-full bg-emerald-300" />
+              Team Request
+            </h4>
+            <dl className="grid grid-cols-1 gap-2">
               <Field label="Request" value={section.team_request.request} />
               <Field label="Gender" value={section.team_request.gender} />
             </dl>
           </section>
         )}
         {!section.customer_care && !section.team_request && (
-          <p className="text-sm text-chalk-300">No additional Hyper Care details are available.</p>
+          <p className="text-sm text-chalk-200">No additional Hyper Care details are available.</p>
         )}
       </div>
     </article>
@@ -52,18 +69,26 @@ export function HyperCareSection({ sections }: { sections: HyperCareTeamSection[
   if (sections.length === 0) return null;
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-2xl border border-pitch-700 bg-pitch-950/90 shadow-lg shadow-black/10">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-pitch-700 bg-pitch-900/90 px-4 py-4 sm:px-5">
+    <section className="relative min-w-0 overflow-hidden rounded-2xl border border-amber-400/60 bg-[#061b18]/95 shadow-[0_16px_50px_rgba(0,0,0,0.3)] ring-1 ring-amber-300/10">
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-300 via-amber-500 to-emerald-400" />
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-300/20 bg-gradient-to-r from-amber-300/10 via-transparent to-emerald-300/10 px-4 py-4 sm:px-5">
         <div className="flex items-center gap-3">
-          <span aria-hidden="true" className="h-8 w-1 rounded-full bg-clock-amber" />
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-amber-300/40 bg-amber-300/10 text-amber-200 shadow-inner">
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3 20 7v5c0 5-3.4 8-8 9-4.6-1-8-4-8-9V7l8-4Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="m9 12 2 2 4-4" />
+            </svg>
+          </span>
           <div>
-            <h2 className="font-display text-lg font-semibold tracking-wide text-chalk-50">Hyper Care</h2>
-            <p className="mt-0.5 text-xs text-chalk-300">Special review notes and team requests</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-amber-200">Priority match notes</p>
+            <h2 className="font-display text-xl font-bold tracking-wide text-white">HYPER CARE</h2>
+            <p className="mt-0.5 text-xs text-chalk-200">Special review notes and team requests</p>
           </div>
         </div>
-        <span className="rounded-full border border-clock-amber/30 bg-clock-amber/10 px-3 py-1 text-xs font-semibold text-clock-amber">
-          {sections.length} {sections.length === 1 ? "team" : "teams"}
-        </span>
+        <div className="rounded-xl border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-right">
+          <p className="text-2xl font-black leading-none text-amber-200">{sections.length}</p>
+          <p className="mt-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-amber-100">{sections.length === 1 ? "Flagged team" : "Flagged teams"}</p>
+        </div>
       </header>
       <div className="space-y-3 p-3 sm:p-4">
         {sections.map((section) => (
