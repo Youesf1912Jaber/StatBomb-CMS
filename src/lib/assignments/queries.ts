@@ -173,6 +173,20 @@ export async function getMatchCollaborators(supabase: Client, matchId: string) {
   return data ?? [];
 }
 
+export async function getMatchCollaboratorsWithContacts(supabase: Client, matchId: string) {
+  const { data, error } = await supabase.rpc("get_match_collaborators_contact", {
+    p_match_id: matchId,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getCollectorTeammates(supabase: Client) {
+  const { data, error } = await supabase.rpc("get_collector_teammates");
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function getAssignmentTaskTimers(
   supabase: Client,
   assignmentId: string
