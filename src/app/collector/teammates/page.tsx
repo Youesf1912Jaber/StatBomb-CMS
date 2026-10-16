@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getCollectorTeammates } from "@/lib/assignments/queries";
 
@@ -7,12 +8,24 @@ export default async function MyTeammatesPage() {
 
   return (
     <section className="max-w-5xl space-y-6">
-      <div>
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-pitch-500">Collector Directory</p>
-        <h1 className="mt-2 font-display text-3xl text-chalk-50">My Teammates</h1>
-        <p className="mt-2 text-sm text-chalk-300">
-          Contact details from the collector roster, matching the information maintained in the Batch sheet.
-        </p>
+      <div className="relative isolate flex min-h-[170px] items-end overflow-hidden rounded-2xl border border-pitch-700 bg-[#021a19] p-5 sm:min-h-[205px] sm:p-7">
+        <Image
+          src="/images/football/locker-room-wide.jpg"
+          alt="Football team lockers"
+          fill
+          sizes="(max-width: 768px) 100vw, 1100px"
+          unoptimized
+          className="object-cover"
+        />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021a19]/95 via-[#021a19]/75 to-[#021a19]/25" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021a19]/80 via-transparent to-[#021a19]/10" />
+        <div className="relative">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-clock-amber">The Squad · Collector Directory</p>
+          <h1 className="mt-2 font-display text-3xl text-white sm:text-4xl">My Teammates</h1>
+          <p className="mt-2 max-w-xl text-sm text-white/80">
+            Know the squad, reach the right person, and keep matchday moving.
+          </p>
+        </div>
       </div>
 
       <div className="rounded-card border border-pitch-700 bg-pitch-900 px-4 py-3 text-sm text-chalk-200">
