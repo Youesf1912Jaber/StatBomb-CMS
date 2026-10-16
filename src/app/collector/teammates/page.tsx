@@ -57,7 +57,7 @@ export default async function MyTeammatesPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-pitch-700 bg-pitch-900/90 px-4 py-4 sm:px-6">
             <div>
               <p className="text-sm font-semibold text-chalk-50">Collector contacts</p>
-              <p className="mt-1 text-xs text-chalk-200">Use the phone link to contact a teammate directly.</p>
+              <p className="mt-1 text-xs text-chalk-200">Tap a number to compose a text message to a teammate.</p>
             </div>
             <span className="rounded-md border border-pitch-600/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-chalk-200">Matchday operations</span>
           </div>
@@ -99,8 +99,8 @@ export default async function MyTeammatesPage() {
                   <div className="flex items-center justify-between gap-3 md:block">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-chalk-400 md:hidden">Phone</p>
                     {teammate.phone ? (
-                      <a className="inline-flex items-center gap-2 break-all text-sm text-chalk-100 underline decoration-pitch-600 underline-offset-4 transition hover:text-clock-amber" href={`tel:${teammate.phone}`}>
-                        <span aria-hidden="true">↗</span>{teammate.phone}
+                      <a className="inline-flex items-center gap-2 break-all text-sm text-chalk-100 underline decoration-pitch-600 underline-offset-4 transition hover:text-clock-amber" href={`sms:${teammate.phone.replace(/[^+\d]/g, "")}`}>
+                        <span aria-hidden="true">✉</span>{teammate.phone}
                       </a>
                     ) : (
                       <p className="text-sm text-chalk-400">Not provided</p>
