@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useFormState, useFormStatus } from "react-dom";
 import { signInWithPassword, type LoginState } from "./actions";
 
@@ -71,8 +72,20 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <section className="mx-auto w-full max-w-md">
-          <form action={formAction} className="rounded-2xl border border-white/15 bg-[#031f1d]/90 p-6 shadow-2xl shadow-black/35 backdrop-blur-xl sm:p-8">
+        <section className="mx-auto grid w-full max-w-2xl grid-cols-1 items-stretch gap-3 sm:gap-4 xl:grid-cols-[minmax(145px,0.7fr)_minmax(330px,1.3fr)]">
+          <div className="group relative hidden min-h-[520px] overflow-hidden rounded-2xl border border-white/15 bg-[#031f1d] shadow-2xl shadow-black/25 xl:block">
+            <Image src="/images/football/login-stadium-ball.jpg" alt="A football stadium entrance ready for matchday" fill priority sizes="(min-width: 1280px) 220px, 0px" className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.03]" />
+            <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021a19] via-[#021a19]/25 to-black/10" />
+            <div className="absolute inset-x-4 bottom-5 z-10">
+              <span className="inline-flex items-center gap-2 rounded-full border border-clock-amber/40 bg-black/35 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-clock-amber backdrop-blur">
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-clock-amber" />
+                Matchday starts here
+              </span>
+              <p className="mt-3 font-display text-2xl leading-tight text-white">Step onto the pitch.</p>
+              <p className="mt-2 text-xs leading-5 text-white/70">Your assignments. Your focus. Every detail counts.</p>
+            </div>
+          </div>
+          <form action={formAction} className="rounded-2xl border border-white/15 bg-[#031f1d]/95 p-6 shadow-2xl shadow-black/35 backdrop-blur-xl sm:p-8">
             <div className="mb-7">
               <div className="mb-5 h-1 w-14 rounded-full bg-clock-amber" />
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-pitch-500">Matchday access</p>
