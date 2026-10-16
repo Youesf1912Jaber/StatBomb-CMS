@@ -34,8 +34,11 @@ export async function PATCH(
       task?: string;
       half?: string;
     };
-    if (!body.expectedCollectorHrCode || !body.expectedTask || !body.expectedHalf || !body.collectorHrCode || !body.task || !body.half) {
-      return NextResponse.json({ success: false, error: "Collector, Task, and Half are required." }, { status: 422 });
+    // Existing Distribution rows may have a collector but missing Task/Half.
+    // Allow those blank old values so admins can complete the row without
+    // having to change the collector as a workaround.
+    if (!body.expectedCollectorHrCode || !body.collectorHrCode || !body.task || !body.half) {
+      return NextResponse.json({ success: false, error: "Collector, Task, and Half are required for the saved assignment." }, { status: 422 });
     }
 
     const roster = await pullTeamSheet();
