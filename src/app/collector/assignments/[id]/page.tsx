@@ -10,6 +10,17 @@ import { AssignmentTaskTracking } from "@/components/AssignmentTaskTracking";
 import { BonusSubmissionForm } from "@/components/BonusSubmissionForm";
 import { HyperCareSection } from "@/components/HyperCareSection";
 
+function toWhatsAppNumber(phone: string) {
+  // wa.me requires digits only, including the international country code.
+  let digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+
+  // Collector roster mobile numbers are stored as Egyptian local numbers.
+  if (digits.length === 10 && digits.startsWith("1")) digits = `20${digits}`;
+  return digits;
+}
+
 function formatTimestamp(value: string | null): string {
   if (!value) return "—";
   return new Date(value).toLocaleString(undefined, {
@@ -154,17 +165,35 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
           </p>
         ) : (
           <ul className="mt-2 divide-y divide-pitch-800 rounded-card border border-pitch-700">
-            {others.map((c) => (
-              <li key={c.assignment_id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <div className="min-w-0">
-                  <p className="text-chalk-50">{c.full_name ?? "Unnamed collector"}</p>
-                  <p className="mt-1 text-xs text-chalk-300">HR-Code: {c.hr_code || "—"} · Phone: {c.phone || "—"}</p>
-                </div>
-                <span className="shrink-0 text-right text-xs text-chalk-200">
-                  {c.task} · {c.half} · {c.status}
-                </span>
-              </li>
-            ))}
+            {others.map((c) => {
+              const whatsappNumber = c.phone ? toWhatsAppNumber(c.phone) : "";
+              return (
+                <li key={c.assignment_id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="text-chalk-50">{c.full_name ?? "Unnamed collector"}</p>
+                    <p className="mt-1 text-xs text-chalk-300">
+                      HR-Code: {c.hr_code || "—"} · Phone:{" "}
+                      {whatsappNumber ? (
+                        <a
+                          href={`https://wa.me/${whatsappNumber}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-clock-amber underline decoration-pitch-600 underline-offset-4 transition hover:text-chalk-50"
+                          aria-label={`Message ${c.full_name ?? "teammate"} on WhatsApp`}
+                        >
+                          {c.phone}
+                        </a>
+                      ) : (
+                        c.phone || "—"
+                      )}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-right text-xs text-chalk-200">
+                    {c.task} · {c.half} · {c.status}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
