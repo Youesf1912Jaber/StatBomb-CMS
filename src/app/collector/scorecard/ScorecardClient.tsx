@@ -130,19 +130,19 @@ export function CollectorScorecardClient() {
             </label>
             <label className="block text-sm text-chalk-200">
               Month
-            <select
-              value={selectedMonth}
-              onChange={(event) => setSelectedMonth(event.target.value)}
-              disabled={busy}
-              className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-900 px-3 py-2 text-sm text-chalk-50 sm:w-64"
-            >
-              <option value={SCORECARD_ALL_MONTHS}>All months</option>
-              {months.map((month) => (
-                <option key={month} value={month}>
-                  {month}
-                </option>
-              ))}
-            </select>
+              <select
+                value={selectedMonth}
+                onChange={(event) => setSelectedMonth(event.target.value)}
+                disabled={busy}
+                className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-900 px-3 py-2 text-sm text-chalk-50 sm:w-64"
+              >
+                <option value={SCORECARD_ALL_MONTHS}>All months</option>
+                {months.map((month) => (
+                  <option key={month} value={month}>
+                    {month}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-card border border-pitch-700 bg-pitch-900 px-4 py-3">
@@ -166,7 +166,7 @@ export function CollectorScorecardClient() {
           )}
           {rows.length > 0 && filteredRows.length === 0 && (
             <p className="rounded-card border border-dashed border-pitch-700 px-4 py-6 text-center text-sm text-chalk-200">
-              No Scorecard rows found for the selected month.
+              No Scorecard rows match the current filters.
             </p>
           )}
           {filteredRows.length > 0 && <ScorecardTable headers={headers} rows={filteredRows} />}
