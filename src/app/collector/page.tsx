@@ -20,29 +20,29 @@ import type { AssignmentWithMatch } from "@/lib/assignments/types";
 
 const MATCH_CARD_PHOTOS = [
   {
-    src: "https://images.unsplash.com/photo-1574561937874-23dd3e64dc89?auto=format&fit=crop&w=1000&q=80",
-    alt: "Aerial view of a football stadium and pitch",
+    src: "/images/football/stadium-wide.jpg",
+    alt: "Wide view of a football stadium and pitch",
     label: "STADIUM VIEW",
   },
   {
-    src: "https://images.unsplash.com/photo-1665413812017-3cd85b51d0a4?auto=format&fit=crop&w=1000&q=80",
-    alt: "Football match atmosphere at the stadium",
+    src: "/images/football/match-action-1.jpg",
+    alt: "Football action on the pitch",
     label: "MATCH ACTION",
   },
   {
-    src: "https://images.unsplash.com/photo-1782603983074-a90e315475fd?auto=format&fit=crop&w=1000&q=80",
-    alt: "Goalkeeper diving to make a save during a football match",
+    src: "/images/football/goalkeeper-save.jpg",
+    alt: "Goalkeeper making a save",
     label: "GOALKEEPER",
   },
   {
-    src: "https://images.unsplash.com/photo-1590701722430-6a9751ff65d1?auto=format&fit=crop&w=1000&q=80",
-    alt: "Football players contesting the ball on the pitch",
+    src: "/images/football/match-action-2.jpg",
+    alt: "Football players contesting the ball",
     label: "ON THE PITCH",
   },
   {
-    src: "https://images.unsplash.com/photo-1592841897941-5766f3c49288?auto=format&fit=crop&w=1000&q=80",
-    alt: "Aerial view of a football stadium",
-    label: "GROUND OVERVIEW",
+    src: "/images/football/team-celebration.jpg",
+    alt: "Football team celebrating together",
+    label: "TEAM MOMENT",
   },
 ] as const;
 
@@ -217,7 +217,7 @@ export default async function CollectorDashboardPage() {
           aria-hidden="true"
           className="absolute inset-0 -z-20 bg-cover bg-center"
           style={{
-            backgroundImage: 'url("https://images.pexels.com/photos/30689707/pexels-photo-30689707.jpeg?auto=compress&cs=tinysrgb&w=1800")',
+            backgroundImage: 'url("/images/football/locker-room-hero.jpg")',
           }}
         />
         <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-r from-[#021A19] via-[#021A19]/90 to-[#021A19]/35" />
