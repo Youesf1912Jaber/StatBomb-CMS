@@ -10,11 +10,10 @@ export default async function MyTeammatesPage() {
     <section className="max-w-5xl space-y-6">
       <div className="relative isolate flex min-h-[170px] items-end overflow-hidden rounded-2xl border border-pitch-700 bg-[#021a19] p-5 sm:min-h-[205px] sm:p-7">
         <Image
-          src="/images/football/locker-room-wide.jpg"
+          src="/images/football/locker-room-wide.webp"
           alt="Football team lockers"
           fill
           sizes="(max-width: 768px) 100vw, 1100px"
-          unoptimized
           className="object-cover"
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021a19]/95 via-[#021a19]/75 to-[#021a19]/25" />
