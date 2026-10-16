@@ -51,7 +51,7 @@ export function MatchMasterPreviewClient() {
   }, []);
 
   async function applyMatchMaster() {
-    if (!data || !window.confirm(`You are about to create ${data.summary.newMatches ?? 0} Match Master records in Supabase. This does not create assignments and does not modify Google Sheets. Continue?`)) {
+    if (!data || !window.confirm(`You are about to create ${data.summary.newMatches ?? 0} new Match Master records and update any Distribution-created placeholders. This does not modify Google Sheets. Continue?`)) {
       return;
     }
     setApplying(true);

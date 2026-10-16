@@ -67,7 +67,7 @@ export type MatchMasterPreviewSummary = {
 
 export type MatchMasterApplyCandidate = {
   source: MatchMasterPreviewRow;
-  result: "NEW_MATCH" | "DUPLICATE_EXACT_DEDUPED";
+  result: "NEW_MATCH" | "DUPLICATE_EXACT_DEDUPED" | "UPDATE_PLACEHOLDER";
   retainedSourceRow: number;
 };
 
@@ -240,8 +240,21 @@ export function buildMatchMasterApplyPlan(
       if (signatures.size > 1) blockedDuplicateConflicts.push(row);
       continue;
     }
-    if (row.result !== "NEW_MATCH") continue;
     const source = sourceRows.find((candidate) => candidate.source_row === row.sourceRow);
+    const existing = matches.find((match) => normalizeMatchId(match.external_id) === row.matchId);
+    if (
+      row.result === "EXISTING_DIFFERENT" &&
+      existing?.home_team === "Pending Match Master" &&
+      existing.away_team === "Pending Match Master"
+    ) {
+      if (!source || !source.home_team || !source.away_team || !normalizeMatchMasterDate(source.match_date) || !normalizeMatchMasterKickoff(source.kick_off_time)) {
+        invalidMetadata.push(row);
+        continue;
+      }
+      candidates.push({ source, result: "UPDATE_PLACEHOLDER", retainedSourceRow: source.source_row });
+      continue;
+    }
+    if (row.result !== "NEW_MATCH") continue;
     if (!source || !source.home_team || !source.away_team || !normalizeMatchMasterDate(source.match_date) || !normalizeMatchMasterKickoff(source.kick_off_time)) {
       invalidMetadata.push(row);
       continue;
