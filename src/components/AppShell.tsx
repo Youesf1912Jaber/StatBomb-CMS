@@ -4,6 +4,7 @@ import { SignOutButton } from "./SignOutButton";
 import { NotificationBell } from "./NotificationBell";
 import { GlobalSlaAlerts } from "./GlobalSlaAlerts";
 import { ThemeToggle } from "./ThemeToggle";
+import { MobileNav } from "./MobileNav";
 import type { SlaAlertAssignment } from "@/lib/assignments/sla-alarm";
 
 export interface NavItem {
@@ -77,11 +78,20 @@ export function AppShell({
 
       <div className="flex min-h-screen flex-1 flex-col">
         <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-pitch-700 bg-pitch-900 px-4 py-3 lg:justify-end">
-          <div className="min-w-0 lg:hidden">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-pitch-500">
-              StatBomb
-            </p>
-            <p className="font-display text-base text-chalk-50">Console</p>
+          <div className="flex min-w-0 items-center gap-3 lg:hidden">
+            <MobileNav
+              roleLabel={roleLabel}
+              userLabel={userLabel}
+              navItems={navItems}
+              notificationsHref={notificationsHref}
+              unreadCount={unreadCount}
+            />
+            <div className="min-w-0">
+              <p className="font-mono text-[10px] uppercase tracking-widest text-pitch-500">
+                StatBomb
+              </p>
+              <p className="font-display text-base text-chalk-50">Console</p>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <div className="lg:hidden">
