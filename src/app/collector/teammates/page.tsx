@@ -2,6 +2,17 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getCollectorTeammates } from "@/lib/assignments/queries";
 
+function toWhatsAppNumber(phone: string) {
+  // wa.me requires digits only, including the international country code.
+  let digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+
+  // Collector roster mobile numbers are stored as Egyptian local numbers.
+  if (digits.length === 10 && digits.startsWith("1")) digits = `20${digits}`;
+  return digits;
+}
+
 export default async function MyTeammatesPage() {
   const supabase = createClient();
   const teammates = await getCollectorTeammates(supabase);
@@ -57,14 +68,14 @@ export default async function MyTeammatesPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-pitch-700 bg-pitch-900/90 px-4 py-4 sm:px-6">
             <div>
               <p className="text-sm font-semibold text-chalk-50">Collector contacts</p>
-              <p className="mt-1 text-xs text-chalk-200">Tap a number to compose a text message to a teammate.</p>
+              <p className="mt-1 text-xs text-chalk-200">Tap a number to open a WhatsApp chat with a teammate.</p>
             </div>
             <span className="rounded-md border border-pitch-600/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-chalk-200">Matchday operations</span>
           </div>
           <div className="hidden grid-cols-[minmax(0,1.6fr)_minmax(110px,0.75fr)_minmax(150px,1fr)_minmax(100px,0.7fr)] gap-4 border-b border-pitch-700 bg-pitch-900/50 px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-chalk-300 md:grid">
             <span>Collector</span>
             <span>HR code</span>
-            <span>Phone</span>
+            <span>WhatsApp</span>
             <span>Team</span>
           </div>
           <ul className="divide-y divide-pitch-800/90">
@@ -77,6 +88,7 @@ export default async function MyTeammatesPage() {
                 .map((part) => part[0])
                 .join("")
                 .toUpperCase() || "ST";
+              const whatsappNumber = teammate.phone ? toWhatsAppNumber(teammate.phone) : "";
 
               return (
                 <li
@@ -97,10 +109,16 @@ export default async function MyTeammatesPage() {
                     <p className="break-words font-mono text-sm text-chalk-200">{teammate.hr_code || "—"}</p>
                   </div>
                   <div className="flex items-center justify-between gap-3 md:block">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-chalk-400 md:hidden">Phone</p>
-                    {teammate.phone ? (
-                      <a className="inline-flex items-center gap-2 break-all text-sm text-chalk-100 underline decoration-pitch-600 underline-offset-4 transition hover:text-clock-amber" href={`sms:${teammate.phone.replace(/[^+\d]/g, "")}`}>
-                        <span aria-hidden="true">✉</span>{teammate.phone}
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-chalk-400 md:hidden">WhatsApp</p>
+                    {whatsappNumber ? (
+                      <a
+                        className="inline-flex items-center gap-2 break-all text-sm text-clock-amber underline decoration-pitch-600 underline-offset-4 transition hover:text-chalk-50"
+                        href={`https://wa.me/${whatsappNumber}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Message ${teammate.full_name || "teammate"} on WhatsApp`}
+                      >
+                        <span aria-hidden="true">▣</span>{teammate.phone}
                       </a>
                     ) : (
                       <p className="text-sm text-chalk-400">Not provided</p>
