@@ -28,7 +28,7 @@ export default function LoginPage() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-20 bg-cover bg-center"
         style={{
-          backgroundImage: 'url("/images/football/pitch-background-dark.jpg")',
+          backgroundImage: 'url("/images/football/pitch-background-dark.webp")',
         }}
       />
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(105deg,rgba(2,20,19,0.87)_0%,rgba(2,29,27,0.78)_48%,rgba(2,19,18,0.84)_100%)]" />
