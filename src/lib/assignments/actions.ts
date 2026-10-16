@@ -220,7 +220,7 @@ export async function adminMarkAssignmentComplete(assignmentId: string): Promise
     return { error: appError.message, errorCode: appError.code };
   }
 
-  const warning = await syncAssignmentCompletionToSheet(supabase, assignmentId);
+  const warning = await syncAssignmentStatusToSheet(supabase, assignmentId, "Complete");
   revalidatePath(`/admin/assignments/${assignmentId}`);
   revalidatePath("/admin");
   revalidatePath(`/collector/assignments/${assignmentId}`);
