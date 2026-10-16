@@ -1,9 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { getCollectorTeammates } from "@/lib/assignments/queries";
 
 export default async function MyTeammatesPage() {
-  const profile = await getProfileOrRedirect();
   const supabase = createClient();
   const teammates = await getCollectorTeammates(supabase);
 
