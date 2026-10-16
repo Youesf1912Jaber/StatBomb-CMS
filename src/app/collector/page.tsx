@@ -18,7 +18,7 @@ import { AssignmentTable } from "@/components/AssignmentTable";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
 
 function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
-  const halfNumber = a.half.match(/\d+/)?.[0] ?? "—";
+  const halfNumber = a.half.match(/\d+/)?.[0] ?? (a.half === "Full Match" ? "FM" : "00");
   const statusTone =
     a.status === "Completed"
       ? "border-emerald-300/30 bg-emerald-300/10 text-chalk-50"
