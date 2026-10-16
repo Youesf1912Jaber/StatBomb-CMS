@@ -36,7 +36,7 @@ export default async function MatchDistributionPage({
     : [];
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="font-mono text-xs uppercase tracking-widest text-pitch-500">Match Distribution</p>
@@ -89,23 +89,43 @@ export default async function MatchDistributionPage({
         </dl>
       )}
 
-      {match && <HyperCareSection sections={hyperCare} />}
+      <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-2">
+        {match && (
+          <section className="min-w-0 overflow-hidden rounded-card border border-pitch-700 bg-pitch-950/30">
+            <div className="border-b border-pitch-700 px-4 py-3">
+              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-pitch-500">Priority Match Notes</p>
+              <h2 className="mt-1 font-display text-lg text-chalk-50">Hyper Care</h2>
+              <p className="text-xs text-chalk-200">Special review notes and team requests</p>
+            </div>
+            <div className="p-3 sm:p-4">
+              <HyperCareSection sections={hyperCare} />
+            </div>
+          </section>
+        )}
 
-      {match ? (
-        <DistributionAssignmentForm matchId={normalizedMatchId} collectors={collectors} />
-      ) : (
-        <div className="rounded-card border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
-          This Match ID is not present in Match Master, so no assignment can be added.
-        </div>
-      )}
-
-      <div className="rounded-card border border-pitch-700 bg-pitch-900 p-4">
-        <p className="text-sm text-chalk-200">
-          {distribution.length} Distribution row{distribution.length === 1 ? "" : "s"} for Match {normalizedMatchId}.
-        </p>
+        <section className="min-w-0">
+          {match ? (
+            <DistributionAssignmentForm matchId={normalizedMatchId} collectors={collectors} />
+          ) : (
+            <div className="rounded-card border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
+              This Match ID is not present in Match Master, so no assignment can be added.
+            </div>
+          )}
+        </section>
       </div>
 
-      <DistributionRowsClient matchId={normalizedMatchId} distribution={distribution} collectors={collectors} />
+      <section className="min-w-0 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-pitch-700 bg-pitch-900 px-4 py-3">
+          <div>
+            <h2 className="font-display text-lg text-chalk-50">Distribution Assignments</h2>
+            <p className="mt-1 text-sm text-chalk-200">Review and edit assignments currently linked to this match.</p>
+          </div>
+          <span className="rounded-full border border-pitch-600 bg-pitch-950 px-3 py-1 text-xs text-chalk-100">
+            {distribution.length} row{distribution.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        <DistributionRowsClient matchId={normalizedMatchId} distribution={distribution} collectors={collectors} />
+      </section>
     </div>
   );
 }
