@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaboratorsWithContacts } from "@/lib/assignments/queries";
@@ -43,18 +44,36 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
   const hyperCare = await getHyperCareForMatch(assignment.match.home_team, assignment.match.away_team);
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <p className="font-mono text-xs uppercase tracking-widest text-pitch-500">
-          {assignment.match.competition ?? "Match"}
-        </p>
-        <h1 className="mt-1 font-display text-2xl text-chalk-50">
-          {assignment.match.home_team} vs {assignment.match.away_team}
-        </h1>
-        <p className="mt-1 text-sm text-chalk-200">
-          {new Date(assignment.match.match_date).toLocaleDateString(undefined, { dateStyle: "medium" })}
-        </p>
-      </div>
+    <div className="max-w-5xl space-y-6">
+      <section className="relative isolate min-h-[250px] overflow-hidden rounded-2xl border border-pitch-700 bg-[#021a19] shadow-xl shadow-black/15 sm:min-h-[290px]">
+        <Image
+          src="/images/football/stadium-tunnel.jpg"
+          alt="The tunnel opening onto a football pitch"
+          fill
+          priority
+          sizes="(max-width: 768px) 100vw, 1200px"
+          unoptimized
+          className="object-cover"
+        />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021a19]/95 via-[#021a19]/70 to-[#021a19]/15" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021a19]/90 via-transparent to-[#021a19]/15" />
+        <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-clock-amber via-pitch-500 to-transparent" />
+        <div className="relative flex min-h-[250px] flex-col justify-end p-5 sm:min-h-[290px] sm:p-8">
+          <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-white/20 bg-black/30 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-white/85 backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-clock-amber" />
+            Match workspace · {assignment.match.competition ?? "Football"}
+          </div>
+          <h1 className="max-w-3xl font-display text-3xl leading-tight text-white sm:text-4xl lg:text-5xl">
+            {assignment.match.home_team} <span className="text-clock-amber">vs</span> {assignment.match.away_team}
+          </h1>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-white/85">
+            <span className="rounded-md border border-white/20 bg-black/25 px-2.5 py-1.5">Match ID · {assignment.match.external_id}</span>
+            <span className="rounded-md border border-white/20 bg-black/25 px-2.5 py-1.5">{formatDateOnly(assignment.match.match_date)}</span>
+            <span className="rounded-md border border-white/20 bg-black/25 px-2.5 py-1.5">{assignment.half}</span>
+            <span className="rounded-md border border-white/20 bg-black/25 px-2.5 py-1.5">{assignment.status}</span>
+          </div>
+        </div>
+      </section>
 
       {assignment.match.official_website_url && (
         <a
