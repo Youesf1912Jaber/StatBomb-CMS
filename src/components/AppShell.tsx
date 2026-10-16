@@ -42,6 +42,12 @@ export function AppShell({
   return (
     <>
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        {role === "collector" ? (
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-[0.10]"
+            style={{ backgroundImage: 'url("/images/football/pitch-background-dark.jpg")' }}
+          />
+        ) : null}
         <svg
           viewBox="0 0 1600 1000"
           preserveAspectRatio="xMidYMid slice"
