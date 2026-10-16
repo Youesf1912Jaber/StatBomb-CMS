@@ -17,6 +17,34 @@ import { SlaCountdown } from "@/components/SlaCountdown";
 import { AssignmentTable } from "@/components/AssignmentTable";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
 
+const MATCH_CARD_PHOTOS = [
+  {
+    src: "https://images.unsplash.com/photo-1574561937874-23dd3e64dc89?auto=format&fit=crop&w=1000&q=80",
+    alt: "Aerial view of a football stadium and pitch",
+    label: "STADIUM VIEW",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1665413812017-3cd85b51d0a4?auto=format&fit=crop&w=1000&q=80",
+    alt: "Football match atmosphere at the stadium",
+    label: "MATCH ACTION",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1782603983074-a90e315475fd?auto=format&fit=crop&w=1000&q=80",
+    alt: "Goalkeeper diving to make a save during a football match",
+    label: "GOALKEEPER",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1590701722430-6a9751ff65d1?auto=format&fit=crop&w=1000&q=80",
+    alt: "Football players contesting the ball on the pitch",
+    label: "ON THE PITCH",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1592841897941-5766f3c49288?auto=format&fit=crop&w=1000&q=80",
+    alt: "Aerial view of a football stadium",
+    label: "GROUND OVERVIEW",
+  },
+] as const;
+
 function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
   const halfNumber = a.half.match(/\d+/)?.[0] ?? (a.half === "Full Match" ? "FM" : "00");
   const statusTone =
@@ -31,12 +59,22 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
   return (
     <Link
       href={`/collector/assignments/${a.id}`}
-      className="group relative isolate flex min-h-[228px] flex-col overflow-hidden rounded-xl border border-pitch-700 bg-gradient-to-br from-pitch-800 via-pitch-900 to-pitch-950 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-clock-amber hover:shadow-xl hover:shadow-black/15"
+      className="group relative isolate flex min-h-[322px] flex-col overflow-hidden rounded-xl border border-pitch-700 bg-gradient-to-br from-pitch-800 via-pitch-900 to-pitch-950 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-clock-amber hover:shadow-xl hover:shadow-black/15"
     >
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 opacity-70">
-        <div className="absolute right-0 top-0 h-full w-24 border-l border-white/[0.06] bg-gradient-to-l from-white/[0.035] to-transparent" />
-        <div className="absolute right-5 top-16 h-14 w-1 rounded-full bg-clock-amber/45 shadow-[0_0_15px_rgba(218,186,105,0.16)]" />
-        <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-clock-amber/70 via-pitch-500/60 to-transparent opacity-70" />
+      <div className="relative -mx-4 -mt-4 mb-4 h-32 overflow-hidden border-b border-white/10 bg-pitch-950">
+        <img
+          src={matchPhoto.src}
+          alt={matchPhoto.alt}
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+        />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021A19]/90 via-[#021A19]/15 to-[#021A19]/10" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021A19]/45 via-transparent to-transparent" />
+        <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/90">{matchPhoto.label}</span>
+          <span className="rounded-full border border-white/25 bg-black/30 px-2 py-1 text-[9px] uppercase tracking-wide text-white/85 backdrop-blur-sm">Photo · Unsplash</span>
+        </div>
       </div>
       <div className="flex items-start justify-between gap-3">
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Matchday locker</span>
