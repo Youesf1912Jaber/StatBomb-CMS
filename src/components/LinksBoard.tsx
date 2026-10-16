@@ -14,7 +14,7 @@ function LinksItem({ cell }: { cell: LinksCell }) {
   let displayText = cell.text;
   if (isLink) {
     try {
-      const url = new URL(cell.href);
+      const url = new URL(cell.href ?? "");
       displayText = url.hostname.replace(/^www\./, "") + (url.pathname === "/" ? "" : url.pathname);
     } catch {
       displayText = cell.text;
