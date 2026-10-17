@@ -68,7 +68,7 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
       href={`/collector/assignments/${a.id}`}
       className="group relative isolate flex min-h-[322px] flex-col overflow-hidden rounded-xl border border-pitch-700 bg-gradient-to-br from-pitch-800 via-pitch-900 to-pitch-950 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-clock-amber hover:shadow-xl hover:shadow-black/15"
     >
-      <div className="relative -mx-4 -mt-4 mb-4 h-36 overflow-hidden border-b border-white/10 bg-pitch-950 sm:h-40">
+      <div className="relative -mx-4 -mt-4 mb-4 h-44 overflow-hidden border-b border-white/10 bg-pitch-950 sm:h-48">
         <Image
           src={matchPhoto.src}
           alt={matchPhoto.alt}
@@ -76,18 +76,17 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
           sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
           className="object-cover object-center transition-transform duration-700 group-hover:scale-105"
         />
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021A19]/90 via-[#021A19]/15 to-[#021A19]/10" />
-        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021A19]/45 via-transparent to-transparent" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-[#021A19]/55 via-[#021A19]/5 to-transparent" />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-[#021A19]/15 via-transparent to-transparent" />
         <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-2">
           <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/90">{matchPhoto.label}</span>
-          <span className="rounded-full border border-white/25 bg-black/30 px-2 py-1 text-[9px] uppercase tracking-wide text-white/85 backdrop-blur-sm">Local image</span>
+          
         </div>
       </div>
       <div className="flex items-start justify-between gap-3">
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Matchday locker</span>
         <span className={`rounded-full border px-2 py-1 text-[10px] font-medium leading-none ${statusTone}`}>{a.status}</span>
       </div>
-      <div aria-hidden="true" className="pointer-events-none absolute right-3 top-3 z-10 flex h-14 min-w-14 items-center justify-center rounded-xl border border-[#E8C977]/60 bg-[#021A19]/90 px-3 font-mono text-3xl font-bold leading-none text-[#F2D37C] shadow-lg shadow-black/40 ring-1 ring-black/20">{halfNumber.padStart(2, "0")}</div>
       <h3 className="relative mt-5 max-w-[88%] text-base font-semibold leading-snug text-chalk-50 transition-colors group-hover:text-clock-amber">
         {a.match.home_team} <span className="text-chalk-200">vs</span> {a.match.away_team}
       </h3>
