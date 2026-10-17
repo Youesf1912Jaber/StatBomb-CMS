@@ -64,6 +64,7 @@ export default async function AdminLayout({
       notificationsHref="/admin/notifications"
       unreadCount={unreadCount}
       role="admin"
+      canSwitchWorkspace={profile.role === "admin"}
       profileId={profile.id}
       slaAlertAssignments={slaAlertAssignments}
     >
