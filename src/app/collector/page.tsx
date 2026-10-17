@@ -87,6 +87,7 @@ function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Matchday locker</span>
         <span className={`rounded-full border px-2 py-1 text-[10px] font-medium leading-none ${statusTone}`}>{a.status}</span>
       </div>
+      <div aria-hidden="true" className="pointer-events-none absolute right-3 top-3 z-10 flex h-14 min-w-14 items-center justify-center rounded-xl border border-[#E8C977]/60 bg-[#021A19]/90 px-3 font-mono text-3xl font-bold leading-none text-[#F2D37C] shadow-lg shadow-black/40 ring-1 ring-black/20">{halfNumber === "FM" ? "FM" : halfNumber.padStart(2, "0")}</div>
       <h3 className="relative mt-5 max-w-[88%] text-base font-semibold leading-snug text-chalk-50 transition-colors group-hover:text-clock-amber">
         {a.match.home_team} <span className="text-chalk-200">vs</span> {a.match.away_team}
       </h3>
