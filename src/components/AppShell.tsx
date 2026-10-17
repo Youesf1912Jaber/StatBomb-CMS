@@ -22,6 +22,7 @@ interface AppShellProps {
   unreadCount: number;
   /** Current authenticated user's role and ID scope SLA monitoring. */
   role: "admin" | "collector";
+  canSwitchWorkspace: boolean;
   profileId: string;
   /** Active assignments visible through the existing role-specific queries. */
   slaAlertAssignments: SlaAlertAssignment[];
@@ -35,6 +36,7 @@ export function AppShell({
   notificationsHref,
   unreadCount,
   role,
+  canSwitchWorkspace,
   profileId,
   slaAlertAssignments,
   children,
@@ -135,6 +137,17 @@ export function AppShell({
             <span className="hidden font-mono text-xs uppercase tracking-wide text-pitch-500 sm:inline lg:hidden">
               {roleLabel}
             </span>
+            {canSwitchWorkspace ? (
+              <Link
+                href={role === "admin" ? "/collector" : "/admin"}
+                title={role === "admin" ? "Switch to Collector workspace" : "Switch to Admin workspace"}
+                className="inline-flex items-center gap-2 rounded-[8px] border border-[#287568] bg-[#063b35] px-3 py-1.5 text-sm font-medium text-[#d9eee8] shadow-sm transition-colors hover:border-[#e3c36b] hover:bg-[#0b4940] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e3c36b]"
+              >
+                <span aria-hidden="true">⇄</span>
+                <span className="hidden sm:inline">{role === "admin" ? "Collector" : "Admin"}</span>
+                <span className="sm:hidden">{role === "admin" ? "COL" : "ADM"}</span>
+              </Link>
+            ) : null}
             <ThemeToggle />
             <SignOutButton />
           </div>
