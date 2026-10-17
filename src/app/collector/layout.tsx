@@ -74,6 +74,7 @@ export default async function CollectorLayout({
       notificationsHref="/collector/notifications"
       unreadCount={unreadCount}
       role="collector"
+      canSwitchWorkspace={profile.role === "admin"}
       profileId={profile.id}
       slaAlertAssignments={slaAlertAssignments}
     >
