@@ -66,9 +66,8 @@ async function syncAssignmentStatusToSheet(
 
 async function fetchCompletedDistributionAssignments(
   supabase: ReturnType<typeof createClient>,
+  assignmentIds: string[],
 ) {
-  // The helper below is typed explicitly from the table row to avoid relying
-  // on a single PostgREST response, which may be capped at 1,000 rows.
   const assignments: Array<{
     id: string;
     match_id: string;
@@ -77,28 +76,50 @@ async function fetchCompletedDistributionAssignments(
     raw_task_value: string | null;
     half: string;
   }> = [];
-  for (let from = 0; ; from += 1000) {
+  // Only sync the assignments affected by this button press. Never scan every
+  // historical completed assignment on the sheet.
+  for (let offset = 0; offset < assignmentIds.length; offset += 100) {
+    const ids = assignmentIds.slice(offset, offset + 100);
     const { data, error } = await supabase
       .from("assignments")
       .select("id, match_id, collector_id, task, raw_task_value, half")
+      .in("id", ids)
       .eq("distribution_present", true)
       .eq("hidden_from_admin_dashboard", false)
-      .eq("status", "Completed")
-      .order("id", { ascending: true })
-      .range(from, from + 999);
+      .eq("status", "Completed");
     if (error) throw error;
-    const page = data ?? [];
-    assignments.push(...page);
-    if (page.length < 1000) break;
+    assignments.push(...(data ?? []));
   }
   return assignments;
 }
 
+async function fetchCurrentDistributionAssignmentIds(
+  supabase: ReturnType<typeof createClient>,
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select("id")
+      .eq("distribution_present", true)
+      .eq("hidden_from_admin_dashboard", false)
+      .in("status", ["Not Started", "In Progress", "Overdue"])
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw error;
+    const page = data ?? [];
+    ids.push(...page.map((row) => row.id));
+    if (page.length < 1000) break;
+  }
+  return ids;
+}
+
 async function syncCurrentDistributionCompletionsToSheet(
   supabase: ReturnType<typeof createClient>,
+  assignmentIds: string[],
 ): Promise<string | null> {
   try {
-    const rows = await fetchCompletedDistributionAssignments(supabase);
+    const rows = await fetchCompletedDistributionAssignments(supabase, assignmentIds);
     if (rows.length === 0) return null;
 
     const collectorIds = [...new Set(rows.map((row) => row.collector_id))];
@@ -130,14 +151,12 @@ async function syncCurrentDistributionCompletionsToSheet(
         status: "Complete" as const,
       }];
     });
-    // A single ambiguous/stale sheet row must not prevent every other valid
-    // assignment from syncing. Try the efficient batch first, then isolate
-    // failures row-by-row so valid Status cells still get updated.
+
     try {
       await updateDistributionStatuses(updates);
       return null;
     } catch (batchError) {
-      console.warn("Bulk Distribution status batch failed; retrying assignments individually.", batchError);
+      console.warn("Bulk Distribution status batch failed; retrying only affected assignments individually.", batchError);
     }
 
     const failures: Array<{ update: DistributionStatusUpdate; reason: string }> = [];
@@ -171,7 +190,6 @@ async function syncCurrentDistributionCompletionsToSheet(
     return `Assignments were completed in the app, but Google Sheets sync failed.${detail}`;
   }
 }
-
 
 /**
  * Start Work. All authorization and the atomic state transition happen
@@ -273,13 +291,21 @@ export async function adminCompleteCurrentDistributionAssignments(): Promise<Bul
   }
 
   const supabase = createClient();
+  let assignmentIds: string[];
+  try {
+    assignmentIds = await fetchCurrentDistributionAssignmentIds(supabase);
+  } catch (fetchError) {
+    console.error("Could not identify current distribution assignments before bulk completion", fetchError);
+    const appError = translateSupabaseError(fetchError);
+    return { error: appError.message, errorCode: appError.code, completedCount: 0 };
+  }
   const { data, error } = await supabase.rpc("admin_complete_current_distribution_assignments");
   if (error) {
     const appError = translateSupabaseError(error);
     return { error: appError.message, errorCode: appError.code, completedCount: 0 };
   }
 
-  const warning = await syncCurrentDistributionCompletionsToSheet(supabase);
+  const warning = await syncCurrentDistributionCompletionsToSheet(supabase, assignmentIds);
   revalidatePath("/admin");
   revalidatePath("/collector");
   return { ...OK, warning, completedCount: data };
