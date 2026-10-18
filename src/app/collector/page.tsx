@@ -25,7 +25,7 @@ const MATCH_CARD_PHOTOS = [
     label: "STADIUM VIEW",
   },
   {
-    src: "/images/football/match-action-1.jpg",
+    src: "/images/football/match-action-1.webp",
     alt: "Football action on the pitch",
     label: "MATCH ACTION",
   },
