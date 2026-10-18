@@ -294,10 +294,16 @@ export async function adminCompleteCurrentDistributionAssignments(): Promise<Bul
   let assignmentIds: string[];
   try {
     assignmentIds = await fetchCurrentDistributionAssignmentIds(supabase);
-  } catch (fetchError) {
+  } catch (fetchError: unknown) {
     console.error("Could not identify current distribution assignments before bulk completion", fetchError);
-    const appError = translateSupabaseError(fetchError);
-    return { error: appError.message, errorCode: appError.code, completedCount: 0 };
+    const message = fetchError instanceof Error
+      ? fetchError.message
+      : "Could not load the current distribution assignments. Please try again.";
+    return {
+      error: message,
+      errorCode: "BULK_COMPLETION_PRECHECK_FAILED",
+      completedCount: 0,
+    };
   }
   const { data, error } = await supabase.rpc("admin_complete_current_distribution_assignments");
   if (error) {
