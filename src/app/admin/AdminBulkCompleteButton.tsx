@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { adminCompleteCurrentDistributionAssignments } from "@/lib/assignments/actions";
 
@@ -57,8 +58,8 @@ export function AdminBulkCompleteButton({ eligibleCount }: AdminBulkCompleteButt
       </button>
       {message && <p role="status" className="text-sm text-chalk-200">{message}</p>}
       {error && <p role="alert" className="text-sm text-clock-red">{error}</p>}
-      {confirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      {confirming && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <div
             role="dialog"
             aria-modal="true"
@@ -88,7 +89,8 @@ export function AdminBulkCompleteButton({ eligibleCount }: AdminBulkCompleteButt
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
