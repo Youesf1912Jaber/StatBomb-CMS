@@ -130,11 +130,45 @@ async function syncCurrentDistributionCompletionsToSheet(
         status: "Complete" as const,
       }];
     });
-    await updateDistributionStatuses(updates);
-    return null;
+    // A single ambiguous/stale sheet row must not prevent every other valid
+    // assignment from syncing. Try the efficient batch first, then isolate
+    // failures row-by-row so valid Status cells still get updated.
+    try {
+      await updateDistributionStatuses(updates);
+      return null;
+    } catch (batchError) {
+      console.warn("Bulk Distribution status batch failed; retrying assignments individually.", batchError);
+    }
+
+    const failures: Array<{ update: DistributionStatusUpdate; reason: string }> = [];
+    let synced = 0;
+    for (const update of updates) {
+      try {
+        const result = await updateDistributionStatuses([update]);
+        synced += result.updated;
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "Unknown Google Sheets error";
+        failures.push({ update, reason });
+        console.error("Could not sync one completed assignment to Distribution sheet", {
+          matchId: update.matchId,
+          collectorHrCode: update.collectorHrCode,
+          task: update.task,
+          half: update.half,
+          reason,
+        });
+      }
+    }
+
+    if (failures.length === 0) return null;
+    const firstFailure = failures[0];
+    const detail = firstFailure
+      ? ` First failed row: Match ID ${firstFailure.update.matchId}, HR ${firstFailure.update.collectorHrCode}, task ${firstFailure.update.task}, ${firstFailure.update.half} — ${firstFailure.reason}`
+      : "";
+    return `Google Sheets sync partially completed: ${synced} status cell(s) updated; ${failures.length} assignment(s) could not be matched or updated.${detail}`;
   } catch (error) {
     console.error("Bulk completion succeeded in app but Distribution status sync failed", error);
-    return "Assignments were completed in the app, but one or more Google Sheets Status cells could not be updated. Check the Distribution sheet connection and retry.";
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    return `Assignments were completed in the app, but Google Sheets sync failed.${detail}`;
   }
 }
 
