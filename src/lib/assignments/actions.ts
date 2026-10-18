@@ -301,7 +301,7 @@ export async function adminCompleteCurrentDistributionAssignments(): Promise<Bul
       : "Could not load the current distribution assignments. Please try again.";
     return {
       error: message,
-      errorCode: "BULK_COMPLETION_PRECHECK_FAILED",
+      errorCode: null,
       completedCount: 0,
     };
   }
