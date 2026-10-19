@@ -2,7 +2,7 @@ import CollectorImportClient from "./CollectorImportClient";
 
 export default function CollectorsPage() {
   return (
-    <section className="w-full min-w-0 space-y-6">
+    <section className="admin-collectors-page w-full min-w-0 space-y-6">
       <header className="relative isolate overflow-hidden rounded-2xl border border-pitch-600/80 bg-pitch-950 shadow-2xl shadow-black/20">
         <div
           className="absolute inset-0 -z-30 bg-[url('/images/football/Collectors%20control%20room.webp')] bg-cover bg-center"
