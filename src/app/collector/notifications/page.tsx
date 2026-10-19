@@ -27,7 +27,7 @@ export default async function CollectorNotificationsPage() {
         </div>
       </div>
 
-      <NotificationList notifications={notifications} />
+      <NotificationList notifications={notifications} detailsBasePath="/collector/assignments" />
     </div>
   );
 }

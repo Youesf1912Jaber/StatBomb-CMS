@@ -6,6 +6,7 @@ type Client = SupabaseClient<Database>;
 
 export type NotificationWithDetails = NotificationRow & {
   assignmentDetails: {
+    assignmentId: string;
     matchLabel: string;
     competition: string | null;
     matchDate: string;
@@ -81,6 +82,7 @@ export async function getNotificationsForUser(
       ...notification,
       assignmentDetails: match
         ? {
+            assignmentId: assignment.id,
             matchLabel: `${match.home_team} vs ${match.away_team}`,
             competition: match.competition,
             matchDate: match.match_date,

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { NotificationType } from "@/types/database.types";
 import type { NotificationWithDetails } from "@/lib/notifications/queries";
 import { formatCairoDateTime } from "@/lib/dates";
@@ -13,7 +14,7 @@ const TYPE_STYLE: Record<NotificationType, { accent: string; label: string }> = 
   assignment_completed: { accent: "text-chalk-200", label: "Completed" },
 };
 
-function NotificationItem({ n }: { n: NotificationWithDetails }) {
+function NotificationItem({ n, detailsBasePath }: { n: NotificationWithDetails; detailsBasePath: string }) {
   const unread = n.read_at === null;
   const style = TYPE_STYLE[n.type];
   const details = n.assignmentDetails;
@@ -41,7 +42,11 @@ function NotificationItem({ n }: { n: NotificationWithDetails }) {
           <p className="mt-1 text-sm text-chalk-200">{n.message}</p>
 
           {details && (
-            <div className="mt-3 space-y-2 rounded-lg border border-pitch-700 bg-pitch-950/60 p-3">
+            <Link
+              href={detailsBasePath + "/" + details.assignmentId}
+              aria-label={"Open assignment for " + details.matchLabel}
+              className="mt-3 block space-y-2 rounded-lg border border-pitch-700 bg-pitch-950/60 p-3 transition-colors hover:border-clock-amber hover:bg-pitch-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clock-amber"
+            >
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-pitch-400">Match</p>
                 <p className="mt-0.5 text-sm font-semibold text-chalk-50">{details.matchLabel}</p>
@@ -67,7 +72,10 @@ function NotificationItem({ n }: { n: NotificationWithDetails }) {
               <p className="text-xs text-chalk-200">
                 SLA deadline: <span className="font-mono">{formatCairoDateTime(details.sla)}</span>
               </p>
-            </div>
+              <p className="flex items-center gap-1 text-xs font-semibold text-clock-amber">
+                Open match / assignment <span aria-hidden="true">→</span>
+              </p>
+            </Link>
           )}
 
           <p className="mt-2 font-mono text-xs text-pitch-500">
@@ -84,7 +92,7 @@ function NotificationItem({ n }: { n: NotificationWithDetails }) {
   );
 }
 
-export function NotificationList({ notifications }: { notifications: NotificationWithDetails[] }) {
+export function NotificationList({ notifications, detailsBasePath }: { notifications: NotificationWithDetails[]; detailsBasePath: string }) {
   if (notifications.length === 0) {
     return (
       <p className="rounded-card border border-dashed border-pitch-700 px-4 py-10 text-center text-sm text-chalk-200">
@@ -96,7 +104,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
   return (
     <ul className="space-y-2">
       {notifications.map((n) => (
-        <NotificationItem key={n.id} n={n} />
+        <NotificationItem key={n.id} n={n} detailsBasePath={detailsBasePath} />
       ))}
     </ul>
   );
