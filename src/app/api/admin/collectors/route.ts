@@ -97,7 +97,7 @@ export async function POST(request: Request) {
         if (body.password !== body.confirmPassword) throw new Error("Temporary passwords do not match.");
         const { data: profiles, error: profilesError } = await admin.service.from("profiles").select("id,email,full_name,hr_code,role,suspended_at").is("deleted_at", null).eq("role", "collector");
         if (profilesError) throw new Error("Unable to load collector accounts.");
-        const targets = (profiles ?? []).filter((profile) => !profile.suspended_at && (body.action === "bulk-set-temporary-password" || true));
+        const targets = (profiles ?? []).filter((profile) => !profile.suspended_at);
         const succeeded: Array<{ id: string; name: string; hr_code: string | null; email: string }> = [];
         const failed: Array<{ name: string; hr_code: string | null; email: string; message: string }> = [];
         for (const profile of targets) {
