@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } from "@/lib/assignments/queries";
@@ -25,7 +26,7 @@ function formatDateOnly(value: string | null): string {
   return day + "/" + month + "/" + year;
 }
 
-function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
+function DetailField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0 border-b border-pitch-800/80 py-2.5 last:border-b-0 sm:border-b-0">
       <dt className="text-[10px] font-semibold uppercase tracking-[0.13em] text-chalk-200">{label}</dt>
