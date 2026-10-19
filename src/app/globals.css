@@ -215,3 +215,36 @@ html[data-theme="light"] .collector-management .border-pitch-600,
 html[data-theme="light"] .collector-management .border-pitch-600\/70 {
   border-color: #d2e0d7 !important;
 }
+
+
+/* Match Master tables must stay opaque above the pitch image in dark mode. */
+html:not([data-theme="light"]) .match-master-table,
+html:not([data-theme="light"]) .match-master-preview-table {
+  background-color: #032e2b !important;
+  background-image: none !important;
+  border-color: #14544c !important;
+}
+html:not([data-theme="light"]) .match-master-table thead,
+html:not([data-theme="light"]) .match-master-preview-table thead {
+  background-color: #06413b !important;
+}
+html:not([data-theme="light"]) .match-master-table tbody,
+html:not([data-theme="light"]) .match-master-preview-table tbody {
+  background-color: #032e2b !important;
+}
+html:not([data-theme="light"]) .match-master-table tbody tr,
+html:not([data-theme="light"]) .match-master-preview-table tbody tr {
+  background-color: #032e2b !important;
+}
+html:not([data-theme="light"]) .match-master-table tbody tr:nth-child(even),
+html:not([data-theme="light"]) .match-master-preview-table tbody tr:nth-child(even) {
+  background-color: #043832 !important;
+}
+html:not([data-theme="light"]) .match-master-table tbody tr:hover,
+html:not([data-theme="light"]) .match-master-preview-table tbody tr:hover {
+  background-color: #084b43 !important;
+}
+html:not([data-theme="light"]) .match-master-table th,
+html:not([data-theme="light"]) .match-master-preview-table th {
+  color: #dcece6 !important;
+}

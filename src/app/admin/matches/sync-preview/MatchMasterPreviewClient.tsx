@@ -160,7 +160,7 @@ export function MatchMasterPreviewClient() {
         ))}
       </div>
       <p className="text-sm text-chalk-200">Showing {rows.length} of {data.rows.length} Match Master rows.</p>
-      <div className="overflow-x-auto rounded-card border border-pitch-700">
+      <div className="match-master-preview-table overflow-x-auto rounded-card border border-pitch-700">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-pitch-700 bg-pitch-900 text-chalk-200">
             <tr>{["Source Row", "Match ID", "Home Team", "Away Team", "Competition", "Season", "Match Date", "Kickoff", "Result", "Reason"].map((header) => <th key={header} className="whitespace-nowrap px-3 py-2">{header}</th>)}</tr>
