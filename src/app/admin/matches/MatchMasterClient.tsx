@@ -82,7 +82,7 @@ export function MatchMasterClient() {
       )}
 
       {!loading && !error && (
-        <div className="overflow-x-auto rounded-card border border-pitch-700">
+        <div className="match-master-table overflow-x-auto rounded-card border border-pitch-700">
           <table className="min-w-[1100px] w-full text-left text-sm">
             <thead className="bg-pitch-900 text-xs uppercase tracking-wide text-pitch-500">
               <tr>
