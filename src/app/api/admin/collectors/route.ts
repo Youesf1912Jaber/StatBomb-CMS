@@ -114,7 +114,7 @@ export async function POST(request: Request) {
           if (updated.error) { failed.push({ name: profile.full_name ?? "Unknown", hr_code: profile.hr_code, email: profile.email, message: "Unable to update account." }); continue; }
           succeeded.push({ id: profile.id, name: profile.full_name ?? "Unknown", hr_code: profile.hr_code, email: profile.email });
           const audit = await admin.service.from("activity_logs").insert({ user_id: admin.user.id, assignment_id: null, action: "collector_bulk_account_activated", old_value: { profile_id: profile.id, hr_code: profile.hr_code }, new_value: { profile_id: profile.id, hr_code: profile.hr_code, activation_method: "temporary_shared_password" } });
-          if (audit.error) failed.push({ name: profile.full_name ?? "Unknown", hr_code: profile.hr_code, email: profile.email, message: "Account activated, but audit logging failed; review Activity Log." });
+          if (audit.error) console.error("Bulk collector activation audit log failed", { profileId: profile.id, error: audit.error.message });
         }
         return NextResponse.json({ result: { attempted: pending.length, activated: succeeded.length, failed: failed.length, accounts: succeeded.map(({ id, name, hr_code, email }) => ({ id, name, hr_code, email })), failures: failed } });
       }
