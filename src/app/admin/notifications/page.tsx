@@ -25,7 +25,7 @@ export default async function AdminNotificationsPage() {
         </div>
       </div>
 
-      <NotificationList notifications={notifications} />
+      <NotificationList notifications={notifications} detailsBasePath="/admin/assignments" />
     </div>
   );
 }
