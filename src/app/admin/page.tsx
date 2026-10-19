@@ -31,7 +31,9 @@ function SummaryCard({ label, value, note, accent, href }: { label: string; valu
   );
 }
 
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({ searchParams }: { searchParams: { status?: string } }) {
+  const allowedStatusFilters = ["All", "Not Started", "In Progress", "Completed", "Overdue"] as const;
+  const initialStatusFilter = allowedStatusFilters.find((status) => status === searchParams.status) ?? "All";
   const supabase = createClient();
   const assignments = await getAdminDashboardAssignments(supabase);
   const currentShiftDate = getCairoToday();
@@ -107,15 +109,15 @@ export default async function AdminDashboardPage() {
       </section>
 
       <section aria-label="Assignment overview" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <SummaryCard label="All assignments" value={assignments.length} note="Across all collectors and shifts" accent="bg-clock-amber" href="#all-distributed-matches" />
-        <SummaryCard label="In progress" value={inProgressCount} note="Collectors currently working" accent="bg-sky-400" href="#status-in-progress" />
-        <SummaryCard label="Completed" value={completedCount} note="Finished assignments" accent="bg-emerald-400" href="#status-completed" />
+        <SummaryCard label="All assignments" value={assignments.length} note="Across all collectors and shifts" accent="bg-clock-amber" href="/admin#all-distributed-matches" />
+        <SummaryCard label="In progress" value={inProgressCount} note="Collectors currently working" accent="bg-sky-400" href="/admin?status=In%20Progress#all-distributed-matches" />
+        <SummaryCard label="Completed" value={completedCount} note="Finished assignments" accent="bg-emerald-400" href="/admin?status=Completed#all-distributed-matches" />
         <SummaryCard
           label="Needs attention"
           value={overdueCount}
           note={`${notStartedCount.toLocaleString()} not started`}
           accent="bg-clock-red"
-          href={overdueCount > 0 ? "#status-overdue" : "#status-not-started"}
+          href={overdueCount > 0 ? "/admin?status=Overdue#all-distributed-matches" : "/admin?status=Not%20Started#all-distributed-matches"}
         />
       </section>
 
@@ -191,6 +193,7 @@ export default async function AdminDashboardPage() {
             detailsBasePath="/admin/assignments"
             showCollector
             collectorNames={collectorNames}
+            initialStatusFilter={initialStatusFilter}
             liveRefresh={false}
             realtimeRefresh={false}
           />
