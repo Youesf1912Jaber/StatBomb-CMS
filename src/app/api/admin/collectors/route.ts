@@ -91,6 +91,33 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({ deleted: true, sheetSync: { ok: true } });
       }
+      if (body.action === "bulk-activate-unconfirmed") {
+        if (typeof body.password !== "string" || typeof body.confirmPassword !== "string") throw new Error("A temporary password and confirmation are required.");
+        if (body.password.length < 8) throw new Error("Temporary password must be at least 8 characters.");
+        if (body.password !== body.confirmPassword) throw new Error("Temporary passwords do not match.");
+        const [profilesResult, usersResult] = await Promise.all([
+          admin.service.from("profiles").select("id,email,full_name,hr_code,role,suspended_at").is("deleted_at", null).eq("role", "collector"),
+          admin.service.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+        ]);
+        if (profilesResult.error) throw new Error("Unable to load collector accounts.");
+        if (usersResult.error) throw new Error("Unable to inspect account activation status.");
+        const authById = new Map(usersResult.data.users.map((user) => [user.id, user]));
+        const pending = (profilesResult.data ?? []).filter((profile) => {
+          if (profile.suspended_at) return false;
+          const user = authById.get(profile.id);
+          return !user || !(user.email_confirmed_at ?? user.confirmed_at);
+        });
+        const succeeded: Array<{ id: string; name: string; hr_code: string | null; email: string }> = [];
+        const failed: Array<{ name: string; hr_code: string | null; email: string; message: string }> = [];
+        for (const profile of pending) {
+          const updated = await admin.service.auth.admin.updateUserById(profile.id, { password: body.password, email_confirm: true });
+          if (updated.error) { failed.push({ name: profile.full_name ?? "Unknown", hr_code: profile.hr_code, email: profile.email, message: "Unable to update account." }); continue; }
+          succeeded.push({ id: profile.id, name: profile.full_name ?? "Unknown", hr_code: profile.hr_code, email: profile.email });
+          const audit = await admin.service.from("activity_logs").insert({ user_id: admin.user.id, assignment_id: null, action: "collector_bulk_account_activated", old_value: { profile_id: profile.id, hr_code: profile.hr_code }, new_value: { profile_id: profile.id, hr_code: profile.hr_code, activation_method: "temporary_shared_password" } });
+          if (audit.error) console.error("Bulk collector activation audit log failed", { profileId: profile.id, error: audit.error.message });
+        }
+        return NextResponse.json({ result: { attempted: pending.length, activated: succeeded.length, failed: failed.length, accounts: succeeded.map(({ id, name, hr_code, email }) => ({ id, name, hr_code, email })), failures: failed } });
+      }
       if (body.action === "activate-account") {
         if (!body.id || typeof body.password !== "string" || typeof body.confirmPassword !== "string") {
           throw new Error("A collector and password confirmation are required.");
