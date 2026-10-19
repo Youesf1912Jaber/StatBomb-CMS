@@ -15,14 +15,19 @@ const CURRENT_SHIFT_SECTION_LABELS = {
   "Not Started": "Not Started (All Shifts)",
 } as const;
 
-function SummaryCard({ label, value, note, accent }: { label: string; value: number; note: string; accent: string }) {
+function SummaryCard({ label, value, note, accent, href }: { label: string; value: number; note: string; accent: string; href: string }) {
   return (
-    <div className="relative min-w-0 overflow-hidden rounded-xl border border-pitch-700 bg-pitch-950/90 p-4 shadow-lg shadow-black/10 sm:p-5">
+    <a
+      href={href}
+      aria-label={`${label}: ${value.toLocaleString()}. ${note}. Jump to matching assignments.`}
+      className="group relative block min-w-0 overflow-hidden rounded-xl border border-pitch-700 bg-pitch-950/90 p-4 text-left shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-0.5 hover:border-pitch-500 hover:bg-pitch-900/90 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clock-amber focus-visible:ring-offset-2 focus-visible:ring-offset-pitch-950 active:translate-y-0 sm:p-5"
+    >
       <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${accent}`} />
-      <p className="text-xs font-medium text-chalk-200">{label}</p>
+      <span aria-hidden="true" className="absolute right-3 top-3 text-sm text-chalk-200/60 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-clock-amber">↗</span>
+      <p className="pr-5 text-xs font-medium text-chalk-200">{label}</p>
       <p className="mt-2 font-display text-3xl font-bold tabular-nums text-chalk-50">{value.toLocaleString()}</p>
       <p className="mt-1 text-xs text-chalk-200">{note}</p>
-    </div>
+    </a>
   );
 }
 
@@ -102,10 +107,16 @@ export default async function AdminDashboardPage() {
       </section>
 
       <section aria-label="Assignment overview" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <SummaryCard label="All assignments" value={assignments.length} note="Across all collectors and shifts" accent="bg-clock-amber" />
-        <SummaryCard label="In progress" value={inProgressCount} note="Collectors currently working" accent="bg-sky-400" />
-        <SummaryCard label="Completed" value={completedCount} note="Finished assignments" accent="bg-emerald-400" />
-        <SummaryCard label="Needs attention" value={overdueCount} note={`${notStartedCount.toLocaleString()} not started`} accent="bg-clock-red" />
+        <SummaryCard label="All assignments" value={assignments.length} note="Across all collectors and shifts" accent="bg-clock-amber" href="#all-distributed-matches" />
+        <SummaryCard label="In progress" value={inProgressCount} note="Collectors currently working" accent="bg-sky-400" href="#status-in-progress" />
+        <SummaryCard label="Completed" value={completedCount} note="Finished assignments" accent="bg-emerald-400" href="#status-completed" />
+        <SummaryCard
+          label="Needs attention"
+          value={overdueCount}
+          note={`${notStartedCount.toLocaleString()} not started`}
+          accent="bg-clock-red"
+          href={overdueCount > 0 ? "#status-overdue" : "#status-not-started"}
+        />
       </section>
 
       <section className="space-y-5 rounded-2xl border border-pitch-700/70 bg-pitch-950/45 p-3 shadow-xl shadow-black/10 backdrop-blur-sm sm:p-5">
@@ -128,7 +139,11 @@ export default async function AdminDashboardPage() {
             : currentShiftAssignments.filter((assignment) => assignment.status === status);
 
           return (
-            <section key={status} className="min-w-0 overflow-hidden rounded-xl border border-pitch-600/80 bg-[#031e1c]/90 shadow-lg shadow-black/10">
+            <section
+              key={status}
+              id={status === "Completed" ? "status-completed" : status === "In Progress" ? "status-in-progress" : status === "Overdue" ? "status-overdue" : "status-not-started"}
+              className="min-w-0 scroll-mt-24 overflow-hidden rounded-xl border border-pitch-600/80 bg-[#031e1c]/90 shadow-lg shadow-black/10"
+            >
               <div className="flex items-center justify-between gap-3 border-b border-pitch-700 bg-gradient-to-r from-pitch-800/90 to-pitch-900/70 px-4 py-3.5">
                 <div className="flex min-w-0 items-center gap-3">
                   <span aria-hidden="true" className={`h-8 w-1 shrink-0 rounded-full ${status === "Completed" ? "bg-emerald-400" : status === "In Progress" ? "bg-sky-400" : status === "Overdue" ? "bg-clock-red" : "bg-clock-amber"}`} />
@@ -151,7 +166,7 @@ export default async function AdminDashboardPage() {
         })}
       </section>
 
-      <section className="min-w-0 space-y-3">
+      <section id="all-distributed-matches" className="min-w-0 scroll-mt-24 space-y-3">
         <div className="flex flex-col gap-2 border-b border-pitch-700 pb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-clock-amber">Full assignment register</p>
