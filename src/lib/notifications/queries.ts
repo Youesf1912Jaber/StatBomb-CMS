@@ -4,16 +4,29 @@ import type { Database, NotificationRow } from "@/types/database.types";
 
 type Client = SupabaseClient<Database>;
 
+export type NotificationWithDetails = NotificationRow & {
+  assignmentDetails: {
+    matchLabel: string;
+    competition: string | null;
+    matchDate: string;
+    task: string;
+    half: string;
+    status: string;
+    sla: string;
+    collectorName: string;
+    collectorHrCode: string | null;
+  } | null;
+};
+
 /**
- * The signed-in user's notifications, newest first. RLS
- * (`notifications_owner_read`) already scopes rows to the recipient (or an
- * admin); the explicit `recipient_id` filter keeps this to "my own
- * notifications" for both roles and makes the intent clear.
+ * The signed-in user's notifications, newest first, enriched with the
+ * assignment's match and collector so SLA alerts explain exactly what is at risk.
+ * RLS scopes the notification and assignment rows to the current user/admin.
  */
 export async function getNotificationsForUser(
   supabase: Client,
   userId: string
-): Promise<NotificationRow[]> {
+): Promise<NotificationWithDetails[]> {
   const { data, error } = await supabase
     .from("notifications")
     .select("*")
@@ -21,7 +34,66 @@ export async function getNotificationsForUser(
     .order("sent_at", { ascending: false });
 
   if (error) throw error;
-  return data ?? [];
+  const notifications = data ?? [];
+  const assignmentIds = [...new Set(
+    notifications.map((notification) => notification.assignment_id).filter((id): id is string => id !== null)
+  )];
+
+  if (assignmentIds.length === 0) {
+    return notifications.map((notification) => ({ ...notification, assignmentDetails: null }));
+  }
+
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("assignments")
+    .select("id, match_id, collector_id, task, half, status, sla")
+    .in("id", assignmentIds);
+  if (assignmentsError) throw assignmentsError;
+
+  const assignmentRows = assignments ?? [];
+  const matchIds = [...new Set(assignmentRows.map((assignment) => assignment.match_id))];
+  const collectorIds = [...new Set(assignmentRows.map((assignment) => assignment.collector_id))];
+
+  const [matchesResult, collectorsResult] = await Promise.all([
+    matchIds.length
+      ? supabase.from("matches").select("id, home_team, away_team, competition, match_date").in("id", matchIds)
+      : Promise.resolve({ data: [], error: null }),
+    collectorIds.length
+      ? supabase.from("profiles").select("id, full_name, hr_code").in("id", collectorIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (matchesResult.error) throw matchesResult.error;
+  if (collectorsResult.error) throw collectorsResult.error;
+
+  const matchById = new Map((matchesResult.data ?? []).map((match) => [match.id, match]));
+  const collectorById = new Map((collectorsResult.data ?? []).map((collector) => [collector.id, collector]));
+  const assignmentById = new Map(assignmentRows.map((assignment) => [assignment.id, assignment]));
+
+  return notifications.map((notification) => {
+    const assignment = notification.assignment_id
+      ? assignmentById.get(notification.assignment_id)
+      : undefined;
+    if (!assignment) return { ...notification, assignmentDetails: null };
+
+    const match = matchById.get(assignment.match_id);
+    const collector = collectorById.get(assignment.collector_id);
+    return {
+      ...notification,
+      assignmentDetails: match
+        ? {
+            matchLabel: `${match.home_team} vs ${match.away_team}`,
+            competition: match.competition,
+            matchDate: match.match_date,
+            task: assignment.task,
+            half: assignment.half,
+            status: assignment.status,
+            sla: assignment.sla,
+            collectorName: collector?.full_name?.trim() || "Unknown collector",
+            collectorHrCode: collector?.hr_code ?? null,
+          }
+        : null,
+    };
+  });
 }
 
 /** Unread notification count for the bell badge (RLS-scoped to the user). */

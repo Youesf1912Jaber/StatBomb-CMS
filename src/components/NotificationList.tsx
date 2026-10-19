@@ -1,4 +1,5 @@
-import type { NotificationRow, NotificationType } from "@/types/database.types";
+import type { NotificationType } from "@/types/database.types";
+import type { NotificationWithDetails } from "@/lib/notifications/queries";
 import { formatCairoDateTime } from "@/lib/dates";
 import { DeleteNotificationButton, MarkAsReadButton } from "./NotificationMarkButtons";
 
@@ -12,9 +13,10 @@ const TYPE_STYLE: Record<NotificationType, { accent: string; label: string }> = 
   assignment_completed: { accent: "text-chalk-200", label: "Completed" },
 };
 
-function NotificationItem({ n }: { n: NotificationRow }) {
+function NotificationItem({ n }: { n: NotificationWithDetails }) {
   const unread = n.read_at === null;
   const style = TYPE_STYLE[n.type];
+  const details = n.assignmentDetails;
 
   return (
     <li
@@ -37,7 +39,38 @@ function NotificationItem({ n }: { n: NotificationRow }) {
             </p>
           </div>
           <p className="mt-1 text-sm text-chalk-200">{n.message}</p>
-          <p className="mt-1 font-mono text-xs text-pitch-500">
+
+          {details && (
+            <div className="mt-3 space-y-2 rounded-lg border border-pitch-700 bg-pitch-950/60 p-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-pitch-400">Match</p>
+                <p className="mt-0.5 text-sm font-semibold text-chalk-50">{details.matchLabel}</p>
+                {details.competition && (
+                  <p className="text-xs text-chalk-200">{details.competition}</p>
+                )}
+                <p className="text-xs text-pitch-400">Match date: {details.matchDate}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-pitch-400">Collector</p>
+                  <p className="text-sm text-chalk-100">{details.collectorName}</p>
+                  {details.collectorHrCode && (
+                    <p className="text-xs text-pitch-400">HR-Code: {details.collectorHrCode}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-pitch-400">Task / Half</p>
+                  <p className="text-sm text-chalk-100">{details.task} · {details.half}</p>
+                  <p className="text-xs text-pitch-400">Status: {details.status}</p>
+                </div>
+              </div>
+              <p className="text-xs text-chalk-200">
+                SLA deadline: <span className="font-mono">{formatCairoDateTime(details.sla)}</span>
+              </p>
+            </div>
+          )}
+
+          <p className="mt-2 font-mono text-xs text-pitch-500">
             {formatCairoDateTime(n.sent_at)}
             {unread ? " · Unread" : " · Read"}
           </p>
@@ -51,7 +84,7 @@ function NotificationItem({ n }: { n: NotificationRow }) {
   );
 }
 
-export function NotificationList({ notifications }: { notifications: NotificationRow[] }) {
+export function NotificationList({ notifications }: { notifications: NotificationWithDetails[] }) {
   if (notifications.length === 0) {
     return (
       <p className="rounded-card border border-dashed border-pitch-700 px-4 py-10 text-center text-sm text-chalk-200">
