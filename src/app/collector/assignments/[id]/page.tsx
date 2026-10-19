@@ -55,8 +55,7 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
 
   return (
     <main className="match-details-page mx-auto w-full min-w-0 max-w-[1440px] space-y-5 pb-8">
-      <header className="relative isolate overflow-hidden rounded-xl border border-pitch-700 bg-pitch-950/95 p-4 shadow-xl shadow-black/20 sm:p-6" style={{ backgroundImage: "url(\"/images/football/Teams%20Vs.png\")", backgroundSize: "cover", backgroundPosition: "center" }}>
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(5,35,32,0.78),rgba(3,24,23,0.72))]" />
+      <header className="relative isolate overflow-hidden rounded-xl border border-pitch-700 bg-pitch-950/95 p-4 shadow-xl shadow-black/20 sm:p-6" style={{ backgroundImage: "linear-gradient(115deg, rgba(5,35,32,0.78), rgba(3,24,23,0.72)), url(\"/images/football/Teams%20Vs.png\")", backgroundSize: "cover", backgroundPosition: "center" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/collector" className="inline-flex items-center gap-2 text-xs text-chalk-200 transition hover:text-clock-amber">
             <span aria-hidden="true">←</span> Back to dashboard
