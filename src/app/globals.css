@@ -99,3 +99,119 @@ html[data-theme="light"] .theme-toggle-moon {
     scroll-behavior: auto !important;
   }
 }
+
+
+/* Collector Management — Figma-inspired Light Mode */
+html[data-theme="light"] .admin-collectors-page > header {
+  background-color: #f0f7f1 !important;
+  border-color: #cbdccf !important;
+  box-shadow: 0 12px 30px rgb(25 55 39 / 0.08) !important;
+}
+html[data-theme="light"] .admin-collectors-page > header > div.absolute:first-child {
+  opacity: 0.06;
+}
+html[data-theme="light"] .admin-collectors-page > header > div.absolute:nth-child(2) {
+  background-image: linear-gradient(90deg, #f0f7f1 0%, #f0f7f1 58%, rgb(240 247 241 / 0.78) 100%) !important;
+}
+html[data-theme="light"] .admin-collectors-page > header .text-chalk-50,
+html[data-theme="light"] .admin-collectors-page > header .text-chalk-100,
+html[data-theme="light"] .admin-collectors-page > header .text-emerald-100,
+html[data-theme="light"] .admin-collectors-page > header .text-emerald-200 {
+  color: #24382f !important;
+}
+html[data-theme="light"] .admin-collectors-page > header .text-chalk-300,
+html[data-theme="light"] .admin-collectors-page > header .text-chalk-400 {
+  color: #52665b !important;
+}
+html[data-theme="light"] .admin-collectors-page > header .bg-pitch-950\/70 {
+  background-color: rgb(255 255 255 / 0.78) !important;
+  border-color: #d2e0d7 !important;
+}
+
+html[data-theme="light"] .collector-management {
+  color: #24382f;
+}
+html[data-theme="light"] .collector-management > .grid > div {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: #d7e3d9 !important;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 0.05) !important;
+}
+html[data-theme="light"] .collector-management > .grid > div .text-chalk-50,
+html[data-theme="light"] .collector-management > .grid > div .text-chalk-300 {
+  color: #52665b !important;
+}
+html[data-theme="light"] .collector-management > .grid > div .text-sky-200 {
+  color: #295b86 !important;
+}
+html[data-theme="light"] .collector-management > .grid > div .text-emerald-200 {
+  color: #1a714b !important;
+}
+html[data-theme="light"] .collector-management > section {
+  background: rgb(255 255 255 / 0.94) !important;
+  border-color: #d7e3d9 !important;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 0.05) !important;
+}
+html[data-theme="light"] .collector-management article {
+  background: #ffffff !important;
+  border-color: #d7e3d9 !important;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 0.05) !important;
+}
+html[data-theme="light"] .collector-management article:hover {
+  background: #f7fbf8 !important;
+  border-color: #87b798 !important;
+}
+html[data-theme="light"] .collector-management article .bg-pitch-900,
+html[data-theme="light"] .collector-management article .bg-pitch-900\/70,
+html[data-theme="light"] .collector-management article .bg-pitch-900\/80 {
+  background-color: #eff5f0 !important;
+}
+html[data-theme="light"] .collector-management article .text-emerald-100,
+html[data-theme="light"] .collector-management article .text-emerald-200 {
+  color: #1a714b !important;
+}
+html[data-theme="light"] .collector-management article .text-sky-200 {
+  color: #295b86 !important;
+}
+html[data-theme="light"] .collector-management article .text-fuchsia-200 {
+  color: #7b3f82 !important;
+}
+html[data-theme="light"] .collector-management article .text-amber-200 {
+  color: #8a5b10 !important;
+}
+html[data-theme="light"] .collector-management article .text-slate-300 {
+  color: #52665b !important;
+}
+html[data-theme="light"] .collector-management article .border-y,
+html[data-theme="light"] .collector-management article .xl\:border-l {
+  border-color: #e5ece8 !important;
+}
+html[data-theme="light"] .collector-management input,
+html[data-theme="light"] .collector-management select,
+html[data-theme="light"] .collector-management textarea {
+  background-color: #ffffff !important;
+  color: #24382f !important;
+  border-color: #cbdccf !important;
+}
+html[data-theme="light"] .collector-management input::placeholder,
+html[data-theme="light"] .collector-management textarea::placeholder {
+  color: #718278 !important;
+}
+html[data-theme="light"] .collector-management .text-chalk-50 {
+  color: #24382f;
+}
+html[data-theme="light"] .collector-management .text-chalk-100,
+html[data-theme="light"] .collector-management .text-chalk-200 {
+  color: #344f42;
+}
+html[data-theme="light"] .collector-management .text-chalk-300,
+html[data-theme="light"] .collector-management .text-chalk-400,
+html[data-theme="light"] .collector-management .text-chalk-500 {
+  color: #607568;
+}
+html[data-theme="light"] .collector-management .border-pitch-700,
+html[data-theme="light"] .collector-management .border-pitch-700\/80,
+html[data-theme="light"] .collector-management .border-pitch-600,
+html[data-theme="light"] .collector-management .border-pitch-600\/70 {
+  border-color: #d2e0d7 !important;
+}
