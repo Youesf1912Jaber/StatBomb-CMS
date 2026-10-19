@@ -211,9 +211,25 @@ export default async function CollectorDashboardPage() {
 
   return (
     <div className="relative isolate -mx-3 space-y-8 overflow-hidden rounded-2xl px-3 py-3 sm:-mx-5 sm:px-5 sm:py-5 lg:-mx-6 lg:px-6">
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url("/images/football/pitch-background-dark.webp")' }} />
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 bg-[#021A19]/30" />
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 bg-gradient-to-b from-[#021A19]/10 via-[#021A19]/25 to-[#021A19]/45" />
+<div
+  aria-hidden="true"
+  className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center bg-no-repeat"
+  style={{
+    backgroundImage: 'url("/images/football/pitch-background-dark.webp")',
+  }}
+/>
+
+{/* Main dark overlay */}
+<div
+  aria-hidden="true"
+  className="pointer-events-none fixed inset-0 -z-10 bg-[#021A19]/50"
+/>
+
+{/* Cinematic gradient overlay */}
+<div
+  aria-hidden="true"
+  className="pointer-events-none fixed inset-0 -z-10 bg-gradient-to-b from-[#021A19]/30 via-[#021A19]/45 to-[#021A19]/65"
+/>
       <section className="relative isolate overflow-hidden rounded-2xl border border-pitch-700 bg-[#032927]/85 shadow-2xl shadow-black/10 backdrop-blur-[2px]">
         <div
           aria-hidden="true"
