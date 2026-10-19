@@ -20,6 +20,7 @@ interface AssignmentTableProps {
   liveRefresh?: boolean;
   showFilters?: boolean;
   realtimeRefresh?: boolean;
+  initialStatusFilter?: (typeof STATUS_OPTIONS)[number];
 }
 
 const STATUS_OPTIONS = ["All", "Not Started", "In Progress", "Completed", "Overdue"] as const;
@@ -32,10 +33,11 @@ export function AssignmentTable({
   liveRefresh = false,
   showFilters = true,
   realtimeRefresh = true,
+  initialStatusFilter = "All",
 }: AssignmentTableProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>("All");
+  const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]>(initialStatusFilter);
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
