@@ -279,7 +279,7 @@ export default function CollectorImportClient() {
   const blocked = preview?.rows.some((row) => ["invalid-row", "duplicate-hr-code", "duplicate-email"].includes(row.outcome));
   const editingProfile = editing ? profiles.find((profile) => profile.id === editing) : undefined;
 
-  return <div className="w-full min-w-0 space-y-6">
+  return <div className="collector-management w-full min-w-0 space-y-6">
     <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {[
         { label: "Squad size", value: profiles.length, color: "text-chalk-50", mark: "XI", note: "Registered members", accent: "from-emerald-300/25" },
