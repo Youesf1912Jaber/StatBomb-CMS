@@ -22,16 +22,22 @@ function formatDateOnly(value: string | null): string {
   if (!value) return "—";
   const [year, month, day] = value.split("-");
   if (!year || !month || !day) return value;
-  return `${day}/${month}/${year}`;
+  return day + "/" + month + "/" + year;
+}
+
+function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 border-b border-pitch-800/80 py-2.5 last:border-b-0 sm:border-b-0">
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.13em] text-chalk-200">{label}</dt>
+      <dd className="mt-1 break-words text-sm font-medium text-chalk-50">{children}</dd>
+    </div>
+  );
 }
 
 export default async function AdminAssignmentDetailsPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
-
   const assignment = await getAssignmentById(supabase, params.id);
-  if (!assignment) {
-    notFound();
-  }
+  if (!assignment) notFound();
 
   const { data: collector } = await supabase
     .from("profiles")
@@ -43,178 +49,153 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
   const activityHistory = await getActivityLogsForAssignment(supabase, assignment.id);
   const taskTimers = await getAssignmentTaskTimers(supabase, assignment.id);
   const hyperCare = await getHyperCareForMatch(assignment.match.home_team, assignment.match.away_team);
-
   const { data: allCollectors } = await supabase
     .from("profiles")
     .select("id, full_name, email")
     .eq("role", "collector")
     .order("full_name");
-
   const availableCollectors = allCollectors ?? [];
 
   return (
-    <div className="w-full min-w-0 space-y-6">
-      <div>
-        <p className="font-mono text-xs uppercase tracking-widest text-pitch-500">
-          {assignment.match.competition ?? "Match"}
+    <main className="match-details-page mx-auto w-full min-w-0 max-w-[1440px] space-y-5 pb-8">
+      <header className="relative isolate overflow-hidden rounded-xl border border-pitch-700 bg-pitch-950/95 p-4 shadow-xl shadow-black/20 sm:p-6">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(5,45,39,0.96),rgba(3,28,26,0.88))]" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link href="/admin" className="inline-flex items-center gap-2 text-xs text-chalk-200 transition hover:text-clock-amber">
+            <span aria-hidden="true">←</span> Back to dashboard
+          </Link>
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-200">
+            <span aria-hidden="true">●</span>{assignment.status}
+          </span>
+        </div>
+        <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">
+          {(assignment.match.competition ?? "Football").toUpperCase()} <span className="mx-2 text-pitch-500">/</span> {formatDateOnly(assignment.match.match_date)}
         </p>
-        <h1 className="mt-1 font-display text-2xl text-chalk-50">
-          {assignment.match.home_team} vs {assignment.match.away_team}
+        <h1 className="mt-2 font-display text-3xl font-semibold leading-tight text-chalk-50 sm:text-4xl">
+          {assignment.match.home_team} <span className="text-clock-amber">vs</span> {assignment.match.away_team}
         </h1>
-        <p className="mt-1 text-sm text-chalk-200">
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-chalk-200">
+          <span aria-hidden="true">♙</span>
           Assigned to {collector?.full_name ?? collector?.email ?? "Unknown collector"}
         </p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <ReassignButton
+            assignmentId={assignment.id}
+            currentCollectorId={assignment.collector_id}
+            currentCollectorName={collector?.full_name ?? collector?.email ?? "Unknown collector"}
+            availableCollectors={availableCollectors}
+          />
+          <EditButton assignment={assignment} />
+          <EditDistributionDetailsButton
+            assignmentId={assignment.id}
+            shiftDate={assignment.shift_date}
+            officialWebsiteUrl={assignment.match.official_website_url}
+          />
+          {assignment.match.official_website_url && (
+            <a href={assignment.match.official_website_url} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center rounded-md border border-pitch-700 bg-pitch-900 px-3.5 py-2 text-xs font-semibold text-chalk-50 transition hover:border-clock-amber">
+              Official Match ↗
+            </a>
+          )}
+          <AdminAssignmentActions assignmentId={assignment.id} status={assignment.status} />
+        </div>
         {!assignment.distribution_present && (
-          <p className="mt-3 rounded-card border border-clock-amber/40 bg-pitch-900 px-4 py-3 text-sm text-clock-amber">
+          <p className="mt-4 rounded-lg border border-clock-amber/35 bg-black/20 px-4 py-3 text-sm text-clock-amber">
             Distribution Missing/Removed. This assignment is preserved for Admin/history. Status, SLA, and task timers are unchanged.
           </p>
         )}
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        {assignment.match.official_website_url && (
-          <a
-            href={assignment.match.official_website_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block rounded-card border border-pitch-700 px-4 py-2 text-sm text-chalk-50 transition-colors hover:border-clock-amber"
-          >
-            Official Website ↗
-          </a>
-        )}
-        <ReassignButton
-          assignmentId={assignment.id}
-          currentCollectorId={assignment.collector_id}
-          currentCollectorName={collector?.full_name ?? collector?.email ?? "Unknown collector"}
-          availableCollectors={availableCollectors}
-        />
-        <EditButton assignment={assignment} />
-        <EditDistributionDetailsButton
-          assignmentId={assignment.id}
-          shiftDate={assignment.shift_date}
-          officialWebsiteUrl={assignment.match.official_website_url}
-        />
-        <AdminAssignmentActions assignmentId={assignment.id} status={assignment.status} />
-      </div>
-
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-card border border-pitch-700 bg-pitch-900 p-5 text-sm sm:grid-cols-3">
-        <div>
-          <dt className="text-chalk-200">Task</dt>
-          <dd className="mt-0.5 text-chalk-50">{assignment.task}</dd>
-        </div>
-        <div>
-          <dt className="text-chalk-200">Half</dt>
-          <dd className="mt-0.5 text-chalk-50">{assignment.half}</dd>
-        </div>
-        <div>
-          <dt className="text-chalk-200">Status</dt>
-          <dd className="mt-0.5 text-chalk-50">{assignment.status}</dd>
-        </div>
-        <div>
-          <dt className="text-chalk-200">Distribution</dt>
-          <dd className={`mt-0.5 ${assignment.distribution_present ? "text-chalk-50" : "text-clock-amber"}`}>
-            {distributionPresenceLabel(assignment.distribution_present)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-chalk-200">Shift Date</dt>
-          <dd className="mt-0.5 text-chalk-50">{formatDateOnly(assignment.shift_date)}</dd>
-        </div>
-        <div>
-          <dt className="text-chalk-200">Official Match URL</dt>
-          <dd className="mt-0.5 text-chalk-50">
-            {assignment.match.official_website_url ? "Set" : "Not set"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-chalk-200">SLA</dt>
-          <dd className="mt-0.5">
-            <SlaCountdown sla={assignment.sla} status={assignment.status} />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-chalk-200">Started</dt>
-          <dd className="mt-0.5 text-chalk-50">{formatTimestamp(assignment.started_at)}</dd>
-        </div>
-        <div>
-          <dt className="text-chalk-200">Completed</dt>
-          <dd className="mt-0.5 text-chalk-50">{formatTimestamp(assignment.completed_at)}</dd>
-        </div>
-      </dl>
+      </header>
 
       <HyperCareSection sections={hyperCare} />
 
+      <section className="overflow-hidden rounded-xl border border-pitch-700 bg-pitch-900 shadow-lg shadow-black/10">
+        <header className="border-b border-pitch-700 bg-[#103a34] px-4 py-3">
+          <h2 className="font-display text-base font-semibold text-chalk-50">Match information</h2>
+        </header>
+        <dl className="grid grid-cols-1 gap-x-5 px-4 py-2 sm:grid-cols-2 sm:px-5 lg:grid-cols-3">
+          <DetailField label="Task">{assignment.task}</DetailField>
+          <DetailField label="Half">{assignment.half}</DetailField>
+          <DetailField label="Status"><span className={assignment.status === "Completed" ? "text-emerald-300" : assignment.status === "Overdue" ? "text-rose-300" : "text-chalk-50"}>{assignment.status}</span></DetailField>
+          <DetailField label="Distribution"><span className={assignment.distribution_present ? "text-chalk-50" : "text-clock-amber"}>{distributionPresenceLabel(assignment.distribution_present)}</span></DetailField>
+          <DetailField label="Shift Date">{formatDateOnly(assignment.shift_date)}</DetailField>
+          <DetailField label="Official Match URL">
+            {assignment.match.official_website_url ? (
+              <a href={assignment.match.official_website_url} target="_blank" rel="noopener noreferrer" className="text-clock-amber underline underline-offset-2">Open official URL ↗</a>
+            ) : "Not set"}
+          </DetailField>
+          <DetailField label="SLA"><SlaCountdown sla={assignment.sla} status={assignment.status} /></DetailField>
+          <DetailField label="Started">{formatTimestamp(assignment.started_at)}</DetailField>
+          <DetailField label="Completed">{formatTimestamp(assignment.completed_at)}</DetailField>
+        </dl>
+      </section>
+
       {assignment.notes && (
-        <div className="rounded-card border border-pitch-700 bg-pitch-900 p-5">
-          <dt className="text-sm font-semibold text-chalk-200">Notes</dt>
-          <dd className="mt-2 whitespace-pre-wrap text-sm text-chalk-50">{assignment.notes}</dd>
-        </div>
+        <section className="rounded-xl border border-pitch-700 bg-pitch-900 p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-chalk-200">Assignment notes</h2>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-chalk-50">{assignment.notes}</p>
+        </section>
       )}
 
-      <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-2">
-        <section className="min-w-0 rounded-card border border-pitch-700 bg-pitch-950/35 p-3 sm:p-4">
+      <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)]">
+        <section className="min-w-0 overflow-hidden rounded-xl border border-pitch-700 bg-pitch-900 p-3 sm:p-4">
           <AdminAssignmentTaskTimers timers={taskTimers} />
         </section>
 
         <div className="min-w-0 space-y-5">
-          {collaborators.length > 1 && (
-            <section className="min-w-0">
-              <h2 className="font-display text-lg text-chalk-50">All collectors on this match</h2>
-              <ul className="mt-2 divide-y divide-pitch-800 overflow-hidden rounded-card border border-pitch-700">
+          <section className="overflow-hidden rounded-xl border border-pitch-700 bg-pitch-900">
+            <header className="border-b border-pitch-700 bg-[#103a34] px-4 py-3">
+              <h2 className="font-display text-base font-semibold text-chalk-50">All collectors on this match</h2>
+            </header>
+            {collaborators.length === 0 ? (
+              <p className="px-4 py-5 text-sm text-chalk-200">No collectors are linked to this match.</p>
+            ) : (
+              <ul className="divide-y divide-pitch-800">
                 {collaborators.map((c) => (
-                  <li
-                    key={c.assignment_id}
-                    className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm ${
-                      c.assignment_id === assignment.id ? "bg-pitch-900" : ""
-                    }`}
-                  >
-                    <span className="flex min-w-0 flex-wrap items-center gap-2">
-                      {c.assignment_id ? (
-                        <Link
-                          href={`/admin/assignments/${c.assignment_id}`}
-                          className="text-chalk-50 underline decoration-pitch-500 underline-offset-2 transition-colors hover:text-clock-amber"
-                        >
-                          {c.full_name ?? "Unnamed collector"}
-                        </Link>
-                      ) : (
-                        <span className="text-chalk-50">{c.full_name ?? "Unnamed collector"}</span>
-                      )}
-                      {c.assignment_id === assignment.id && (
-                        <span className="text-xs text-pitch-500">(Current)</span>
-                      )}
-                    </span>
-                    <span className="text-xs text-chalk-200 sm:text-right">
-                      {c.task} · {c.half} · {c.status}
-                    </span>
+                  <li key={c.assignment_id ?? c.collector_id} className={"flex flex-wrap items-center justify-between gap-3 px-4 py-3 " + (c.assignment_id === assignment.id ? "bg-[#0d332e]" : "")}>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-pitch-700 bg-pitch-800 text-[10px] font-semibold text-chalk-200">
+                        {(c.full_name ?? "C").split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        {c.assignment_id ? (
+                          <Link href={"/admin/assignments/" + c.assignment_id} className="break-words text-sm font-semibold text-chalk-50 underline decoration-pitch-500 underline-offset-2 hover:text-clock-amber">
+                            {c.full_name ?? "Unnamed collector"}
+                          </Link>
+                        ) : <p className="text-sm font-semibold text-chalk-50">{c.full_name ?? "Unnamed collector"}</p>}
+                        <p className="mt-1 text-xs text-chalk-200">{c.task} · {c.half}</p>
+                        {c.assignment_id === assignment.id && <p className="mt-1 text-[10px] uppercase tracking-wider text-pitch-500">Current assignment</p>}
+                      </div>
+                    </div>
+                    <span className={"shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold " + (c.status === "Completed" ? "bg-emerald-400/10 text-emerald-200" : "bg-pitch-800 text-chalk-200")}>{c.status}</span>
                   </li>
                 ))}
               </ul>
-            </section>
-          )}
+            )}
+          </section>
 
-          <section className="min-w-0">
-            <h2 className="font-display text-lg text-chalk-50">Activity History</h2>
+          <section className="overflow-hidden rounded-xl border border-pitch-700 bg-pitch-900">
+            <header className="border-b border-pitch-700 bg-[#103a34] px-4 py-3">
+              <h2 className="font-display text-base font-semibold text-chalk-50">Activity History</h2>
+            </header>
             {activityHistory.length === 0 ? (
-              <p className="mt-2 rounded-card border border-dashed border-pitch-700 px-4 py-6 text-sm text-chalk-200">
-                No activity history for this assignment.
-              </p>
+              <p className="px-4 py-6 text-sm text-chalk-200">No activity history for this assignment.</p>
             ) : (
-              <div className="mt-2 max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+              <div className="max-h-[32rem] space-y-0 overflow-y-auto">
                 {activityHistory.map((log) => (
-                  <div key={log.id} className="rounded-card border border-pitch-700 bg-pitch-900 p-3 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium text-chalk-50">{log.actionLabel}</span>
-                      <span className="text-xs text-chalk-200">{formatTimestamp(log.created_at)}</span>
+                  <article key={log.id} className="relative border-b border-pitch-800 px-4 py-3 last:border-b-0">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-chalk-50">{log.actionLabel}</p>
+                      <time className="text-[10px] text-chalk-200">{formatTimestamp(log.created_at)}</time>
                     </div>
-                    <p className="mt-1 text-chalk-200">By {log.userName}</p>
-                    <p className="mt-2 text-chalk-50">{log.changeSummary}</p>
-                  </div>
+                    <p className="mt-1 text-xs text-chalk-200">By {log.userName}</p>
+                    <p className="mt-2 text-sm leading-5 text-chalk-50">{log.changeSummary}</p>
+                  </article>
                 ))}
               </div>
             )}
           </section>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
