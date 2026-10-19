@@ -261,14 +261,30 @@ export default async function CollectorDashboardPage() {
       </section>
 
       <section aria-label="Matchday overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {matchdayStats.map((stat, index) => (
-          <div key={stat.label} className="relative overflow-hidden rounded-xl border border-pitch-700 bg-pitch-900/85 p-4">
-            <div aria-hidden="true" className={index === 3 ? "absolute inset-y-0 left-0 w-1 bg-clock-red" : index === 1 ? "absolute inset-y-0 left-0 w-1 bg-sky-400" : "absolute inset-y-0 left-0 w-1 bg-clock-amber"} />
-            <p className="pl-2 text-xs text-chalk-200">{stat.label}</p>
-            <p className="pl-2 pt-2 font-mono text-3xl font-semibold tracking-tight text-chalk-50">{stat.value}</p>
-            <p className="pl-2 pt-1 text-[11px] text-chalk-200">{stat.note}</p>
-          </div>
-        ))}
+        {matchdayStats.map((stat, index) => {
+          const href = index === 0
+            ? "#collector-todays-work"
+            : index === 1
+              ? "#collector-in-progress"
+              : index === 2
+                ? "#collector-completed-today"
+                : "#collector-sla-attention";
+
+          return (
+            <a
+              key={stat.label}
+              href={href}
+              aria-label={`${stat.label}: ${stat.value}. ${stat.note}. Scroll to matching assignments.`}
+              className="group relative block min-w-0 overflow-hidden rounded-xl border border-pitch-700 bg-pitch-900/85 p-4 text-left shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-0.5 hover:border-pitch-500 hover:bg-pitch-800/90 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clock-amber focus-visible:ring-offset-2 focus-visible:ring-offset-pitch-950 active:translate-y-0"
+            >
+              <div aria-hidden="true" className={index === 3 ? "absolute inset-y-0 left-0 w-1 bg-clock-red" : index === 1 ? "absolute inset-y-0 left-0 w-1 bg-sky-400" : "absolute inset-y-0 left-0 w-1 bg-clock-amber"} />
+              <span aria-hidden="true" className="absolute right-3 top-3 text-sm text-chalk-200/60 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-clock-amber">↘</span>
+              <p className="pl-2 pr-5 text-xs text-chalk-200">{stat.label}</p>
+              <p className="pl-2 pt-2 font-mono text-3xl font-semibold tracking-tight text-chalk-50">{stat.value.toLocaleString()}</p>
+              <p className="pl-2 pt-1 text-[11px] text-chalk-200">{stat.note}</p>
+            </a>
+          );
+        })}
       </section>
 
       <div id="locker-room" className="space-y-2">
@@ -282,11 +298,13 @@ export default async function CollectorDashboardPage() {
         </div>
       </div>
 
+      <div id="collector-todays-work" className="scroll-mt-24">
       <Section
         title="Today's Work"
         items={todaysWork}
         emptyLabel="Nothing shift-dated for today."
       />
+      </div>
 
       <Section
         title="Not Started (All Shifts)"
@@ -294,11 +312,13 @@ export default async function CollectorDashboardPage() {
         emptyLabel="No not-started assignments in your current distribution."
       />
 
+      <div id="collector-in-progress" className="scroll-mt-24">
       <Section
         title="Currently In Progress"
         items={inProgress}
         emptyLabel="Nothing in progress right now."
       />
+      </div>
 
       <Section
         title="Upcoming Assignments"
@@ -306,17 +326,21 @@ export default async function CollectorDashboardPage() {
         emptyLabel="No upcoming assignments."
       />
 
+      <div id="collector-completed-today" className="scroll-mt-24">
       <Section
         title="Completed Today"
         items={completedToday}
         emptyLabel="Nothing completed yet today."
       />
+      </div>
 
+      <div id="collector-sla-attention" className="scroll-mt-24">
       <Section
         title="SLA Warnings / Overdue"
         items={slaAttention}
         emptyLabel="Nothing overdue."
       />
+      </div>
 
       <section>
         <h2 className="font-display text-lg text-chalk-50">
