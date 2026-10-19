@@ -54,8 +54,11 @@ body {
   min-height: 100vh;
   background-color: rgb(var(--body-bg));
   background-image:
-    radial-gradient(ellipse at 12% 0%, rgb(var(--pitch-600) / 0.13), transparent 42%),
-    linear-gradient(135deg, rgb(var(--pitch-950) / 0.12), transparent 58%);
+    linear-gradient(180deg, rgb(var(--pitch-950) / 0.28), rgb(var(--pitch-950) / 0.42)),
+    url("/images/football/pitch-background-dark.webp");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
   background-attachment: fixed;
   color: rgb(var(--body-fg));
 }
