@@ -45,10 +45,10 @@ export function AppShell({
     <>
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.42]"
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.22]"
           style={{ backgroundImage: 'url("/images/football/pitch-background-dark.webp")' }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#021A19]/45 via-[#021A19]/52 to-[#021A19]/68" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#021A19]/68 via-[#021A19]/76 to-[#021A19]/84" />
       </div>
       <div className="relative z-10 min-h-screen lg:flex">
       <GlobalSlaAlerts
