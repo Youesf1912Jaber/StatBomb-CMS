@@ -1237,7 +1237,9 @@ export async function readDeduction2026Sheet(): Promise<DeductionSheetSourceRow[
   const indexFor = (...aliases: string[]) =>
     headers.findIndex((header) => aliases.includes(header));
   const indexes = {
-    matchId: indexFor("match id", "id", "matchid"),
+    // Match ID is always stored in column A. Do not infer its location from the
+    // header text because that cell's label has been renamed in the source sheet.
+    matchId: 0,
     app: indexFor("app"),
     code: indexFor("code", "hr code", "hrcode", "collector hr code", "collector code"),
     collectorName: indexFor("collector name", "collector", "name"),
@@ -1250,8 +1252,8 @@ export async function readDeduction2026Sheet(): Promise<DeductionSheetSourceRow[
     reviewDate: indexFor("review date"),
     link: indexFor("link", "url"),
   };
-  if (indexes.matchId < 0 || indexes.code < 0) {
-    throw new PreviewInputError("The Deduction2026 sheet is missing Match ID or Code headers.");
+  if (indexes.code < 0) {
+    throw new PreviewInputError("The Deduction2026 sheet is missing its Code header.");
   }
 
   const cell = (row: unknown[], index: number): string =>
