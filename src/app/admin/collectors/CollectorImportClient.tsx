@@ -301,7 +301,7 @@ export default function CollectorImportClient() {
       <div className="mt-5 space-y-3">
         {filtered.map((profile, index) => {
           const initials = (profile.full_name ?? "Collector").trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase();
-          const squadNumber = profile.hr_code?.match(/\d+/)?.[0]?.slice(-3).padStart(3, "0") ?? "—";
+          const squadNumber = profile.hr_code?.match(/\d+/)?.[0] ?? "—";
           const accountLabel = profile.suspended_at ? "Deactivated" : profile.auth_confirmed ? "Account Active" : profile.auth_user_exists ? "Waiting for activation" : "Auth user missing";
           const accountTone = profile.suspended_at ? "border-slate-500/40 bg-slate-500/10 text-slate-300" : profile.auth_confirmed ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : "border-amber-400/30 bg-amber-400/10 text-amber-200";
           const protectedAdmin = shouldShowProtectedAdminBadge(profile);
