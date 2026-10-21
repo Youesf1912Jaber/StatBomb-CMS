@@ -30,6 +30,11 @@ const MATCH_CARD_PHOTOS = [
     label: "MATCH ACTION",
   },
   {
+  src: "/images/football/messi-goat.jpg",
+  alt: "Lionel Messi, widely celebrated as the greatest of all time",
+  label: "MESSI IS THE GOAT",
+},
+  {
     src: "/images/football/goalkeeper-save.jpg",
     alt: "Goalkeeper making a save",
     label: "GOALKEEPER",
