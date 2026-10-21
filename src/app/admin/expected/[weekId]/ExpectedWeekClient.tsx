@@ -239,6 +239,34 @@ export function ExpectedWeekClient({ weekId }: { weekId: string }) {
                         })}
                       </tr>
                     ))}
+                    {(["count_m1", "sum_m1"] as const).map((summaryRow) => (
+                      <tr
+                        key={summaryRow}
+                        className={summaryRow === "count_m1"
+                          ? "border-t-2 border-pitch-600 bg-pitch-800 font-semibold text-chalk-50"
+                          : "bg-pitch-800/80 font-semibold text-clock-amber"}
+                      >
+                        <th colSpan={3} scope="row" className="whitespace-nowrap px-3 py-3 text-left">
+                          {summaryRow === "count_m1" ? "Count-M1" : "Sum-M1"}
+                        </th>
+                        {DAY_SHORT.map(([day]) => {
+                          const values = week.collectors.map((collector) => collectorDayValue(collector, day).trim());
+                          const count = values.filter((value) => value !== "").length;
+                          const sum = values.reduce((total, value) => {
+                            if (!value) return total;
+                            const normalized = value.replace(/,/g, ".");
+                            if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return total;
+                            return total + Number(normalized);
+                          }, 0);
+                          const displaySum = Number(sum.toFixed(2)).toString();
+                          return (
+                            <td key={day} className="whitespace-nowrap px-3 py-3 text-center tabular-nums">
+                              {summaryRow === "count_m1" ? count : displaySum}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
