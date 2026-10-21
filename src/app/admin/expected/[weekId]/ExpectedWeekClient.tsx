@@ -255,7 +255,7 @@ export function ExpectedWeekClient({ weekId }: { weekId: string }) {
                           const sum = values.reduce((total, value) => {
                             if (!value) return total;
                             const normalized = value.replace(/,/g, ".");
-                            if (!/^-?\\d+(?:\\.\\d+)?$/.test(normalized)) return total;
+                            if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return total;
                             return total + Number(normalized);
                           }, 0);
                           const displaySum = Number(sum.toFixed(2)).toString();
