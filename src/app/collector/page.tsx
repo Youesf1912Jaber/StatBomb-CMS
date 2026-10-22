@@ -53,12 +53,10 @@ const MATCH_CARD_PHOTOS = [
 
 const DEFAULT_MATCH_CARD_PHOTO = MATCH_CARD_PHOTOS[0]!;
 
-function AssignmentCard({ a }: { a: AssignmentWithMatch }) {
+function AssignmentCard({ a, photoIndex }: { a: AssignmentWithMatch; photoIndex: number }) {
   const halfNumber = a.half.match(/\d+/)?.[0] ?? (a.half === "Full Match" ? "FM" : "00");
-  const photoSeed = String(a.match.external_id ?? a.id)
-    .split("")
-    .reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  const matchPhoto = MATCH_CARD_PHOTOS[photoSeed % MATCH_CARD_PHOTOS.length] ?? DEFAULT_MATCH_CARD_PHOTO;
+  // Use the card's position within its section so adjacent matches do not reuse the same photo.
+  const matchPhoto = MATCH_CARD_PHOTOS[photoIndex % MATCH_CARD_PHOTOS.length] ?? DEFAULT_MATCH_CARD_PHOTO;
   const statusTone =
     a.status === "Completed"
       ? "border-emerald-300/30 bg-emerald-300/10 text-chalk-50"
@@ -141,8 +139,8 @@ function Section({
         </p>
       ) : (
         <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((a) => (
-            <AssignmentCard key={a.id} a={a} />
+          {items.map((a, index) => (
+            <AssignmentCard key={a.id} a={a} photoIndex={index} />
           ))}
         </div>
       )}
