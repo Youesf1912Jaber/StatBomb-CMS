@@ -158,9 +158,6 @@ export default async function AdminDashboardPage({
           </span>
         </div>
         {CURRENT_SHIFT_STATUS_ORDER.map((status) => {
-          // New distributions can belong to a previous shift date. Keep every
-          // not-started assignment visible so fresh rows don't disappear from
-          // the status overview just because their Shift Date is not today.
           const statusAssignments = currentShiftAssignments.filter((assignment) => assignment.status === status);
 
           return (
