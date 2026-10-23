@@ -43,7 +43,7 @@ export function EditAssignmentModal({
   const taskOptions = [...new Set([...DISTRIBUTION_TASK_OPTIONS, assignment.task])];
   const [addCollectorHrCode, setAddCollectorHrCode] = useState("");
   const [addCollectorTask, setAddCollectorTask] = useState(assignment.task);
-  const [addCollectorHalf, setAddCollectorHalf] = useState(assignment.half);
+  const [addCollectorHalf, setAddCollectorHalf] = useState<string>(assignment.half);
   const [addCollectorShiftDate, setAddCollectorShiftDate] = useState(assignment.shift_date ?? "");
   const [addCollectorError, setAddCollectorError] = useState<string | null>(null);
   const [addingCollector, setAddingCollector] = useState(false);
