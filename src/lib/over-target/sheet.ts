@@ -309,6 +309,52 @@ function weekDatesMatch(
   );
 }
 
+export async function deleteOverTargetSheetRow(row: {
+  sheet_row_number: number | null;
+  match_external_id: string;
+  week_date: string | null;
+  week_date_raw: string | null;
+  hr_code: string;
+  count_value: number | null;
+}): Promise<{ deletedRow: number }> {
+  const rowNumber = row.sheet_row_number;
+  if (!rowNumber || !Number.isSafeInteger(rowNumber) || rowNumber < 2) {
+    throw new PreviewInputError("This record has no valid Google Sheets row number. Sync the sheet and try again.");
+  }
+
+  const { spreadsheetId, title, sheetId, matrix, indexes } = await loadOverTargetSheet();
+  const source = matrix[rowNumber - 1];
+  if (!source) throw new PreviewInputError("The saved sheet row no longer exists. Sync the sheet and try again.");
+
+  const value = (index: number) => index >= 0 ? cellText(source[index]) : "";
+  const sameRow =
+    canonicalizeOverTargetMatchId(value(indexes.id)) === canonicalizeOverTargetMatchId(row.match_external_id) &&
+    canonicalizeOverTargetHrCode(value(indexes.hrCode)) === canonicalizeOverTargetHrCode(row.hr_code) &&
+    weekDatesMatch(value(indexes.week), row.week_date_raw || row.week_date || "") &&
+    value(indexes.count) === String(row.count_value ?? "");
+  if (!sameRow) {
+    throw new PreviewInputError("The Google Sheets row has changed or moved. Sync the sheet before deleting to avoid removing the wrong record.");
+  }
+
+  await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: "ROWS",
+            startIndex: rowNumber - 1,
+            endIndex: rowNumber,
+          },
+        },
+      }],
+    }),
+  });
+
+  return { deletedRow: rowNumber };
+}
+
 export async function appendOverTargetRow(
   fields: OverTargetSheetWriteFields
 ): Promise<OverTargetSheetWriteResult> {
