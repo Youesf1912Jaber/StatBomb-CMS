@@ -115,9 +115,12 @@ function hrefFromCandidate(value: unknown): string | null {
 export function hrefFromGridCell(cell: LinksGridCellData | null | undefined): string | null {
   if (!cell) return null;
   const runUris = (cell.textFormatRuns ?? []).map((run) => run.format?.link?.uri);
+  // Prefer the hyperlink attached to the actual rich-text run. Google Sheets can
+  // expose a cell-level hyperlink that differs from the link attached to its visible
+  // text; using the cell-level value first can send users to a different document.
   const candidates = [
-    cell.hyperlink,
     ...runUris,
+    cell.hyperlink,
     cell.userEnteredFormat?.textFormat?.link?.uri,
     cell.effectiveFormat?.textFormat?.link?.uri,
   ];
