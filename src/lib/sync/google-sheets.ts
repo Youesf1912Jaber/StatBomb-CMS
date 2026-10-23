@@ -667,7 +667,7 @@ export async function createDistributionAssignments(inputs: DistributionCreateIn
         ? [index + 1]
         : []
     );
-    const lastMatchRow = matchingRows.length > 0 ? matchingRows[matchingRows.length - 1] : null;
+    const lastMatchRow = matchingRows.length > 0 ? (matchingRows[matchingRows.length - 1] ?? null) : null;
     const firstBlankRow = latestValues
       .slice(1)
       .findIndex((row) => String(row[indexes.id] ?? "").trim() === "");
