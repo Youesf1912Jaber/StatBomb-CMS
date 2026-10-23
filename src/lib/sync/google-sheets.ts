@@ -631,9 +631,6 @@ export async function createDistributionAssignments(inputs: DistributionCreateIn
     if (!matchId || !collectorHrCode || !task) {
       throw new PreviewInputError("Each assignment requires a valid Match ID, Collector, and Task.");
     }
-    // Distribution supports custom task scopes (for example, "Duels").
-    // Validate that the task is non-empty above, but do not restrict it to the
-    // app's predefined dropdown options; preserve the exact normalized task in Sheets.
     return { ...input, matchId, collectorHrCode, task, half };
   });
 
@@ -647,57 +644,119 @@ export async function createDistributionAssignments(inputs: DistributionCreateIn
   }
 
   const sheetName = normalizedSheetName(process.env.GOOGLE_SHEETS_DISTRIBUTION_TAB ?? "Distribution");
-  const latestValues = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
-  if (latestValues.length === 0) throw new PreviewInputError("The Distribution sheet is empty.");
-  const headers = (latestValues[0] ?? []).map(normalizeDistributionHeader);
-  const indexes = getDistributionHeaderIndexes(headers);
+  const spreadsheetId = required("GOOGLE_SHEETS_SPREADSHEET_ID");
+  const created: DistributionMatchRow[] = [];
 
+  // Re-read after every insert/write so subsequent assignments use current row numbers.
+  // Existing matches are extended directly below their last row instead of using an
+  // unrelated blank row elsewhere in the sheet.
   for (const item of prepared) {
-    if (latestValues.slice(1).some((row) => matchesDistributionIdentity(row, indexes, item.matchId, item.collectorHrCode, item.task, item.half))) {
+    const latestValues = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
+    if (latestValues.length === 0) throw new PreviewInputError("The Distribution sheet is empty.");
+    const headers = (latestValues[0] ?? []).map(normalizeDistributionHeader);
+    const indexes = getDistributionHeaderIndexes(headers);
+
+    if (latestValues.slice(1).some((row) =>
+      matchesDistributionIdentity(row, indexes, item.matchId, item.collectorHrCode, item.task, item.half)
+    )) {
       throw new PreviewInputError(`Assignment already exists: ${item.matchId} / ${item.collectorHrCode} / ${item.task} / ${item.half}.`);
     }
-  }
 
-  const availableRows = latestValues
-    .slice(1)
-    .map((row, index) => String(row[indexes.id] ?? "").trim() === "" ? index + 2 : null)
-    .filter((row): row is number => row !== null);
-  if (availableRows.length < prepared.length) {
-    throw new PreviewInputError("There are not enough available Distribution rows for this batch.");
-  }
+    const matchingRows = latestValues.flatMap((row, index) =>
+      index > 0 && normalizeMatchId(row[indexes.id] ?? null) === item.matchId
+        ? [index + 1]
+        : []
+    );
+    const lastMatchRow = matchingRows.length > 0 ? matchingRows[matchingRows.length - 1] : null;
+    const firstBlankRow = latestValues
+      .slice(1)
+      .findIndex((row) => String(row[indexes.id] ?? "").trim() === "");
+    let targetRow: number;
+    let mustInsertRow = false;
 
-  const data = prepared.flatMap((item, index) => {
-    const row = availableRows[index];
-    if (row === undefined) {
-      throw new PreviewInputError("There are not enough available Distribution rows for this batch.");
+    if (lastMatchRow !== null) {
+      // Row numbers are 1-based in Sheets. Insert immediately after the match
+      // group only when the next row already belongs to another match or is
+      // beyond the currently returned grid; otherwise reuse the blank row there.
+      targetRow = lastMatchRow + 1;
+      const nextRow = latestValues[targetRow - 1];
+      if (nextRow && String(nextRow[indexes.id] ?? "").trim() !== "") {
+        mustInsertRow = true;
+      } else if (!nextRow) {
+        mustInsertRow = true;
+      }
+    } else if (firstBlankRow >= 0) {
+      targetRow = firstBlankRow + 2;
+    } else {
+      targetRow = latestValues.length + 1;
+      mustInsertRow = true;
     }
-    return [
-      { range: `${sheetName}!A${row}:B${row}`, majorDimension: "ROWS", values: [[item.matchId, item.shiftDate ?? ""]] },
-      { range: `${sheetName}!K${row}:K${row}`, majorDimension: "ROWS", values: [[item.collectorHrCode]] },
-      { range: `${sheetName}!M${row}:O${row}`, majorDimension: "ROWS", values: [[item.task, item.half, ""]] },
+
+    if (mustInsertRow) {
+      const sheetId = await findDistributionSheetId(spreadsheetId, sheetName);
+      const sourceRow = targetRow - 1;
+      if (sourceRow < 2) {
+        throw new PreviewInputError("A formatted Distribution row is not available to insert this assignment safely.");
+      }
+      await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
+        method: "POST",
+        body: JSON.stringify({
+          requests: [
+            {
+              insertDimension: {
+                range: {
+                  sheetId,
+                  dimension: "ROWS",
+                  startIndex: targetRow - 1,
+                  endIndex: targetRow,
+                },
+                inheritFromBefore: true,
+              },
+            },
+            {
+              copyPaste: {
+                source: {
+                  sheetId,
+                  startRowIndex: sourceRow - 1,
+                  endRowIndex: sourceRow,
+                  startColumnIndex: 0,
+                  endColumnIndex: 26,
+                },
+                destination: {
+                  sheetId,
+                  startRowIndex: targetRow - 1,
+                  endRowIndex: targetRow,
+                  startColumnIndex: 0,
+                  endColumnIndex: 26,
+                },
+                pasteType: "PASTE_NORMAL",
+                pasteOrientation: "NORMAL",
+              },
+            },
+          ],
+        }),
+      });
+    }
+
+    const rowData = [
+      { range: `${sheetName}!A${targetRow}:B${targetRow}`, majorDimension: "ROWS", values: [[item.matchId, item.shiftDate ?? ""]] },
+      { range: `${sheetName}!K${targetRow}:K${targetRow}`, majorDimension: "ROWS", values: [[item.collectorHrCode]] },
+      { range: `${sheetName}!M${targetRow}:O${targetRow}`, majorDimension: "ROWS", values: [[item.task, item.half, ""]] },
     ];
-  });
+    await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`, {
+      method: "POST",
+      body: JSON.stringify({ valueInputOption: "USER_ENTERED", data: rowData }),
+    });
 
-  const spreadsheetId = required("GOOGLE_SHEETS_SPREADSHEET_ID");
-  await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`, {
-    method: "POST",
-    body: JSON.stringify({ valueInputOption: "USER_ENTERED", data }),
-  });
-
-  const created: DistributionMatchRow[] = [];
-  for (const [index, item] of prepared.entries()) {
-    const rowNumber = availableRows[index];
-    if (rowNumber === undefined) {
-      throw new PreviewInputError("There are not enough available Distribution rows for this batch.");
-    }
-    const verificationValues = await readDistributionSheetRange(`${sheetName}!A${rowNumber}:Z${rowNumber}`);
+    const verificationValues = await readDistributionSheetRange(`${sheetName}!A${targetRow}:Z${targetRow}`, "FORMULA");
     if (!verificationValues.some((row) => matchesDistributionIdentity(row, indexes, item.matchId, item.collectorHrCode, item.task, item.half))) {
-      const recoveryValues = await readDistributionSheetRange(`${sheetName}!A:Z`);
+      const recoveryValues = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
       if (!recoveryValues.slice(1).some((row) => matchesDistributionIdentity(row, indexes, item.matchId, item.collectorHrCode, item.task, item.half))) {
         throw new PreviewInputError(`Assignment verification failed for ${item.collectorHrCode} / ${item.task} / ${item.half}; no retry was attempted.`);
       }
-      throw new PreviewInputError(`Assignment exists but could not be verified at row ${rowNumber}; no retry was attempted.`);
+      throw new PreviewInputError(`Assignment exists but could not be verified at row ${targetRow}; no retry was attempted.`);
     }
+
     created.push({
       match_id: item.matchId,
       collector_hr_code: item.collectorHrCode,
@@ -711,13 +770,13 @@ export async function createDistributionAssignments(inputs: DistributionCreateIn
       kick_off_time: item.kickOffTime ?? null,
       hyper_care_notes: null,
       review_events: null,
-      raw_row_number: rowNumber,
+      raw_row_number: targetRow,
     });
   }
+
   await refreshDistributionMatchBorders();
   return created;
 }
-
 export async function updateDistributionRow(input: DistributionUpdateInput): Promise<DistributionMatchRow> {
   const matchId = normalizeMatchId(input.matchId);
   const expectedHrCode = normalizeDistributionCollectorHrCode(input.expectedCollectorHrCode);
