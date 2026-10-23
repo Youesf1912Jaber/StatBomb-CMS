@@ -53,8 +53,7 @@ const MATCH_CARD_PHOTOS = [
 
 const DEFAULT_MATCH_CARD_PHOTO = MATCH_CARD_PHOTOS[0]!;
 
-function AssignmentCard({ a, photoIndex }: { a: AssignmentWithMatch; photoIndex: number }) {
-  const halfNumber = a.half.match(/\d+/)?.[0] ?? (a.half === "Full Match" ? "FM" : "00");
+function AssignmentCard({ a, photoIndex, cardNumber }: { a: AssignmentWithMatch; photoIndex: number; cardNumber: number }) {
   // Use the card's position within its section so adjacent matches do not reuse the same photo.
   const matchPhoto = MATCH_CARD_PHOTOS[photoIndex % MATCH_CARD_PHOTOS.length] ?? DEFAULT_MATCH_CARD_PHOTO;
   const statusTone =
@@ -90,7 +89,7 @@ function AssignmentCard({ a, photoIndex }: { a: AssignmentWithMatch; photoIndex:
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-chalk-200">Matchday locker</span>
         <span className={`rounded-full border px-2 py-1 text-[10px] font-medium leading-none ${statusTone}`}>{a.status}</span>
       </div>
-      <div aria-hidden="true" className="pointer-events-none absolute right-3 top-3 z-10 flex h-14 min-w-14 items-center justify-center rounded-xl border border-[#E8C977]/60 bg-[#021A19]/90 px-3 font-mono text-3xl font-bold leading-none text-[#F2D37C] shadow-lg shadow-black/40 ring-1 ring-black/20">{halfNumber === "FM" ? "FM" : halfNumber.padStart(2, "0")}</div>
+      <div aria-hidden="true" className="pointer-events-none absolute right-3 top-3 z-10 flex h-14 min-w-14 items-center justify-center rounded-xl border border-[#E8C977]/60 bg-[#021A19]/90 px-3 font-mono text-3xl font-bold leading-none text-[#F2D37C] shadow-lg shadow-black/40 ring-1 ring-black/20">{String(cardNumber).padStart(2, "0")}</div>
       <h3 className="relative mt-5 max-w-[88%] text-base font-semibold leading-snug text-chalk-50 transition-colors group-hover:text-clock-amber">
         {a.match.home_team} <span className="text-chalk-200">vs</span> {a.match.away_team}
       </h3>
@@ -139,9 +138,20 @@ function Section({
         </p>
       ) : (
         <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((a, index) => (
-            <AssignmentCard key={a.id} a={a} photoIndex={index} />
-          ))}
+          {(() => {
+            const ordered = [...items].sort((left, right) => {
+              const shiftOrder = (left.shift_date ?? "9999-99-99").localeCompare(right.shift_date ?? "9999-99-99");
+              if (shiftOrder !== 0) return shiftOrder;
+              return left.created_at.localeCompare(right.created_at);
+            });
+            const sequenceByShift = new Map<string, number>();
+            return ordered.map((a, index) => {
+              const shiftKey = a.shift_date ?? "no-shift-date";
+              const cardNumber = (sequenceByShift.get(shiftKey) ?? 0) + 1;
+              sequenceByShift.set(shiftKey, cardNumber);
+              return <AssignmentCard key={a.id} a={a} photoIndex={index} cardNumber={cardNumber} />;
+            });
+          })()}
         </div>
       )}
     </section>
