@@ -86,7 +86,8 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
   };
 
   return (
-    <div className="space-y-3">\n      {deleteError && <p role="alert" className="rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">{deleteError}</p>}
+    <div className="space-y-3">
+      {deleteError && <p role="alert" className="rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">{deleteError}</p>}
       <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-2" : ""}`}>
         <label className="block text-sm text-chalk-200">
           Search
@@ -137,7 +138,8 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Count</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Done</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Sync Status</th>
-                {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Add Collector</th>}\n                {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Sheet Action</th>}
+                {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Add Collector</th>}
+                {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Sheet Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-pitch-800">
