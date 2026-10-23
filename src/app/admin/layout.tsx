@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Links", href: "/admin/links" },
   { label: "Activity Log", href: "/admin/activity-log" },
   { label: "Notifications", href: "/admin/notifications" },
+  { label: "Account Settings", href: "/collector/settings" },
 ];
 
 export default async function AdminLayout({
