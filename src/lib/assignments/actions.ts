@@ -473,23 +473,37 @@ export async function updateAssignment(
   if (original.distribution_present !== false) {
     try {
       const rows = await readDistributionRowsForMatch(match.external_id);
-      const expectedTask = original.raw_task_value ?? original.task;
-      const row = rows.find((candidate) =>
-        candidate.collector_hr_code?.trim().toUpperCase() === collector.hr_code!.trim().toUpperCase() &&
-        (candidate.task ?? "").trim().toLowerCase() === expectedTask.trim().toLowerCase() &&
-        (candidate.half ?? "").trim().toLowerCase() === original.half.trim().toLowerCase()
+      const normalizedHrCode = collector.hr_code.trim().toUpperCase();
+      const normalizedOriginalTask = (original.raw_task_value ?? original.task).trim().toLowerCase();
+      const normalizedOriginalHalf = original.half.trim().toLowerCase();
+
+      // The app database may already have a newer task than the sheet (or vice versa)
+      // after an earlier partial sync. First try the full old identity, then safely
+      // fall back to the unique collector + half row for this Match ID.
+      const collectorHalfRows = rows.filter((candidate) =>
+        candidate.collector_hr_code?.trim().toUpperCase() === normalizedHrCode &&
+        (candidate.half ?? "").trim().toLowerCase() === normalizedOriginalHalf
       );
+      const exactRow = collectorHalfRows.find((candidate) =>
+        (candidate.task ?? "").trim().toLowerCase() === normalizedOriginalTask
+      );
+      const row = exactRow ?? (collectorHalfRows.length === 1 ? collectorHalfRows[0] : null);
 
       if (!row) {
-        throw new Error("The matching Distribution row was not found using Match ID, collector HR code, original task, and original half.");
+        throw new Error(
+          collectorHalfRows.length > 1
+            ? "More than one Distribution row matches this collector and half; refusing to update an ambiguous row."
+            : "No unique Distribution row was found for this Match ID, collector HR code, and half."
+        );
       }
 
       await updateDistributionRow({
         matchId: match.external_id,
         rowNumber: row.raw_row_number,
         expectedCollectorHrCode: collector.hr_code,
-        expectedTask,
-        expectedHalf: original.half,
+        // Use the actual sheet identity so a previous partial sync can be repaired.
+        expectedTask: row.task ?? "",
+        expectedHalf: row.half ?? original.half,
         collectorHrCode: collector.hr_code,
         collectorName: collector.full_name ?? collector.email,
         task,
