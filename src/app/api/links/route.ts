@@ -1,6 +1,7 @@
 import { linksErrorResponse, linksJsonResponse, loadLinks, requireLinksAccess } from "@/lib/links/api";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const access = await requireLinksAccess();
