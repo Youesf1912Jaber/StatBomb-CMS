@@ -31,10 +31,19 @@ function SummaryCard({ label, value, note, accent, href }: { label: string; valu
   );
 }
 
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+  searchParams,
+}: {
+  searchParams?: { shiftDate?: string };
+}) {
   const supabase = createClient();
   const assignments = await getAdminDashboardAssignments(supabase);
-  const currentShiftDate = getCairoToday();
+  const today = getCairoToday();
+  const requestedShiftDate = searchParams?.shiftDate ?? "";
+  const isValidShiftDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedShiftDate)
+    && !Number.isNaN(Date.parse(requestedShiftDate))
+    && new Date(requestedShiftDate).toISOString().slice(0, 10) === requestedShiftDate;
+  const currentShiftDate = isValidShiftDate ? requestedShiftDate : today;
   const currentShiftAssignments = assignments.filter(
     (assignment) => isCurrentShiftDate(assignment.shift_date, currentShiftDate)
   );
@@ -88,9 +97,27 @@ export default async function AdminDashboardPage() {
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <RefreshDistributionButton />
               <AdminBulkCompleteButton eligibleCount={bulkCompletionCount} />
-              <span className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-xs text-white/75">
-                Shift date · {currentShiftDate}
-              </span>
+              <form method="get" className="flex flex-wrap items-center gap-2 rounded-lg border border-white/15 bg-black/20 px-3 py-2">
+                <label htmlFor="shiftDate" className="text-xs text-white/75">Shift date</label>
+                <input
+                  id="shiftDate"
+                  name="shiftDate"
+                  type="date"
+                  value={currentShiftDate}
+                  max="9999-12-31"
+                  className="min-w-0 rounded-md border border-white/15 bg-[#031c1a] px-2 py-1 text-xs text-white [color-scheme:dark]"
+                  aria-label="Choose shift date"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md border border-clock-amber/50 bg-clock-amber/10 px-3 py-1.5 text-xs font-semibold text-clock-amber transition hover:bg-clock-amber/20"
+                >
+                  Show Matches
+                </button>
+                <a href="/admin" className="px-1 py-1.5 text-xs text-white/65 underline underline-offset-2 hover:text-white">
+                  Today
+                </a>
+              </form>
             </div>
           </div>
           <aside className="rounded-xl border border-clock-amber/35 bg-[#031c1a]/90 p-5 backdrop-blur-sm">
@@ -131,12 +158,7 @@ export default async function AdminDashboardPage() {
           </span>
         </div>
         {CURRENT_SHIFT_STATUS_ORDER.map((status) => {
-          // New distributions can belong to a previous shift date. Keep every
-          // not-started assignment visible so fresh rows don't disappear from
-          // the status overview just because their Shift Date is not today.
-          const statusAssignments = status === "Not Started"
-            ? allDistributedAssignments.filter((assignment) => assignment.status === "Not Started")
-            : currentShiftAssignments.filter((assignment) => assignment.status === status);
+          const statusAssignments = currentShiftAssignments.filter((assignment) => assignment.status === status);
 
           return (
             <section
