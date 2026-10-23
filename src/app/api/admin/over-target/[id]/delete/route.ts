@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { PreviewInputError } from "@/lib/sync/preview";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { deleteOverTargetSheetRow } from "@/lib/over-target/sheet";
+import { syncOverTarget } from "@/lib/over-target/sync";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,8 @@ export async function DELETE(
       .update({ source_present: false, last_synced_at: new Date().toISOString() })
       .eq("id", record.id);
     if (updateError) throw updateError;
+    // Reconcile stored row numbers after Google Sheets shifts the remaining rows upward.
+    await syncOverTarget(service);
 
     return NextResponse.json({ success: true, deletedRow: result.deletedRow });
   } catch (error) {
