@@ -28,6 +28,7 @@ export function ReassignModal({
   const [mode, setMode] = useState<ReassignmentMode>("preserve");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [warning, setWarning] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const newCollector = availableCollectors.find((c) => c.id === newCollectorId);
@@ -50,6 +51,7 @@ export function ReassignModal({
       if (result.error) {
         setError(result.error);
       } else {
+        setWarning(result.warning ?? null);
         setSuccess(true);
         setTimeout(() => {
           onClose();
@@ -66,6 +68,9 @@ export function ReassignModal({
         {success ? (
           <div className="rounded border border-green-700 bg-green-900/30 p-3 text-sm text-green-300">
             Assignment reassigned successfully.
+            {warning && (
+              <p role="alert" className="mt-2 text-xs text-clock-amber">{warning}</p>
+            )}
           </div>
         ) : (
           <>
