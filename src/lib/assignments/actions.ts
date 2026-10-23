@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { translateSupabaseError, type AppErrorCode } from "@/lib/errors";
 import { isAssignmentTaskName } from "./task-names";
@@ -548,6 +548,71 @@ function isValidOfficialWebsiteUrl(value: string | null): boolean {
  * and the parent match official_website_url without touching status,
  * timestamps, SLA, identity, or task timers.
  */
+/**
+ * Allows a collector assigned to a match to add or correct the official match
+ * URL. The URL lives on the shared match record, so all collectors and admins
+ * see the same link. Shift date and assignment progress are not changed.
+ */
+export async function addOfficialMatchUrl(
+  assignmentId: string,
+  officialWebsiteUrl: string
+): Promise<AssignmentActionState> {
+  const profile = await getProfileOrRedirect();
+  if (profile.role !== "collector" && profile.role !== "admin") {
+    return { error: "You're not authorized to do that.", errorCode: "NOT_AUTHORIZED" };
+  }
+
+  const url = officialWebsiteUrl.trim();
+  if (!isValidOfficialWebsiteUrl(url)) {
+    return {
+      error: "Official Match URL must be a valid http or https address.",
+      errorCode: "INVALID_OFFICIAL_WEBSITE_URL",
+    };
+  }
+
+  const supabase = createClient();
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("assignments")
+    .select("id, match_id, collector_id")
+    .eq("id", assignmentId)
+    .maybeSingle();
+
+  if (assignmentError || !assignment) {
+    return { error: "Assignment not found.", errorCode: "NOT_FOUND" };
+  }
+  if (profile.role !== "admin" && assignment.collector_id !== profile.id) {
+    return { error: "You can only add an official URL for a match assigned to you.", errorCode: "NOT_AUTHORIZED" };
+  }
+
+  const serviceClient = createServiceRoleClient();
+  const { error: updateError } = await serviceClient
+    .from("matches")
+    .update({ official_website_url: url })
+    .eq("id", assignment.match_id);
+
+  if (updateError) {
+    console.error("Collector official match URL update failed", {
+      assignmentId,
+      matchId: assignment.match_id,
+      error: updateError,
+    });
+    return { error: "The official match URL could not be saved. Please try again.", errorCode: "UNKNOWN" };
+  }
+
+  const { data: matchAssignments } = await supabase
+    .from("assignments")
+    .select("id")
+    .eq("match_id", assignment.match_id);
+
+  for (const row of matchAssignments ?? []) {
+    revalidatePath(`/collector/assignments/${row.id}`);
+    revalidatePath(`/admin/assignments/${row.id}`);
+  }
+  revalidatePath("/collector");
+  revalidatePath("/admin");
+  return OK;
+}
+
 export async function updateDistributionDetails(
   assignmentId: string,
   shiftDate: string | null,

@@ -11,6 +11,7 @@ import { AssignmentWorkControls } from "@/components/AssignmentWorkControls";
 import { AssignmentTaskTracking } from "@/components/AssignmentTaskTracking";
 import { BonusSubmissionForm } from "@/components/BonusSubmissionForm";
 import { HyperCareSection } from "@/components/HyperCareSection";
+import { AddOfficialMatchButton } from "@/components/AddOfficialMatchButton";
 
 function toWhatsAppNumber(phone: string) {
   let digits = phone.replace(/\D/g, "");
@@ -78,6 +79,10 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
             assignmentId={assignment.id}
             status={assignment.status}
             hasActiveTaskTimer={taskTimers.some((timer) => timer.ended_at === null)}
+          />
+          <AddOfficialMatchButton
+            assignmentId={assignment.id}
+            officialWebsiteUrl={assignment.match.official_website_url}
           />
           {assignment.match.official_website_url && (
             <a href={assignment.match.official_website_url} target="_blank" rel="noopener noreferrer"
