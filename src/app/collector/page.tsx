@@ -107,7 +107,9 @@ function AssignmentCard({ a, photoIndex, cardNumber }: { a: AssignmentWithMatch;
           </span>
         </div>
         <div className="mt-2 flex items-center justify-between gap-3 text-xs text-chalk-200">
-          <span>{new Date(a.match.match_date).toLocaleDateString()}</span>
+          <span>{(a.shift_date ?? a.match.match_date)
+              ? new Date(`${a.shift_date ?? a.match.match_date}T12:00:00`).toLocaleDateString()
+              : "Shift date —"}</span>
           <span className="text-right font-medium text-clock-amber transition-transform group-hover:translate-x-0.5">Open assignment →</span>
         </div>
         <div className="mt-2"><SlaCountdown sla={a.sla} status={a.status} /></div>
