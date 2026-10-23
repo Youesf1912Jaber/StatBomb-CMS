@@ -25,6 +25,14 @@ export default async function AdminDeductionsPage() {
             Read-only synchronized copy of Deduction2026. Refresh reads the official sheet and never writes back.
           </p>
         </div>
+<a
+          href="https://script.google.com/macros/s/AKfycbxWF7Iy4qRDsSdcTcN_jmKE5ANh8PrFD5sspdoOUHRF8C1hLglPtbmcQv7KmmrhClZ2/exec"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center rounded-lg border border-[#b89a45] bg-[#263a2b] px-4 py-2 text-sm font-semibold text-[#f1d77f] transition hover:border-[#e3c36b] hover:bg-[#344a34] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e3c36b]"
+        >
+          QA Dashboard
+        </a>
         <RefreshDeductionsButton endpoint="/api/admin/deductions/refresh" />
       </div>
       <p className="text-sm text-chalk-200">Total deductions: {deductions.length}</p>
