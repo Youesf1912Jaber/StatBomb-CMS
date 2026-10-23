@@ -1,11 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { DISTRIBUTION_TASK_OPTIONS } from "@/lib/distribution-options";
+import type { TeamSheetCollector } from "@/lib/sync/google-sheets";
 import { updateAssignment } from "@/lib/assignments/actions";
 import type { AssignmentRow } from "@/types/database.types";
 
 interface EditAssignmentModalProps {
   assignment: AssignmentRow;
+  matchExternalId: string;
+  availableCollectors: TeamSheetCollector[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -28,10 +33,21 @@ function isValidUrl(url: string | null): boolean {
 
 export function EditAssignmentModal({
   assignment,
+  matchExternalId,
+  availableCollectors,
   onClose,
   onSuccess,
 }: EditAssignmentModalProps) {
+  const router = useRouter();
   const [task, setTask] = useState(assignment.task);
+  const taskOptions = [...new Set([...DISTRIBUTION_TASK_OPTIONS, assignment.task])];
+  const [addCollectorHrCode, setAddCollectorHrCode] = useState("");
+  const [addCollectorTask, setAddCollectorTask] = useState(assignment.task);
+  const [addCollectorHalf, setAddCollectorHalf] = useState(assignment.half);
+  const [addCollectorShiftDate, setAddCollectorShiftDate] = useState(assignment.shift_date ?? "");
+  const [addCollectorError, setAddCollectorError] = useState<string | null>(null);
+  const [addingCollector, setAddingCollector] = useState(false);
+  const [addCollectorSuccess, setAddCollectorSuccess] = useState<string | null>(null);
   const [half, setHalf] = useState(assignment.half);
   const [sla, setSla] = useState(assignment.sla);
   const [notes, setNotes] = useState(assignment.notes ?? "");
@@ -105,15 +121,15 @@ export function EditAssignmentModal({
                 <label htmlFor="task" className="block text-chalk-200">
                   Task
                 </label>
-                <input
+                <select
                   id="task"
-                  type="text"
                   value={task}
                   onChange={(e) => setTask(e.target.value)}
                   className="mt-1 w-full rounded border border-pitch-700 bg-pitch-800 px-3 py-2 text-chalk-50 focus:border-clock-amber focus:outline-none disabled:opacity-50"
                   disabled={isPending}
-                  placeholder="e.g. 1st Half - Shot Map"
-                />
+                >
+                  {taskOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
               </div>
 
               <div>
@@ -178,6 +194,53 @@ export function EditAssignmentModal({
                   placeholder="Add internal notes or instructions for collectors"
                 />
               </div>
+
+              <section className="space-y-3 rounded-lg border border-pitch-700 bg-pitch-950/50 p-4">
+                <div>
+                  <h3 className="font-semibold text-chalk-50">Add Collector to This Match</h3>
+                  <p className="mt-1 text-xs text-chalk-200">Choose a collector from the current Team sheet roster and assign a task without leaving this page.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm text-chalk-200">Collector
+                    <select value={addCollectorHrCode} onChange={(e) => setAddCollectorHrCode(e.target.value)} className="mt-1 w-full rounded border border-pitch-700 bg-pitch-800 px-3 py-2 text-chalk-50" disabled={addingCollector || isPending}>
+                      <option value="">Select a collector...</option>
+                      {availableCollectors.map((person) => <option key={person.hr_code} value={person.hr_code}>{person.full_name} ({person.hr_code})</option>)}
+                    </select>
+                  </label>
+                  <label className="text-sm text-chalk-200">Task
+                    <select value={addCollectorTask} onChange={(e) => setAddCollectorTask(e.target.value)} className="mt-1 w-full rounded border border-pitch-700 bg-pitch-800 px-3 py-2 text-chalk-50" disabled={addingCollector || isPending}>
+                      {taskOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-sm text-chalk-200">Half
+                    <select value={addCollectorHalf} onChange={(e) => setAddCollectorHalf(e.target.value)} className="mt-1 w-full rounded border border-pitch-700 bg-pitch-800 px-3 py-2 text-chalk-50" disabled={addingCollector || isPending}>
+                      {HALF_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-sm text-chalk-200">Shift Date
+                    <input type="date" value={addCollectorShiftDate} onChange={(e) => setAddCollectorShiftDate(e.target.value)} className="mt-1 w-full rounded border border-pitch-700 bg-pitch-800 px-3 py-2 text-chalk-50" disabled={addingCollector || isPending} />
+                  </label>
+                </div>
+                {addCollectorError && <p role="alert" className="rounded border border-red-700 bg-red-900/30 p-2 text-sm text-red-300">{addCollectorError}</p>}
+                {addCollectorSuccess && <p role="status" className="rounded border border-green-700 bg-green-900/30 p-2 text-sm text-green-300">{addCollectorSuccess}</p>}
+                <button type="button" disabled={!addCollectorHrCode || addingCollector || isPending} onClick={async () => {
+                  setAddingCollector(true); setAddCollectorError(null); setAddCollectorSuccess(null);
+                  try {
+                    const response = await fetch(`/api/matches/${encodeURIComponent(matchExternalId)}/distribution`, {
+                      method: "POST", headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ assignments: [{ collectorHrCode: addCollectorHrCode, task: addCollectorTask, half: addCollectorHalf, shiftDate: addCollectorShiftDate || null }] }),
+                    });
+                    const payload = await response.json() as { success?: boolean; error?: string };
+                    if (!response.ok || !payload.success) throw new Error(payload.error ?? "Could not add this collector to the match.");
+                    const addedName = availableCollectors.find((person) => person.hr_code === addCollectorHrCode)?.full_name ?? addCollectorHrCode;
+                    setAddCollectorSuccess(`Added ${addedName} — ${addCollectorTask} · ${addCollectorHalf}.`);
+                    setAddCollectorHrCode("");
+                    router.refresh();
+                  } catch (reason) {
+                    setAddCollectorError(reason instanceof Error ? reason.message : "Could not add this collector to the match.");
+                  } finally { setAddingCollector(false); }
+                }} className="rounded border border-clock-amber/50 px-3 py-2 text-sm font-semibold text-clock-amber hover:bg-clock-amber/10 disabled:opacity-50">{addingCollector ? "Adding..." : "Add Collector"}</button>
+              </section>
 
               <div className="rounded border border-clock-amber/30 bg-clock-amber/10 p-3 text-xs text-clock-amber">
                 <p className="font-semibold">Important:</p>

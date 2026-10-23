@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { EditAssignmentModal } from "@/components/EditAssignmentModal";
 import type { AssignmentRow } from "@/types/database.types";
+import type { TeamSheetCollector } from "@/lib/sync/google-sheets";
 
 interface EditButtonProps {
   assignment: AssignmentRow;
+  matchExternalId: string;
+  availableCollectors: TeamSheetCollector[];
 }
 
-export function EditButton({ assignment }: EditButtonProps) {
+export function EditButton({ assignment, matchExternalId, availableCollectors }: EditButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -23,6 +26,8 @@ export function EditButton({ assignment }: EditButtonProps) {
       {isOpen && (
         <EditAssignmentModal
           assignment={assignment}
+          matchExternalId={matchExternalId}
+          availableCollectors={availableCollectors}
           onClose={() => setIsOpen(false)}
           onSuccess={() => {
             // Revalidation happens via the server action

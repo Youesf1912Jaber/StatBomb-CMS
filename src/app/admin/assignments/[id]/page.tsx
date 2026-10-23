@@ -6,6 +6,7 @@ import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } fro
 import { distributionPresenceLabel } from "@/lib/assignments/distribution-presence";
 import { getActivityLogsForAssignment } from "@/lib/activity-logs/queries";
 import { getHyperCareForMatch } from "@/lib/hyper-care/lookup";
+import { pullTeamSheet, normalizeDistributionCollectorHrCode } from "@/lib/sync/google-sheets";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AdminAssignmentTaskTimers } from "@/components/AdminAssignmentTaskTimers";
 import { AdminAssignmentActions } from "@/components/AdminAssignmentActions";
@@ -50,12 +51,21 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
   const activityHistory = await getActivityLogsForAssignment(supabase, assignment.id);
   const taskTimers = await getAssignmentTaskTimers(supabase, assignment.id);
   const hyperCare = await getHyperCareForMatch(assignment.match.home_team, assignment.match.away_team);
-  const { data: allCollectors } = await supabase
-    .from("profiles")
-    .select("id, full_name, email")
-    .eq("role", "collector")
-    .order("full_name");
-  const availableCollectors = allCollectors ?? [];
+  const [{ data: allProfiles }, teamRoster] = await Promise.all([
+    supabase.from("profiles").select("id, full_name, email, hr_code, role, deleted_at, suspended_at").order("full_name"),
+    pullTeamSheet(),
+  ]);
+  const profilesByHrCode = new Map(
+    (allProfiles ?? [])
+      .filter((profile) => profile.hr_code)
+      .map((profile) => [normalizeDistributionCollectorHrCode(profile.hr_code), profile])
+  );
+  // Match the distribution form: only people on the current Team sheet roster are selectable.
+  const availableCollectors = teamRoster
+    .filter((person) => person.hr_code && person.status?.trim().toLowerCase() !== "inactive")
+    .map((person) => profilesByHrCode.get(normalizeDistributionCollectorHrCode(person.hr_code)))
+    .filter((person): person is NonNullable<typeof person> => Boolean(person && !person.deleted_at && !person.suspended_at))
+    .map((person) => ({ id: person.id, full_name: person.full_name, email: person.email }));
 
   return (
     <main className="match-details-page mx-auto w-full min-w-0 max-w-[1440px] space-y-5 pb-8">
@@ -85,7 +95,7 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
             currentCollectorName={collector?.full_name ?? collector?.email ?? "Unknown collector"}
             availableCollectors={availableCollectors}
           />
-          <EditButton assignment={assignment} />
+          <EditButton assignment={assignment} matchExternalId={assignment.match.external_id} availableCollectors={teamRoster.filter((person) => person.hr_code && person.status?.trim().toLowerCase() !== "inactive")} />
           <EditDistributionDetailsButton
             assignmentId={assignment.id}
             shiftDate={assignment.shift_date}
