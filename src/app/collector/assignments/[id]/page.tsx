@@ -85,6 +85,14 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
               Open Official Match ↗
             </a>
           )}
+          <a
+            href="https://docs.google.com/forms/d/e/1FAIpQLSfspWKGM3KLxSLPzKORNOmYdl9O6q8qCHRpUAe2bFOkGuWhwA/viewform"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-md border border-clock-amber/50 bg-clock-amber px-3.5 py-2 text-xs font-bold text-pitch-950 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clock-amber focus-visible:ring-offset-2 focus-visible:ring-offset-pitch-950"
+          >
+            Facts form ↗
+          </a>
         </div>
       </header>
 
