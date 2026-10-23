@@ -173,7 +173,7 @@ export default async function CollectorDashboardPage({
   const assignments = await getAssignmentsForCollector(supabase, profile.id);
   const today = getCairoToday();
   const requestedShiftDate = searchParams?.shiftDate ?? "";
-  const isValidShiftDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(requestedShiftDate)
+  const isValidShiftDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedShiftDate)
     && !Number.isNaN(Date.parse(requestedShiftDate))
     && new Date(requestedShiftDate).toISOString().slice(0, 10) === requestedShiftDate;
   const selectedShiftDate = isValidShiftDate ? requestedShiftDate : today;
