@@ -428,7 +428,34 @@ export async function updateAssignment(
   sla: string,
   notes: string | null
 ): Promise<AssignmentActionState> {
+  const profile = await getProfileOrRedirect();
+  if (profile.role !== "admin") {
+    return { error: "You're not authorized to do that.", errorCode: "NOT_AUTHORIZED" };
+  }
+
   const supabase = createClient();
+  // Capture the original sheet identity before the database RPC changes task/half.
+  const { data: original, error: originalError } = await supabase
+    .from("assignments")
+    .select("id, match_id, collector_id, task, raw_task_value, half, distribution_present")
+    .eq("id", assignmentId)
+    .single();
+
+  if (originalError || !original) {
+    return { error: originalError?.message ?? "Assignment not found.", errorCode: null };
+  }
+
+  const [{ data: match, error: matchError }, { data: collector, error: collectorError }] = await Promise.all([
+    supabase.from("matches").select("external_id").eq("id", original.match_id).single(),
+    supabase.from("profiles").select("hr_code, full_name, email").eq("id", original.collector_id).single(),
+  ]);
+  if (matchError || !match?.external_id) {
+    return { error: matchError?.message ?? "Match ID could not be found.", errorCode: null };
+  }
+  if (collectorError || !collector?.hr_code) {
+    return { error: collectorError?.message ?? "Collector HR code could not be found.", errorCode: null };
+  }
+
   const { error } = await supabase.rpc("update_assignment", {
     p_assignment_id: assignmentId,
     p_task: task,
@@ -442,11 +469,47 @@ export async function updateAssignment(
     return { error: appError.message, errorCode: appError.code };
   }
 
+  let warning: string | null = null;
+  if (original.distribution_present !== false) {
+    try {
+      const rows = await readDistributionRowsForMatch(match.external_id);
+      const expectedTask = original.raw_task_value ?? original.task;
+      const row = rows.find((candidate) =>
+        candidate.collector_hr_code?.trim().toUpperCase() === collector.hr_code!.trim().toUpperCase() &&
+        (candidate.task ?? "").trim().toLowerCase() === expectedTask.trim().toLowerCase() &&
+        (candidate.half ?? "").trim().toLowerCase() === original.half.trim().toLowerCase()
+      );
+
+      if (!row) {
+        throw new Error("The matching Distribution row was not found using Match ID, collector HR code, original task, and original half.");
+      }
+
+      await updateDistributionRow({
+        matchId: match.external_id,
+        rowNumber: row.raw_row_number,
+        expectedCollectorHrCode: collector.hr_code,
+        expectedTask,
+        expectedHalf: original.half,
+        collectorHrCode: collector.hr_code,
+        collectorName: collector.full_name ?? collector.email,
+        task,
+        half,
+      });
+    } catch (syncError) {
+      console.error("Assignment was updated in the app but Google Sheets Distribution task/half sync failed", {
+        assignmentId,
+        matchId: match.external_id,
+        error: syncError,
+      });
+      warning = "Assignment was updated in the app, but its Task/Half could not be updated in Google Sheets. Check the Distribution row and retry after verifying the sheet connection.";
+    }
+  }
+
   revalidatePath(`/admin/assignments/${assignmentId}`);
   revalidatePath("/admin");
-  return OK;
+  revalidatePath("/collector");
+  return { ...OK, warning };
 }
-
 function isValidShiftDate(value: string | null): boolean {
   if (value === null) return true;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;

@@ -53,6 +53,7 @@ export function EditAssignmentModal({
   const [notes, setNotes] = useState(assignment.notes ?? "");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const slaDate = new Date(sla).toISOString().split("T")[0];
@@ -96,6 +97,7 @@ export function EditAssignmentModal({
       if (result.error) {
         setError(result.error);
       } else {
+        setSyncWarning(result.warning ?? null);
         setSuccess(true);
         setTimeout(() => {
           onSuccess();
@@ -111,8 +113,13 @@ export function EditAssignmentModal({
         <h2 className="font-display text-xl text-chalk-50">Edit Assignment</h2>
 
         {success ? (
-          <div className="rounded border border-green-700 bg-green-900/30 p-3 text-sm text-green-300">
-            Assignment updated successfully.
+          <div className="space-y-2 rounded border border-green-700 bg-green-900/30 p-3 text-sm text-green-300">
+            <p>Assignment updated successfully.</p>
+            {syncWarning && (
+              <p role="alert" className="rounded border border-amber-500/40 bg-amber-950/40 p-2 text-amber-200">
+                {syncWarning}
+              </p>
+            )}
           </div>
         ) : (
           <>
