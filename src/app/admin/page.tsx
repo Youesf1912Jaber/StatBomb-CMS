@@ -105,7 +105,6 @@ export default async function AdminDashboardPage({
                   type="date"
                   value={currentShiftDate}
                   max="9999-12-31"
-                  onChange={undefined}
                   className="min-w-0 rounded-md border border-white/15 bg-[#031c1a] px-2 py-1 text-xs text-white [color-scheme:dark]"
                   aria-label="Choose shift date"
                 />
