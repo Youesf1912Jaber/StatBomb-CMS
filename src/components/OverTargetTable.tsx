@@ -40,6 +40,18 @@ type OverTargetMatchDetails = {
   add_collector_href: string | null;
 };
 
+function canDeleteOverTargetSheetRow(row: OverTargetRow | CollectorOverTargetRecord | AdminOverTargetRecord): boolean {
+  // App-created records can also have a real, verified Google Sheets row after
+  // a successful write. The source field describes where the record originated,
+  // not whether the corresponding row currently exists in the sheet.
+  return row.source_present &&
+    row.sheet_row_number != null &&
+    Number.isSafeInteger(row.sheet_row_number) &&
+    row.sheet_row_number >= 2 &&
+    (row.source === "google_sheet" ||
+      (row.source === "app" && row.sheet_sync_status === "synced"));
+}
+
 function overTargetMatchDetails(
   row: OverTargetRow | CollectorOverTargetRecord | AdminOverTargetRecord
 ): OverTargetMatchDetails {
@@ -192,7 +204,7 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
                     )}
                     {isAdmin && (
                       <td className="whitespace-nowrap px-3 py-3">
-                        {row.source === "google_sheet" && row.source_present ? (
+                        {canDeleteOverTargetSheetRow(row) ? (
                           <button
                             type="button"
                             onClick={() => void deleteFromSheet(row)}

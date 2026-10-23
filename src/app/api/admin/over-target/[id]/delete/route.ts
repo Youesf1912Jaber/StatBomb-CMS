@@ -24,15 +24,21 @@ export async function DELETE(
     const service = createServiceRoleClient();
     const { data: record, error: readError } = await service
       .from("over_target")
-      .select("id, source, source_present, sheet_row_number, match_external_id, week_date, week_date_raw, hr_code, count_value")
+      .select("id, source, source_present, sheet_sync_status, sheet_row_number, match_external_id, week_date, week_date_raw, hr_code, count_value")
       .eq("id", id)
       .maybeSingle();
     if (readError) throw readError;
     if (!record || !record.source_present) {
       return NextResponse.json({ error: "This Over Target record is no longer present in the sheet." }, { status: 404 });
     }
-    if (record.source !== "google_sheet") {
-      return NextResponse.json({ error: "Only records imported from Google Sheets can be deleted with this action." }, { status: 409 });
+    const hasVerifiedSheetRow =
+      record.sheet_row_number != null &&
+      Number.isSafeInteger(record.sheet_row_number) &&
+      record.sheet_row_number >= 2 &&
+      (record.source === "google_sheet" ||
+        (record.source === "app" && record.sheet_sync_status === "synced"));
+    if (!hasVerifiedSheetRow) {
+      return NextResponse.json({ error: "This record has no verified row in the Over Target sheet. Sync the sheet and try again." }, { status: 409 });
     }
 
     const result = await deleteOverTargetSheetRow(record);
