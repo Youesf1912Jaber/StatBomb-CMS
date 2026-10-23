@@ -4,6 +4,7 @@ import { AssignmentTable } from "@/components/AssignmentTable";
 import { getCairoToday, isCurrentShiftDate } from "@/lib/dates";
 import { AdminBulkCompleteButton } from "./AdminBulkCompleteButton";
 import { RefreshDistributionButton } from "./RefreshDistributionButton";
+import { ShiftDatePicker } from "./ShiftDatePicker";
 
 export const runtime = "nodejs";
 
@@ -97,27 +98,7 @@ export default async function AdminDashboardPage({
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <RefreshDistributionButton />
               <AdminBulkCompleteButton eligibleCount={bulkCompletionCount} />
-              <form method="get" className="flex flex-wrap items-center gap-2 rounded-lg border border-white/15 bg-black/20 px-3 py-2">
-                <label htmlFor="shiftDate" className="text-xs text-white/75">Shift date</label>
-                <input
-                  id="shiftDate"
-                  name="shiftDate"
-                  type="date"
-                  value={currentShiftDate}
-                  max="9999-12-31"
-                  className="min-w-0 rounded-md border border-white/15 bg-[#031c1a] px-2 py-1 text-xs text-white [color-scheme:dark]"
-                  aria-label="Choose shift date"
-                />
-                <button
-                  type="submit"
-                  className="rounded-md border border-clock-amber/50 bg-clock-amber/10 px-3 py-1.5 text-xs font-semibold text-clock-amber transition hover:bg-clock-amber/20"
-                >
-                  Show Matches
-                </button>
-                <a href="/admin" className="px-1 py-1.5 text-xs text-white/65 underline underline-offset-2 hover:text-white">
-                  Today
-                </a>
-              </form>
+              <ShiftDatePicker selectedDate={currentShiftDate} />
             </div>
           </div>
           <aside className="rounded-xl border border-clock-amber/35 bg-[#031c1a]/90 p-5 backdrop-blur-sm">
