@@ -24,9 +24,20 @@ function requiredSheetGid(name: string): number {
   return gid;
 }
 
-export const LINKS_SHEET_TAB = requiredEnv("GOOGLE_SHEETS_LINKS_TAB");
-export const LINKS_SHEET_GID = requiredSheetGid("GOOGLE_SHEETS_LINKS_GID");
-export const LINKS_SPREADSHEET_ID = requiredEnv("GOOGLE_SHEETS_LINKS_SPREADSHEET_ID");
+type LinksSheetConfig = {
+  tab: string;
+  gid: number;
+  spreadsheetId: string;
+};
+
+// Resolve environment variables at request time, not module import/build time.
+function getLinksSheetConfig(): LinksSheetConfig {
+  return {
+    tab: requiredEnv("GOOGLE_SHEETS_LINKS_TAB"),
+    gid: requiredSheetGid("GOOGLE_SHEETS_LINKS_GID"),
+    spreadsheetId: requiredEnv("GOOGLE_SHEETS_LINKS_SPREADSHEET_ID"),
+  };
+}
 
 const LINKS_GRID_FIELDS =
   "sheets(properties(sheetId,title),data(rowData(values(formattedValue,userEnteredValue,hyperlink,textFormatRuns(format(link(uri))),userEnteredFormat(textFormat(link(uri))),effectiveFormat(textFormat(link(uri)))))))";
@@ -47,30 +58,31 @@ function quotedSheetTitle(title: string): string {
   return `'${title.replace(/'/g, "''")}'`;
 }
 
-async function resolveLinksSheet(spreadsheetId: string): Promise<{ title: string; sheetId: number }> {
+async function resolveLinksSheet(spreadsheetId: string, expectedGid: number, expectedTab: string): Promise<{ title: string; sheetId: number }> {
   const url = new URL(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}`);
   url.searchParams.set("fields", "sheets(properties(sheetId,title))");
   const payload = await googleRequest<{ sheets?: SpreadsheetSheet[] }>(url.toString());
-  const sheet = (payload.sheets ?? []).find((item) => item.properties?.sheetId === LINKS_SHEET_GID);
+  const sheet = (payload.sheets ?? []).find((item) => item.properties?.sheetId === expectedGid);
   const title = sheet?.properties?.title;
   if (!title || sheet?.properties?.sheetId === undefined) {
     throw new PreviewInputError("The Links sheet tab was not found.");
   }
-  if (LINKS_SHEET_TAB.toLowerCase() !== title.trim().toLowerCase()) {
+  if (expectedTab.toLowerCase() !== title.trim().toLowerCase()) {
     throw new PreviewInputError("The Links sheet tab does not match its GID.");
   }
   return { title, sheetId: sheet.properties.sheetId };
 }
 
 export async function readLinksSheet(): Promise<LinksSheetData> {
-  const spreadsheetId = LINKS_SPREADSHEET_ID;
-  const sheet = await resolveLinksSheet(spreadsheetId);
+  const config = getLinksSheetConfig();
+  const spreadsheetId = config.spreadsheetId;
+  const sheet = await resolveLinksSheet(spreadsheetId, config.gid, config.tab);
   const url = new URL(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}`);
   url.searchParams.set("includeGridData", "true");
   url.searchParams.set("ranges", quotedSheetTitle(sheet.title));
   url.searchParams.set("fields", LINKS_GRID_FIELDS);
   const payload = await googleRequest<{ sheets?: SpreadsheetSheet[] }>(url.toString());
-  const target = (payload.sheets ?? []).find((item) => item.properties?.sheetId === LINKS_SHEET_GID);
+  const target = (payload.sheets ?? []).find((item) => item.properties?.sheetId === config.gid);
   const rowData = target?.data?.[0]?.rowData ?? [];
   const { formatted, formulas, hyperlinks } = matricesFromGridData(rowData);
   return parseLinksSheet(formatted, formulas, hyperlinks);
