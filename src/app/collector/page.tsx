@@ -16,6 +16,7 @@ import {
 } from "@/lib/dates";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AssignmentTable } from "@/components/AssignmentTable";
+import { CollectorShiftDatePicker } from "./CollectorShiftDatePicker";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
 
 const MATCH_CARD_PHOTOS = [
@@ -160,22 +161,31 @@ function Section({
   );
 }
 
-export default async function CollectorDashboardPage() {
+export default async function CollectorDashboardPage({
+  searchParams,
+}: {
+  searchParams?: { shiftDate?: string };
+}) {
   const profile = await getProfileOrRedirect();
   const firstName = (profile.full_name ?? profile.email).split(" ")[0];
 
   const supabase = createClient();
   const assignments = await getAssignmentsForCollector(supabase, profile.id);
   const today = getCairoToday();
+  const requestedShiftDate = searchParams?.shiftDate ?? "";
+  const isValidShiftDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedShiftDate)
+    && !Number.isNaN(Date.parse(requestedShiftDate))
+    && new Date(requestedShiftDate).toISOString().slice(0, 10) === requestedShiftDate;
+  const selectedShiftDate = isValidShiftDate ? requestedShiftDate : today;
 
   const currentAssignments = assignments.filter(isOperationalAssignment);
   const currentDistribution = assignments.filter(
     isCurrentDistributionAssignment
   );
 
-  // A) Today's Work — shift_date is the operational grouping, not match_date.
-  const todaysWork = currentAssignments.filter(
-    (a) => isCurrentShiftDate(a.shift_date, today)
+  // A) Selected Shift Work — use shift_date (not match_date), matching admin behavior.
+  const selectedShiftWork = currentAssignments.filter(
+    (a) => isCurrentShiftDate(a.shift_date, selectedShiftDate)
   );
 
   // Show all not-started assignments still present in the current Distribution,
@@ -218,7 +228,7 @@ export default async function CollectorDashboardPage() {
   );
 
   const matchdayStats = [
-    { label: "Today’s work", value: todaysWork.length, note: "Shift assignments" },
+    { label: "Selected shift work", value: selectedShiftWork.length, note: "Assignments for selected shift" },
     { label: "In progress", value: inProgress.length, note: "On the pitch now" },
     { label: "Completed today", value: completedToday.length, note: "Full-time" },
     { label: "SLA attention", value: slaAttention.length, note: "Needs attention" },
@@ -275,7 +285,8 @@ export default async function CollectorDashboardPage() {
               <a href="#locker-room" className="inline-flex items-center gap-2 rounded-lg bg-[#E8C977] px-4 py-2.5 text-sm font-semibold text-[#052221] transition hover:brightness-105">
                 Open my lockers <span aria-hidden="true">↓</span>
               </a>
-              <span className="text-xs text-white/75">Matchday · {today}</span>
+              <span className="text-xs text-white/75">Shift · {selectedShiftDate}</span>
+              <CollectorShiftDatePicker selectedDate={selectedShiftDate} />
             </div>
             <p className="mt-5 text-[10px] text-white/55">
               Football visuals are stored locally with the app.
@@ -334,9 +345,9 @@ export default async function CollectorDashboardPage() {
 
       <div id="collector-todays-work" className="scroll-mt-24">
       <Section
-        title="Today's Work"
-        items={todaysWork}
-        emptyLabel="Nothing shift-dated for today."
+        title={selectedShiftDate === today ? "Today's Work" : `Shift Work · ${selectedShiftDate}`}
+        items={selectedShiftWork}
+        emptyLabel={`No assignments scheduled for shift date ${selectedShiftDate}.`}
       />
       </div>
 
