@@ -596,7 +596,7 @@ export async function addOfficialMatchUrl(
       matchId: assignment.match_id,
       error: updateError,
     });
-    return { error: "The official match URL could not be saved. Please try again.", errorCode: "INTERNAL_ERROR" };
+    return { error: "The official match URL could not be saved. Please try again.", errorCode: "UNKNOWN" };
   }
 
   const { data: matchAssignments } = await supabase
