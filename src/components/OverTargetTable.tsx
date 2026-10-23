@@ -64,9 +64,26 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
   const isAdmin = variant === "admin";
 
   const filtered = useMemo(
-    () => filterOverTargetRecords(records, query, isAdmin ? syncStatus : "all"),
-    [isAdmin, query, records, syncStatus]
+    () => filterOverTargetRecords(records, query, isAdmin ? syncStatus : "all").filter((row) => !deletedIds.has(row.id)),
+    [deletedIds, isAdmin, query, records, syncStatus]
   );
+
+  const deleteFromSheet = async (row: OverTargetRow | CollectorOverTargetRecord | AdminOverTargetRecord) => {
+    const confirmed = window.confirm(`Delete Match ID ${row.match_external_id} from the Over Target Google Sheet? This removes the entire sheet row.`);
+    if (!confirmed) return;
+    setDeletingId(row.id);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/admin/over-target/${encodeURIComponent(row.id)}/delete`, { method: "DELETE", cache: "no-store" });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to delete the sheet row.");
+      setDeletedIds((previous) => new Set(previous).add(row.id));
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete the sheet row.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-3">\n      {deleteError && <p role="alert" className="rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">{deleteError}</p>}
