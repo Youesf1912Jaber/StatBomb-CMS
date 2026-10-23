@@ -1236,31 +1236,29 @@ export async function readDeduction2026Sheet(): Promise<DeductionSheetSourceRow[
     `${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(`${sheet.title}!A:Z`)}`
   );
   const matrix = payload.values ?? [];
-  if (matrix.length === 0) {
-    return [];
-  }
+  if (matrix.length === 0) return [];
 
   const headers = (matrix[0] ?? []).map(normalizeDeductionHeader);
-  const indexFor = (...aliases: string[]) =>
-    headers.findIndex((header) => aliases.includes(header));
+  const indexFor = (...aliases: string[]) => headers.findIndex((header) => aliases.includes(header));
   const indexes = {
-    // Match ID is always stored in column A. Do not infer its location from the
-    // header text because that cell's label has been renamed in the source sheet.
+    // Match ID is anchored to column A even if its header is renamed.
     matchId: 0,
-    app: indexFor("app"),
-    code: indexFor("code", "hr code", "hrcode", "collector hr code", "collector code"),
+    code: indexFor("collector hr code", "collector code", "hr code", "hrcode", "code"),
     collectorName: indexFor("collector name", "collector", "name"),
-    squad: indexFor("squad"),
+    // Error Code is the deduction category shown in the UI. Final Event is kept
+    // in the app field for source fidelity, but does not replace the error code.
+    event: indexFor("error code (col i)", "error code", "deduction", "deduction type", "event"),
+    app: indexFor("final event (col o)", "final event", "app"),
+    comment: indexFor("comment", "comments"),
     side: indexFor("side"),
     half: indexFor("half"),
-    timestamp: indexFor("timestamp", "time", "event time"),
-    event: indexFor("event"),
-    comment: indexFor("comment", "comments"),
     reviewDate: indexFor("review date"),
-    link: indexFor("link", "url"),
+    squad: indexFor("squad"),
+    timestamp: indexFor("timestamp", "event timestamp", "time"),
+    link: indexFor("match link", "link", "url"),
   };
-  if (indexes.code < 0) {
-    throw new PreviewInputError("The Deduction2026 sheet is missing its Code header.");
+  if (indexes.code < 0 || indexes.event < 0) {
+    throw new PreviewInputError("The Deductions2026 sheet is missing Collector HR Code or Error Code headers.");
   }
 
   const cell = (row: unknown[], index: number): string =>
@@ -1283,18 +1281,9 @@ export async function readDeduction2026Sheet(): Promise<DeductionSheetSourceRow[
       link: cell(row, indexes.link),
     };
     const hasValue = [
-      mapped.match_id,
-      mapped.app,
-      mapped.code,
-      mapped.collector_name,
-      mapped.squad,
-      mapped.side,
-      mapped.half,
-      mapped.timestamp,
-      mapped.event,
-      mapped.comment,
-      mapped.review_date,
-      mapped.link,
+      mapped.match_id, mapped.app, mapped.code, mapped.collector_name,
+      mapped.squad, mapped.side, mapped.half, mapped.timestamp, mapped.event,
+      mapped.comment, mapped.review_date, mapped.link,
     ].some((value) => value !== "");
     return hasValue ? [mapped] : [];
   });
