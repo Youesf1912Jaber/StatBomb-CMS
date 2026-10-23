@@ -58,15 +58,36 @@ function overTargetMatchDetails(
 export function OverTargetTable({ records, variant }: OverTargetTableProps) {
   const [query, setQuery] = useState("");
   const [syncStatus, setSyncStatus] = useState<OverTargetSheetSyncStatus | "all">("all");
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const isAdmin = variant === "admin";
 
   const filtered = useMemo(
-    () => filterOverTargetRecords(records, query, isAdmin ? syncStatus : "all"),
-    [isAdmin, query, records, syncStatus]
+    () => filterOverTargetRecords(records, query, isAdmin ? syncStatus : "all").filter((row) => !deletedIds.has(row.id)),
+    [deletedIds, isAdmin, query, records, syncStatus]
   );
+
+  const deleteFromSheet = async (row: OverTargetRow | CollectorOverTargetRecord | AdminOverTargetRecord) => {
+    const confirmed = window.confirm(`Delete Match ID ${row.match_external_id} from the Over Target Google Sheet? This removes the entire sheet row.`);
+    if (!confirmed) return;
+    setDeletingId(row.id);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/admin/over-target/${encodeURIComponent(row.id)}/delete`, { method: "DELETE", cache: "no-store" });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to delete the sheet row.");
+      setDeletedIds((previous) => new Set(previous).add(row.id));
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete the sheet row.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-3">
+      {deleteError && <p role="alert" className="rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">{deleteError}</p>}
       <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-2" : ""}`}>
         <label className="block text-sm text-chalk-200">
           Search
@@ -118,6 +139,7 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Done</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Sync Status</th>
                 {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Add Collector</th>}
+                {isAdmin && <th className="whitespace-nowrap px-3 py-3 font-medium">Sheet Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-pitch-800">
@@ -165,6 +187,22 @@ export function OverTargetTable({ records, variant }: OverTargetTableProps) {
                           <span className="inline-flex rounded-[8px] border border-pitch-800 px-2.5 py-1.5 text-xs text-pitch-500">
                             Add Collector
                           </span>
+                        )}
+                      </td>
+                    )}
+                    {isAdmin && (
+                      <td className="whitespace-nowrap px-3 py-3">
+                        {row.source === "google_sheet" && row.source_present ? (
+                          <button
+                            type="button"
+                            onClick={() => void deleteFromSheet(row)}
+                            disabled={deletingId === row.id}
+                            className="inline-flex rounded-[8px] border border-red-700/70 px-2.5 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-950/50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {deletingId === row.id ? "Deleting…" : "Delete from Sheet"}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-chalk-200">Not a sheet row</span>
                         )}
                       </td>
                     )}
