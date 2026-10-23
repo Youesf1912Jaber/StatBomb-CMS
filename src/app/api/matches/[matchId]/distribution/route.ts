@@ -103,6 +103,23 @@ export async function POST(
     if (!databaseMatch) {
       throw new PreviewInputError("The selected Match Master record is not available in Supabase.");
     }
+    // Reconcile current sheet rows before validating a new distribution. Rows
+    // deleted manually in Google Sheets may not yet be marked missing in Supabase.
+    const existingSheetRows = await readDistributionRowsForMatch(normalizedMatchId);
+    await persistReconciledDistributionPresence(supabase, {
+      distributionRows: existingSheetRows,
+      assignments: assignmentsResult.data ?? [],
+      matches: databaseMatches,
+      matchId: databaseMatch.id,
+    });
+    const { data: refreshedAssignments, error: refreshedAssignmentsError } = await supabase
+      .from("assignments")
+      .select("*");
+    if (refreshedAssignmentsError) {
+      throw new PreviewInputError("Unable to refresh assignment identity after reconciling the current Distribution sheet.");
+    }
+    const currentDatabaseAssignments = refreshedAssignments ?? [];
+
     const logicalKeys = new Set<string>();
     const overTargetFlags: ParsedDistributionOverTarget[] = [];
     const assignments = body.assignments.map((assignment) => {
@@ -127,8 +144,8 @@ export async function POST(
         throw new PreviewInputError("The pending list contains a duplicate Match + Task + Half assignment.");
       }
       logicalKeys.add(logicalKey);
-      const existing = findAssignmentByLogicalKey(assignmentsResult.data ?? [], databaseMatch.id, task, half);
-      if (existing && existing.collector_id !== profileForHrCode.id) {
+      const existing = findAssignmentByLogicalKey(currentDatabaseAssignments, databaseMatch.id, task, half);
+      if (existing && existing.collector_id !== profileForHrCode.id && existing.distribution_present) {
         throw new PreviewInputError("This Match + Task + Half assignment belongs to a different collector.");
       }
       if (existing?.distribution_present) {
@@ -172,7 +189,7 @@ export async function POST(
       if (!source) {
         return NextResponse.json({ success: false, error: "Distribution row saved, but assignment creation failed: the saved row could not be re-read." }, { status: 500 });
       }
-      const currentAssignments = [...(assignmentsResult.data ?? []), ...persisted];
+      const currentAssignments = [...currentDatabaseAssignments.filter((assignment) => assignment.distribution_present), ...persisted];
       const planned = planDistributionAssignment(source, profilesResult.data ?? [], databaseMatches, currentAssignments);
       if (!planned.ok) {
         return NextResponse.json({ success: false, error: `Distribution row saved, but assignment creation failed: ${planned.reason}` }, { status: planned.conflict ? 409 : 422 });
@@ -200,7 +217,7 @@ export async function POST(
     }
     await persistReconciledDistributionPresence(supabase, {
       distributionRows: currentDistributionRows,
-      assignments: [...(assignmentsResult.data ?? []), ...persisted],
+      assignments: [...currentDatabaseAssignments, ...persisted],
       matches: databaseMatches,
       matchId: databaseMatch.id,
     });
