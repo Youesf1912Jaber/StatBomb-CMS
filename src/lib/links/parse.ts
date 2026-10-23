@@ -162,7 +162,9 @@ function resolveHref(
 ): string | null {
   const explicit = providedHref(value);
   if (explicit) return hrefFromCandidate(explicit);
-  return hrefFromCandidate(gridHref) ?? hrefFromFormula(formula) ?? extractLinksHref(text);
+  // A HYPERLINK formula is the authoritative target when present; grid metadata
+  // can expose a stale or different cell-level URL for the same displayed text.
+  return hrefFromFormula(formula) ?? hrefFromCandidate(gridHref) ?? extractLinksHref(text);
 }
 
 export function parseLinksSheet(
