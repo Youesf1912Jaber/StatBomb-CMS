@@ -735,7 +735,11 @@ export async function updateDistributionRow(input: DistributionUpdateInput): Pro
   const sheetName = normalizedSheetName(process.env.GOOGLE_SHEETS_DISTRIBUTION_TAB ?? "Distribution");
   const values = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
   if (values.length === 0) throw new PreviewInputError("The Distribution sheet is empty.");
-  const indexes = getDistributionHeaderIndexes((values[0] ?? []).map(normalizeDistributionHeader));
+  const normalizedHeaders = (values[0] ?? []).map(normalizeDistributionHeader);
+  const indexes = getDistributionHeaderIndexes(normalizedHeaders);
+  const collectorNameColumn = normalizedHeaders.findIndex((header) =>
+    ["collector", "collector name", "assigned collector", "name"].includes(header)
+  );
   const originalRow = values[input.rowNumber - 1];
   if (!originalRow || !matchesDistributionIdentity(originalRow, indexes, matchId, expectedHrCode, expectedTask, expectedHalf)) {
     throw new DistributionRowConflictError();
@@ -756,6 +760,9 @@ export async function updateDistributionRow(input: DistributionUpdateInput): Pro
       valueInputOption: "USER_ENTERED",
       data: [
         { range: `${sheetName}!K${input.rowNumber}:K${input.rowNumber}`, majorDimension: "ROWS", values: [[collectorHrCode]] },
+        ...(collectorNameColumn >= 0 && input.collectorName
+          ? [{ range: `${sheetName}!${columnLetter(collectorNameColumn + 1)}${input.rowNumber}:${columnLetter(collectorNameColumn + 1)}${input.rowNumber}`, majorDimension: "ROWS" as const, values: [[input.collectorName]] }]
+          : []),
         { range: `${sheetName}!M${input.rowNumber}:N${input.rowNumber}`, majorDimension: "ROWS", values: [[task, half]] },
       ],
     }),

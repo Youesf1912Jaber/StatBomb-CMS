@@ -5,7 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { translateSupabaseError, type AppErrorCode } from "@/lib/errors";
 import { isAssignmentTaskName } from "./task-names";
-import { updateDistributionStatuses, type DistributionStatusUpdate } from "@/lib/sync/google-sheets";
+import {
+  readDistributionRowsForMatch,
+  updateDistributionRow,
+  updateDistributionStatuses,
+  type DistributionStatusUpdate,
+} from "@/lib/sync/google-sheets";
 
 export interface AssignmentActionState {
   error: string | null;
@@ -324,7 +329,41 @@ export async function reassignAssignment(
   newCollectorId: string,
   mode: ReassignmentMode
 ): Promise<AssignmentActionState> {
+  const profile = await getProfileOrRedirect();
+  if (profile.role !== "admin") {
+    return { error: "You're not authorized to do that.", errorCode: "NOT_AUTHORIZED" };
+  }
+
   const supabase = createClient();
+
+  // Capture the original assignment identity before the reassignment RPC changes its collector.
+  const { data: original, error: originalError } = await supabase
+    .from("assignments")
+    .select("id, match_id, collector_id, task, raw_task_value, half, distribution_present")
+    .eq("id", assignmentId)
+    .single();
+
+  if (originalError || !original) {
+    return { error: originalError?.message ?? "Assignment not found.", errorCode: null };
+  }
+
+  const [{ data: match, error: matchError }, { data: oldCollector, error: oldCollectorError }, { data: newCollector, error: newCollectorError }] =
+    await Promise.all([
+      supabase.from("matches").select("external_id").eq("id", original.match_id).single(),
+      supabase.from("profiles").select("hr_code").eq("id", original.collector_id).single(),
+      supabase.from("profiles").select("hr_code,full_name,email").eq("id", newCollectorId).single(),
+    ]);
+
+  if (matchError || !match?.external_id) {
+    return { error: matchError?.message ?? "Match ID could not be found.", errorCode: null };
+  }
+  if (oldCollectorError || !oldCollector?.hr_code) {
+    return { error: oldCollectorError?.message ?? "Current collector HR code could not be found.", errorCode: null };
+  }
+  if (newCollectorError || !newCollector?.hr_code) {
+    return { error: newCollectorError?.message ?? "New collector HR code could not be found.", errorCode: null };
+  }
+
   const { error } = await supabase.rpc("reassign_assignment", {
     p_assignment_id: assignmentId,
     p_new_collector_id: newCollectorId,
@@ -336,9 +375,46 @@ export async function reassignAssignment(
     return { error: appError.message, errorCode: appError.code };
   }
 
+  let warning: string | null = null;
+  if (original.distribution_present !== false) {
+    try {
+      const rows = await readDistributionRowsForMatch(match.external_id);
+      const expectedTask = original.raw_task_value ?? original.task;
+      const row = rows.find((candidate) =>
+        candidate.collector_hr_code?.trim().toUpperCase() === oldCollector.hr_code!.trim().toUpperCase() &&
+        (candidate.task ?? "").trim().toLowerCase() === expectedTask.trim().toLowerCase() &&
+        (candidate.half ?? "").trim().toLowerCase() === original.half.trim().toLowerCase()
+      );
+
+      if (!row) {
+        throw new Error("The matching Distribution row was not found using Match ID, current collector HR code, task, and half.");
+      }
+
+      await updateDistributionRow({
+        matchId: match.external_id,
+        rowNumber: row.raw_row_number,
+        expectedCollectorHrCode: oldCollector.hr_code,
+        expectedTask,
+        expectedHalf: original.half,
+        collectorHrCode: newCollector.hr_code,
+        collectorName: newCollector.full_name ?? newCollector.email,
+        task: expectedTask,
+        half: original.half,
+      });
+    } catch (syncError) {
+      console.error("Assignment was reassigned in the app but Google Sheets Distribution sync failed", {
+        assignmentId,
+        matchId: match.external_id,
+        error: syncError,
+      });
+      warning = "Assignment was reassigned in the app, but the Google Sheets Distribution row could not be updated. Check the row and retry after verifying the sheet connection.";
+    }
+  }
+
   revalidatePath(`/admin/assignments/${assignmentId}`);
   revalidatePath("/admin");
-  return OK;
+  revalidatePath("/collector");
+  return { ...OK, warning };
 }
 
 /**
