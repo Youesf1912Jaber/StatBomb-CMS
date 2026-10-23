@@ -110,17 +110,6 @@ export function AppShell({
             <span className="hidden font-mono text-xs uppercase tracking-wide text-pitch-500 sm:inline lg:hidden">
               {roleLabel}
             </span>
-            {role === "admin" ? (
-              <a
-                href="https://script.google.com/macros/s/AKfycbxWF7Iy4qRDsSdcTcN_jmKE5ANh8PrFD5sspdoOUHRF8C1hLglPtbmcQv7KmmrhClZ2/exec"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-[8px] border border-[#b89a45] bg-[#263a2b] px-3 py-1.5 text-sm font-semibold text-[#f1d77f] shadow-sm transition-colors hover:border-[#e3c36b] hover:bg-[#344a34] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e3c36b]"
-              >
-                <span className="hidden sm:inline">QA Dashboard</span>
-                <span className="sm:hidden">QA</span>
-              </a>
-            ) : null}
             {canSwitchWorkspace ? (
               <Link
                 href={role === "admin" ? "/collector" : "/admin"}
