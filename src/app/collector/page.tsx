@@ -54,9 +54,19 @@ const MATCH_CARD_PHOTOS = [
 
 const DEFAULT_MATCH_CARD_PHOTO = MATCH_CARD_PHOTOS[0]!;
 
-function AssignmentCard({ a, photoIndex, cardNumber }: { a: AssignmentWithMatch; photoIndex: number; cardNumber: number }) {
-  // Use the card's position within its section so adjacent matches do not reuse the same photo.
-  const matchPhoto = MATCH_CARD_PHOTOS[photoIndex % MATCH_CARD_PHOTOS.length] ?? DEFAULT_MATCH_CARD_PHOTO;
+function getMatchPhotoIndex(assignment: AssignmentWithMatch): number {
+  // Stable per assignment, rather than restarting at photo 0 in every section.
+  // This way different matches can use different imagery across shifts and sections.
+  const identity = assignment.id || assignment.match.external_id;
+  let hash = 0;
+  for (let index = 0; index < identity.length; index += 1) {
+    hash = (hash * 31 + identity.charCodeAt(index)) >>> 0;
+  }
+  return hash % MATCH_CARD_PHOTOS.length;
+}
+
+function AssignmentCard({ a, cardNumber }: { a: AssignmentWithMatch; cardNumber: number }) {
+  const matchPhoto = MATCH_CARD_PHOTOS[getMatchPhotoIndex(a)] ?? DEFAULT_MATCH_CARD_PHOTO;
   const statusTone =
     a.status === "Completed"
       ? "border-emerald-300/30 bg-emerald-300/10 text-chalk-50"
@@ -152,7 +162,7 @@ function Section({
               const shiftKey = a.shift_date ?? "no-shift-date";
               const cardNumber = (sequenceByShift.get(shiftKey) ?? 0) + 1;
               sequenceByShift.set(shiftKey, cardNumber);
-              return <AssignmentCard key={a.id} a={a} photoIndex={index} cardNumber={cardNumber} />;
+              return <AssignmentCard key={a.id} a={a} cardNumber={cardNumber} />;
             });
           })()}
         </div>
