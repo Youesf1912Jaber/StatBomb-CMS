@@ -7,9 +7,26 @@ import type { LinksSheetData } from "./types";
 
 const GOOGLE_SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 
-export const LINKS_SHEET_TAB = "Links";
-export const LINKS_SHEET_GID = 490955441;
-export const LINKS_SPREADSHEET_ID = "1gT8xUWKw-83xIYCXtYXJZU1S4M87JpapM-ROBqF_KgQ";
+function requiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new PreviewInputError(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+function requiredSheetGid(name: string): number {
+  const raw = requiredEnv(name);
+  const gid = Number(raw);
+  if (!Number.isSafeInteger(gid) || gid < 0) {
+    throw new PreviewInputError(`Environment variable ${name} must be a valid non-negative sheet GID.`);
+  }
+  return gid;
+}
+
+export const LINKS_SHEET_TAB = requiredEnv("GOOGLE_SHEETS_LINKS_TAB");
+export const LINKS_SHEET_GID = requiredSheetGid("GOOGLE_SHEETS_LINKS_GID");
+export const LINKS_SPREADSHEET_ID = requiredEnv("GOOGLE_SHEETS_LINKS_SPREADSHEET_ID");
 
 const LINKS_GRID_FIELDS =
   "sheets(properties(sheetId,title),data(rowData(values(formattedValue,userEnteredValue,hyperlink,textFormatRuns(format(link(uri))),userEnteredFormat(textFormat(link(uri))),effectiveFormat(textFormat(link(uri)))))))";
