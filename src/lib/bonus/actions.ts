@@ -8,6 +8,7 @@ import { PreviewInputError } from "@/lib/sync/preview";
 import {
   appendBonusRow,
   updateBonusResolution,
+  deleteBonusRow,
   formatBonusDateForSheet,
 } from "./sheet";
 import {
@@ -136,6 +137,42 @@ export async function setBonusResolution(input: BonusResolutionInput): Promise<B
     });
   } catch (error) {
     return failure(safeMessage(error, "Unable to update Resolution."));
+  }
+
+  revalidateBonusPaths();
+  return OK;
+}
+
+export async function deleteBonusSubmission(input: {
+  rowNumber: number;
+  hrCode: string;
+  matchId: string;
+  reason: string;
+  task: string;
+  date: string | null;
+}): Promise<BonusActionState> {
+  const profile = await getProfileOrRedirect();
+  if (profile.role !== "admin") {
+    return failure("You're not authorized to delete Bonus records.");
+  }
+  if (!Number.isSafeInteger(input.rowNumber) || input.rowNumber < 2) {
+    return failure("That Bonus row is invalid.");
+  }
+  if (!input.hrCode.trim() || !input.matchId.trim() || !input.reason.trim() || !input.task.trim()) {
+    return failure("The Bonus row identity is incomplete. Refresh the page and try again.");
+  }
+
+  try {
+    await deleteBonusRow({
+      row_number: input.rowNumber,
+      hr_code: input.hrCode,
+      match_id: input.matchId,
+      reason: input.reason,
+      task: input.task,
+      date: input.date,
+    });
+  } catch (error) {
+    return failure(safeMessage(error, "Unable to delete the Bonus from Google Sheets."));
   }
 
   revalidateBonusPaths();
