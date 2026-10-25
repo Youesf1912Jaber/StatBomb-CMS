@@ -13,6 +13,7 @@ export function BonusSubmissionForm({ assignmentId }: BonusSubmissionFormProps) 
   const router = useRouter();
   const [reason, setReason] = useState<string>(BONUS_REASONS[0]);
   const [task, setTask] = useState<string>(BONUS_TASKS[0]);
+  const [comment, setComment] = useState<string>("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -21,7 +22,7 @@ export function BonusSubmissionForm({ assignmentId }: BonusSubmissionFormProps) 
     setMessage(null);
     setError(null);
     startTransition(async () => {
-      const result = await submitBonus(assignmentId, reason, task);
+      const result = await submitBonus(assignmentId, reason, task, comment);
       if (result.error) {
         setError(result.error);
         return;
@@ -70,6 +71,18 @@ export function BonusSubmissionForm({ assignmentId }: BonusSubmissionFormProps) 
           </select>
         </label>
       </div>
+
+      <label className="block text-sm text-chalk-200">
+        Comment <span className="text-chalk-400">(optional)</span>
+        <textarea
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          maxLength={1000}
+          rows={3}
+          placeholder="Add a comment about this bonus (optional)"
+          className="mt-1 block w-full resize-y rounded-[8px] border border-pitch-700 bg-pitch-900 px-3 py-2 text-sm text-chalk-50 placeholder:text-chalk-400"
+        />
+      </label>
 
       <button
         type="button"
