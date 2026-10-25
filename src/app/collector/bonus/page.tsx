@@ -1,4 +1,5 @@
 import { getBonusRecordsForHrCode } from "@/lib/bonus/sheet";
+import { CollectorBonusDeleteControl } from "@/components/CollectorBonusDeleteControl";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 
 export const runtime = "nodejs";
@@ -72,6 +73,7 @@ export default async function CollectorBonusPage() {
                 <th className="min-w-[220px] px-3 py-3 font-medium">Comment</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Amount</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Resolution</th>
+                <th className="whitespace-nowrap px-3 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-pitch-800">
@@ -93,6 +95,20 @@ export default async function CollectorBonusPage() {
                     {record.resolution === null || record.resolution === undefined || String(record.resolution).trim() === "" ? (
                       <span className="inline-flex rounded-full border border-clock-amber/40 bg-clock-amber/10 px-2.5 py-1 text-xs font-medium text-clock-amber">Pending</span>
                     ) : display(String(record.resolution))}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3">
+                    {profile.role === "collector" && (
+                      <CollectorBonusDeleteControl
+                        bonus={{
+                          rowNumber: record.row_number,
+                          hrCode: record.hr_code,
+                          matchId: record.match_id,
+                          reason: record.reason,
+                          task: record.task,
+                          date: record.date,
+                        }}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}
