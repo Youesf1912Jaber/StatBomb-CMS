@@ -6,6 +6,7 @@ import { getAssignmentById, getAssignmentTaskTimers, getMatchCollaborators } fro
 import { distributionPresenceLabel } from "@/lib/assignments/distribution-presence";
 import { getActivityLogsForAssignment } from "@/lib/activity-logs/queries";
 import { getHyperCareForMatch } from "@/lib/hyper-care/lookup";
+import { getMatchMasterMetadata } from "@/lib/match-master-metadata";
 import { pullTeamSheet, normalizeDistributionCollectorHrCode } from "@/lib/sync/google-sheets";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { AdminAssignmentTaskTimers } from "@/components/AdminAssignmentTaskTimers";
@@ -50,7 +51,10 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
   const collaborators = await getMatchCollaborators(supabase, assignment.match_id);
   const activityHistory = await getActivityLogsForAssignment(supabase, assignment.id);
   const taskTimers = await getAssignmentTaskTimers(supabase, assignment.id);
-  const hyperCare = await getHyperCareForMatch(assignment.match.home_team, assignment.match.away_team);
+  const [hyperCare, matchMetadata] = await Promise.all([
+    getHyperCareForMatch(assignment.match.home_team, assignment.match.away_team),
+    getMatchMasterMetadata(assignment.match.external_id),
+  ]);
   const [{ data: allProfiles }, teamRoster] = await Promise.all([
     supabase.from("profiles").select("id, full_name, email, hr_code, role, deleted_at, suspended_at").order("full_name"),
     pullTeamSheet(),
@@ -123,6 +127,8 @@ export default async function AdminAssignmentDetailsPage({ params }: { params: {
           <h2 className="font-display text-base font-semibold text-chalk-50">Match information</h2>
         </header>
         <dl className="grid grid-cols-1 gap-x-5 px-4 py-2 sm:grid-cols-2 sm:px-5 lg:grid-cols-3">
+          <DetailField label="Competition">{matchMetadata.competition ?? assignment.match.competition ?? "—"}</DetailField>
+          <DetailField label="Country">{matchMetadata.country ?? "—"}</DetailField>
           <DetailField label="Task">{assignment.task}</DetailField>
           <DetailField label="Half">{assignment.half}</DetailField>
           <DetailField label="Status"><span className={assignment.status === "Completed" ? "text-emerald-300" : assignment.status === "Overdue" ? "text-rose-300" : "text-chalk-50"}>{assignment.status}</span></DetailField>
