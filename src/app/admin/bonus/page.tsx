@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { BonusResolutionControl } from "@/components/BonusResolutionControl";
+import { BonusDeleteControl } from "@/components/BonusDeleteControl";
 import { getAllBonusRecords } from "@/lib/bonus/sheet";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 
@@ -167,6 +168,7 @@ export default async function AdminBonusPage({
                 <th className="min-w-[220px] px-3 py-3 font-medium">Comment</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Amount</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Resolution</th>
+                <th className="whitespace-nowrap px-3 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-pitch-800">
@@ -193,6 +195,18 @@ export default async function AdminBonusPage({
                         date: record.date,
                       }}
                       resolution={record.resolution}
+                    />
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3">
+                    <BonusDeleteControl
+                      bonus={{
+                        rowNumber: record.row_number,
+                        hrCode: record.hr_code,
+                        matchId: record.match_id,
+                        reason: record.reason,
+                        task: record.task,
+                        date: record.date,
+                      }}
                     />
                   </td>
                 </tr>
