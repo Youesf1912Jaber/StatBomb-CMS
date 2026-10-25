@@ -15,6 +15,30 @@ function distributionLabel(distribution: MatchMasterDisplayRow["distribution"]):
   return `Distributed ${halves}`;
 }
 
+function parseSlaTimestamp(value: string | null | undefined): number | null {
+  if (!value?.trim()) return null;
+  const raw = value.trim();
+
+  // Match Master SLA values commonly use M/D/YYYY H:mm:ss (US format).
+  const usDate = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
+  if (usDate) {
+    const month = Number(usDate[1]);
+    const day = Number(usDate[2]);
+    const year = Number(usDate[3]);
+    let hour = Number(usDate[4] ?? 0);
+    const minute = Number(usDate[5] ?? 0);
+    const second = Number(usDate[6] ?? 0);
+    const meridiem = usDate[7]?.toUpperCase();
+    if (meridiem === "PM" && hour < 12) hour += 12;
+    if (meridiem === "AM" && hour === 12) hour = 0;
+    const timestamp = new Date(year, month - 1, day, hour, minute, second).getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
+  }
+
+  const timestamp = Date.parse(raw);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
 export function MatchMasterClient() {
   const [matches, setMatches] = useState<MatchMasterDisplayRow[]>([]);
   const [query, setQuery] = useState("");
