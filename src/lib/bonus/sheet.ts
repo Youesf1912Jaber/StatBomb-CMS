@@ -28,6 +28,7 @@ export type BonusRecord = {
   done: string | null;
   resolution_raw: string;
   resolution: BonusResolution | null;
+  comment: string;
 };
 
 export type BonusRowIdentity = {
@@ -361,6 +362,7 @@ function mapBonusRecord(row: unknown[], rowNumber: number, indexes: BonusColumnI
     done: cell(indexes.done) || null,
     resolution_raw: resolutionRaw,
     resolution: normalizeBonusResolution(resolutionRaw),
+    comment: cell(indexes.comment),
   };
 }
 
