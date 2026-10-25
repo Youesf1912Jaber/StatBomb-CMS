@@ -35,12 +35,31 @@ export function MatchMasterClient() {
 
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
-    return matches.filter((match) => {
+    const rows = matches.filter((match) => {
       const matchesText = !value || [match.match_id, match.home_team, match.away_team]
         .some((field) => field?.toLowerCase().includes(value));
       const matchesEta = !etaDate || normalizeEtaDate(match.eta) === etaDate;
       return matchesText && matchesEta;
     });
+
+    // When an ETA day is selected, show the nearest SLA deadline first.
+    if (etaDate) {
+      return rows
+        .map((match, originalIndex) => ({
+          match,
+          originalIndex,
+          slaTimestamp: parseSlaTimestamp(match.sla),
+        }))
+        .sort((left, right) => {
+          if (left.slaTimestamp === null && right.slaTimestamp === null) return left.originalIndex - right.originalIndex;
+          if (left.slaTimestamp === null) return 1;
+          if (right.slaTimestamp === null) return -1;
+          return left.slaTimestamp - right.slaTimestamp || left.originalIndex - right.originalIndex;
+        })
+        .map(({ match }) => match);
+    }
+
+    return rows;
   }, [matches, query, etaDate]);
 
   return (
