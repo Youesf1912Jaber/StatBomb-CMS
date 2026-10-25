@@ -1,5 +1,7 @@
 import "server-only";
 
+import { revalidateTag, unstable_cache } from "next/cache";
+
 import { googleRequest } from "@/lib/sync/google-sheets";
 import { PreviewInputError } from "@/lib/sync/preview";
 import type { BonusTask, BonusReason, BonusResolution } from "./options";
@@ -377,7 +379,7 @@ function compareBonusDateDesc(a: BonusRecord, b: BonusRecord): number {
   return a.row_number - b.row_number;
 }
 
-export async function getAllBonusRecords(): Promise<BonusRecord[]> {
+async function readAllBonusRecords(): Promise<BonusRecord[]> {
   const { matrix, indexes, headerRowIndex } = await loadBonusSheet();
   return matrix
     .slice(headerRowIndex + 1)
@@ -386,6 +388,16 @@ export async function getAllBonusRecords(): Promise<BonusRecord[]> {
     .map((row, index) => mapBonusRecord(row, headerRowIndex + 2 + index, indexes))
     .filter((record): record is BonusRecord => record !== null)
     .sort(compareBonusDateDesc);
+}
+
+const getCachedBonusRecords = unstable_cache(
+  readAllBonusRecords,
+  ["bonus-records-v1"],
+  { revalidate: 15, tags: ["bonus-records"] }
+);
+
+export async function getAllBonusRecords(): Promise<BonusRecord[]> {
+  return getCachedBonusRecords();
 }
 
 export async function getBonusRecordsForHrCode(
@@ -472,6 +484,7 @@ export async function appendBonusRow(fields: BonusSubmissionFields): Promise<voi
   if (writtenHr !== fields.hr_code.toUpperCase() || writtenMatch !== fields.match_id) {
     throw new PreviewInputError("The Bonus submission could not be verified.");
   }
+  revalidateTag("bonus-records");
 }
 
 function matchesBonusIdentity(row: unknown[], indexes: BonusColumnIndexes, expected: BonusRowIdentity): boolean {
@@ -537,6 +550,7 @@ export async function deleteBonusRow(expected: BonusRowIdentity): Promise<void> 
       }],
     }),
   });
+  revalidateTag("bonus-records");
 }
 
 export async function updateBonusResolution(input: {
@@ -563,4 +577,5 @@ export async function updateBonusResolution(input: {
   await batchUpdateBonusCells(spreadsheetId, [
     cellWrite(title, input.expected.row_number, resolutionColumn, input.resolution ?? ""),
   ]);
+  revalidateTag("bonus-records");
 }
