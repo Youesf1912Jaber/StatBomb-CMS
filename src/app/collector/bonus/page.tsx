@@ -69,6 +69,7 @@ export default async function CollectorBonusPage() {
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Home Team</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Away Team</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Date</th>
+                <th className="min-w-[220px] px-3 py-3 font-medium">Comment</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Amount</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Resolution</th>
               </tr>
@@ -82,6 +83,7 @@ export default async function CollectorBonusPage() {
                   <td className="whitespace-nowrap px-3 py-3">{display(record.home_team)}</td>
                   <td className="whitespace-nowrap px-3 py-3">{display(record.away_team)}</td>
                   <td className="whitespace-nowrap px-3 py-3">{displayDate(record.date, record.date_raw)}</td>
+                  <td className="max-w-sm whitespace-pre-wrap break-words px-3 py-3">{display(record.comment)}</td>
                   <td className="whitespace-nowrap px-3 py-3">
                     {record.amount === null || record.amount === undefined || String(record.amount).trim() === "" ? (
                       <span className="inline-flex rounded-full border border-clock-amber/40 bg-clock-amber/10 px-2.5 py-1 text-xs font-medium text-clock-amber">Pending</span>
