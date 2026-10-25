@@ -373,6 +373,7 @@ export default async function CollectorDashboardPage({
 
       <div id="collector-todays-work" className="scroll-mt-24">
       <Section
+        matchMetadata={matchMetadata}
         title={selectedShiftDate === today ? "Today's Work" : `Shift Work · ${selectedShiftDate}`}
         items={selectedShiftWork}
         emptyLabel={`No assignments scheduled for shift date ${selectedShiftDate}.`}
@@ -380,6 +381,7 @@ export default async function CollectorDashboardPage({
       </div>
 
       <Section
+        matchMetadata={matchMetadata}
         title="Not Started (All Shifts)"
         items={notStartedAssignments}
         emptyLabel="No not-started assignments in your current distribution."
@@ -387,6 +389,7 @@ export default async function CollectorDashboardPage({
 
       <div id="collector-in-progress" className="scroll-mt-24">
       <Section
+        matchMetadata={matchMetadata}
         title="Currently In Progress"
         items={inProgress}
         emptyLabel="Nothing in progress right now."
@@ -394,6 +397,7 @@ export default async function CollectorDashboardPage({
       </div>
 
       <Section
+        matchMetadata={matchMetadata}
         title="Upcoming Assignments"
         items={upcoming}
         emptyLabel="No upcoming assignments."
@@ -401,6 +405,7 @@ export default async function CollectorDashboardPage({
 
       <div id="collector-completed-today" className="scroll-mt-24">
       <Section
+        matchMetadata={matchMetadata}
         title="Completed Today"
         items={completedToday}
         emptyLabel="Nothing completed yet today."
@@ -409,6 +414,7 @@ export default async function CollectorDashboardPage({
 
       <div id="collector-sla-attention" className="scroll-mt-24">
       <Section
+        matchMetadata={matchMetadata}
         title="SLA Warnings / Overdue"
         items={slaAttention}
         emptyLabel="Nothing overdue."
