@@ -1,5 +1,6 @@
 import { getBonusRecordsForHrCode } from "@/lib/bonus/sheet";
 import { CollectorBonusDeleteControl } from "@/components/CollectorBonusDeleteControl";
+import { BonusDeleteControl } from "@/components/BonusDeleteControl";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 
 export const runtime = "nodejs";
@@ -80,7 +81,7 @@ export default async function CollectorBonusPage() {
               {records.map((record) => (
                 <tr key={record.row_number} className="bg-pitch-900 text-chalk-50 transition-colors hover:bg-pitch-800/70">
                   <td className="whitespace-nowrap px-3 py-3">
-                    {profile.role === "collector" && (
+                    {profile.role === "collector" ? (
                       <CollectorBonusDeleteControl
                         bonus={{
                           rowNumber: record.row_number,
@@ -91,7 +92,18 @@ export default async function CollectorBonusPage() {
                           date: record.date,
                         }}
                       />
-                    )}
+                    ) : profile.role === "admin" ? (
+                      <BonusDeleteControl
+                        bonus={{
+                          rowNumber: record.row_number,
+                          hrCode: record.hr_code,
+                          matchId: record.match_id,
+                          reason: record.reason,
+                          task: record.task,
+                          date: record.date,
+                        }}
+                      />
+                    ) : null}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 font-mono">{display(record.match_id)}</td>
                   <td className="whitespace-nowrap px-3 py-3">{display(record.reason)}</td>
