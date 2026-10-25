@@ -49,7 +49,8 @@ function revalidateBonusPaths(assignmentId?: string) {
 export async function submitBonus(
   assignmentId: string,
   reason: string,
-  task: string
+  task: string,
+  comment = ""
 ): Promise<BonusActionState> {
   const profile = await getProfileOrRedirect();
   if (profile.role !== "collector" && profile.role !== "admin") {
@@ -88,6 +89,7 @@ export async function submitBonus(
       home_team: assignment.match.home_team,
       away_team: assignment.match.away_team,
       date: submissionDate,
+      comment: comment.trim().slice(0, 1000),
     });
   } catch (error) {
     return failure(safeMessage(error, "Unable to submit the Bonus."));
