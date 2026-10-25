@@ -164,6 +164,7 @@ export default async function AdminBonusPage({
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Home Team</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Away Team</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Date</th>
+                <th className="min-w-[220px] px-3 py-3 font-medium">Comment</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Amount</th>
                 <th className="whitespace-nowrap px-3 py-3 font-medium">Resolution</th>
               </tr>
@@ -179,6 +180,7 @@ export default async function AdminBonusPage({
                   <td className="whitespace-nowrap px-3 py-3">{display(record.home_team)}</td>
                   <td className="whitespace-nowrap px-3 py-3">{display(record.away_team)}</td>
                   <td className="whitespace-nowrap px-3 py-3">{displayDate(record.date, record.date_raw)}</td>
+                  <td className="max-w-sm whitespace-pre-wrap break-words px-3 py-3">{display(record.comment)}</td>
                   <td className="whitespace-nowrap px-3 py-3">{record.amount ?? "Pending"}</td>
                   <td className="whitespace-nowrap px-3 py-3">
                     <BonusResolutionControl
