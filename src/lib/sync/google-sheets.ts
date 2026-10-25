@@ -1149,6 +1149,8 @@ export async function updateDistributionStatuses(
   if (updates.length === 0) return { updated: 0 };
 
   const sheetName = normalizedSheetName(process.env.GOOGLE_SHEETS_DISTRIBUTION_TAB ?? "Distribution");
+  // Always re-read the live sheet immediately before resolving row numbers.
+  // Rows can move when a collector/task is added or edited during a match.
   const values = await readDistributionSheetRange(`${sheetName}!A:Z`, "FORMULA");
   if (values.length < 2) throw new PreviewInputError("No assignment rows were found in the Distribution sheet.");
 
@@ -1169,25 +1171,41 @@ export async function updateDistributionStatuses(
       throw new PreviewInputError("A Distribution status update has incomplete assignment identity.");
     }
 
-    const matches = values.slice(1).flatMap((row, index) =>
+    const allRows = values.slice(1).map((row, index) => ({
+      row,
+      rowNumber: index + 2,
+    }));
+    const exactMatches = allRows.filter(({ row }) =>
       matchesDistributionIdentity(row, indexes, matchId, hrCode, task, half)
-        ? [{ rowNumber: index + 2, currentStatus: String(row[statusIndex] ?? "").trim() }]
-        : []
     );
+
+    // If the task was edited in the app/sheet and one side did not finish
+    // syncing, recover only when Match ID + current HR-Code + Half uniquely
+    // identifies a row. Never guess between multiple tasks or collectors.
+    const matches = exactMatches.length > 0
+      ? exactMatches
+      : allRows.filter(({ row }) =>
+          normalizeMatchId(row[indexes.id] ?? null) === matchId &&
+          normalizeDistributionCollectorHrCode(row[indexes.hr] ?? null) === hrCode &&
+          normalizeDistributionHalf(row[indexes.half] ?? null).toLowerCase() === half.toLowerCase()
+        );
+
     if (matches.length !== 1) {
       throw new PreviewInputError(
         matches.length === 0
-          ? `No matching Distribution row was found for Match ID ${matchId}, HR code ${hrCode}, task ${task}, half ${half}.`
-          : `Multiple Distribution rows match Match ID ${matchId}, HR code ${hrCode}, task ${task}, half ${half}. No status was changed.`
+          ? `No matching Distribution row was found for Match ID ${matchId}, HR code ${hrCode}, task ${task}, half ${half}. Check that the current collector and task exist in the Distribution sheet.`
+          : `Multiple Distribution rows match Match ID ${matchId}, HR code ${hrCode}, and half ${half}. No status was changed because the row is ambiguous.`
       );
     }
+
     const match = matches[0];
     if (!match) throw new PreviewInputError("The matching Distribution row could not be resolved.");
     if (seenRows.has(match.rowNumber)) {
       throw new PreviewInputError("Multiple status updates target the same Distribution row.");
     }
     seenRows.add(match.rowNumber);
-    if (match.currentStatus.toLowerCase() !== update.status.toLowerCase()) {
+    const currentStatus = String(match.row[statusIndex] ?? "").trim();
+    if (currentStatus.toLowerCase() !== update.status.toLowerCase()) {
       writes.push({ rowNumber: match.rowNumber, status: update.status });
     }
   }
@@ -1208,6 +1226,7 @@ export async function updateDistributionStatuses(
     }),
   });
 
+  // Verify against the latest status column values after the write.
   const verification = await readDistributionSheetRange(
     `${sheetName}!${statusColumn}:${statusColumn}`,
     "FORMATTED_VALUE",
