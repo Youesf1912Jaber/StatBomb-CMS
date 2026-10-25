@@ -48,6 +48,7 @@ export type BonusSubmissionFields = {
   home_team: string;
   away_team: string;
   date: string;
+  comment?: string;
 };
 
 type SpreadsheetSheet = { properties?: { sheetId?: number; title?: string } };
@@ -64,6 +65,7 @@ type BonusColumnIndexes = {
   amount: number;
   done: number;
   resolution: number;
+  comment: number;
 };
 
 type LoadedBonusSheet = {
@@ -253,6 +255,7 @@ function tryResolveIndexes(headers: string[]): BonusColumnIndexes | null {
     amount: findColumnIndex(headers, "amount", "bonus amount", "amont"),
     done: findColumnIndex(headers, "done"),
     resolution: findColumnIndex(headers, "resolution", "resolution status", "review resolution"),
+    comment: findColumnIndex(headers, "comment", "comments"),
   };
 
   // DIAGNOSTIC: Investigate why Resolution writes may not be landing on the
@@ -449,6 +452,9 @@ export async function appendBonusRow(fields: BonusSubmissionFields): Promise<voi
   }
   if (indexes.awayTeam >= 0) {
     writes.push(cellWrite(title, targetRow, indexes.awayTeam, fields.away_team));
+  }
+  if (indexes.comment >= 0 && fields.comment?.trim()) {
+    writes.push(cellWrite(title, targetRow, indexes.comment, fields.comment.trim()));
   }
 
   await batchUpdateBonusCells(spreadsheetId, writes);
