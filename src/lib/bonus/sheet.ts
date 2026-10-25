@@ -501,6 +501,44 @@ async function ensureResolutionColumn(loaded: LoadedBonusSheet): Promise<number>
   return column;
 }
 
+export async function deleteBonusRow(expected: BonusRowIdentity): Promise<void> {
+  const loaded = await loadBonusSheet();
+  const { spreadsheetId, title, matrix, indexes } = loaded;
+  if (!Number.isSafeInteger(expected.row_number) || expected.row_number <= loaded.headerRowNumber) {
+    throw new PreviewInputError("That Bonus row is invalid.");
+  }
+
+  const row = matrix[expected.row_number - 1];
+  if (!row || !matchesBonusIdentity(row, indexes, expected)) {
+    throw new PreviewInputError("This Bonus row changed in Google Sheets. Refresh the page and try again.");
+  }
+
+  const metadataUrl = new URL(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}`);
+  metadataUrl.searchParams.set("fields", "sheets(properties(sheetId,title))");
+  const metadata = await googleRequest<{ sheets?: SpreadsheetSheet[] }>(metadataUrl.toString());
+  const sheet = (metadata.sheets ?? []).find((item) => item.properties?.title === title);
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId === undefined) {
+    throw new PreviewInputError("The Bonus sheet tab could not be found.");
+  }
+
+  await googleRequest(`${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: "ROWS",
+            startIndex: expected.row_number - 1,
+            endIndex: expected.row_number,
+          },
+        },
+      }],
+    }),
+  });
+}
+
 export async function updateBonusResolution(input: {
   expected: BonusRowIdentity;
   resolution: BonusResolution | null;
