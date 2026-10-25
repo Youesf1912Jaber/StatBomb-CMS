@@ -18,6 +18,8 @@ import { SlaCountdown } from "@/components/SlaCountdown";
 import { AssignmentTable } from "@/components/AssignmentTable";
 import { CollectorShiftDatePicker } from "./CollectorShiftDatePicker";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
+import { getMatchMasterMetadataMap } from "@/lib/match-master-metadata";
+import { normalizeMatchId } from "@/lib/sync/google-sheets";
 
 const MATCH_CARD_PHOTOS = [
   {
@@ -65,7 +67,8 @@ function getMatchPhotoIndex(assignment: AssignmentWithMatch): number {
   return hash % MATCH_CARD_PHOTOS.length;
 }
 
-function AssignmentCard({ a, cardNumber }: { a: AssignmentWithMatch; cardNumber: number }) {
+function AssignmentCard({ a, cardNumber, matchMetadata }: { a: AssignmentWithMatch; cardNumber: number; matchMetadata: Map<string, { competition: string | null; country: string | null }> }) {
+  const metadata = matchMetadata.get(normalizeMatchId(a.match.external_id) ?? "") ?? { competition: null, country: null };
   const matchPhoto = MATCH_CARD_PHOTOS[getMatchPhotoIndex(a)] ?? DEFAULT_MATCH_CARD_PHOTO;
   const statusTone =
     a.status === "Completed"
@@ -104,7 +107,17 @@ function AssignmentCard({ a, cardNumber }: { a: AssignmentWithMatch; cardNumber:
       <h3 className="relative mt-5 max-w-[88%] text-base font-semibold leading-snug text-chalk-50 transition-colors group-hover:text-clock-amber">
         {a.match.home_team} <span className="text-chalk-200">vs</span> {a.match.away_team}
       </h3>
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-chalk-200">
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-chalk-200">
+        <div className="min-w-0 rounded-md border border-pitch-600/60 bg-pitch-950/40 px-2 py-2">
+          <p className="text-[9px] uppercase tracking-wider text-chalk-300">Competition</p>
+          <p className="mt-1 break-words font-medium text-chalk-50">{metadata.competition ?? a.match.competition ?? "—"}</p>
+        </div>
+        <div className="min-w-0 rounded-md border border-pitch-600/60 bg-pitch-950/40 px-2 py-2">
+          <p className="text-[9px] uppercase tracking-wider text-chalk-300">Country</p>
+          <p className="mt-1 break-words font-medium text-chalk-50">{metadata.country ?? "—"}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-chalk-200">
         <span className="rounded-md border border-pitch-600/60 bg-pitch-950/40 px-2 py-1">{a.half}</span>
         <span className="rounded-md border border-pitch-600/60 bg-pitch-950/40 px-2 py-1">{a.task}</span>
       </div>
@@ -133,10 +146,12 @@ function Section({
   title,
   items,
   emptyLabel,
+  matchMetadata,
 }: {
   title: string;
   items: AssignmentWithMatch[];
   emptyLabel: string;
+  matchMetadata: Map<string, { competition: string | null; country: string | null }>;
 }) {
   return (
     <section>
@@ -162,7 +177,7 @@ function Section({
               const shiftKey = a.shift_date ?? "no-shift-date";
               const cardNumber = (sequenceByShift.get(shiftKey) ?? 0) + 1;
               sequenceByShift.set(shiftKey, cardNumber);
-              return <AssignmentCard key={a.id} a={a} cardNumber={cardNumber} />;
+              return <AssignmentCard key={a.id} a={a} cardNumber={cardNumber} matchMetadata={matchMetadata} />;
             });
           })()}
         </div>
@@ -180,7 +195,10 @@ export default async function CollectorDashboardPage({
   const firstName = (profile.full_name ?? profile.email).split(" ")[0];
 
   const supabase = createClient();
-  const assignments = await getAssignmentsForCollector(supabase, profile.id);
+  const [assignments, matchMetadata] = await Promise.all([
+    getAssignmentsForCollector(supabase, profile.id),
+    getMatchMasterMetadataMap().catch(() => new Map<string, { competition: string | null; country: string | null }>()),
+  ]);
   const today = getCairoToday();
   const requestedShiftDate = searchParams?.shiftDate ?? "";
   const isValidShiftDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedShiftDate)
