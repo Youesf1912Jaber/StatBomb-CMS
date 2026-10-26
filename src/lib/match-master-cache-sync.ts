@@ -50,10 +50,18 @@ export async function syncMatchMasterCache() {
     if (error) throw error;
   }
 
-  const { data: existing, error: readError } = await supabase.from("match_master_cache").select("match_id");
-  if (readError) throw readError;
+  const existingIds: string[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.from("match_master_cache")
+      .select("match_id")
+      .order("match_id", { ascending: true })
+      .range(offset, offset + 999);
+    if (error) throw error;
+    existingIds.push(...(data ?? []).map((row) => row.match_id));
+    if (!data || data.length < 1000) break;
+  }
   const sourceIds = new Set(cacheRows.map((row) => row.match_id));
-  const staleIds = (existing ?? []).map((row) => row.match_id).filter((id) => !sourceIds.has(id));
+  const staleIds = existingIds.filter((id) => !sourceIds.has(id));
 
   for (let offset = 0; offset < staleIds.length; offset += 500) {
     const { error } = await supabase.from("match_master_cache").delete().in("match_id", staleIds.slice(offset, offset + 500));
