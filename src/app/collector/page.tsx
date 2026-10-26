@@ -2,14 +2,21 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
-import { isOperationalAssignment } from "@/lib/assignments/distribution-presence";
+import {
+  isCurrentDistributionAssignment,
+  isOperationalAssignment,
+} from "@/lib/assignments/distribution-presence";
 import { getCollectorDashboardAssignmentsForShift } from "@/lib/assignments/queries";
 import { CollectorHistoricalMatchSearch } from "@/components/CollectorHistoricalMatchSearch";
 import {
   getCairoToday,
+  isCurrentShiftDate,
+  isOnOrAfterCalendarDate,
+  isUpcomingShiftDate,
   toCairoDateString,
 } from "@/lib/dates";
 import { SlaCountdown } from "@/components/SlaCountdown";
+import { AssignmentTable } from "@/components/AssignmentTable";
 import { CollectorShiftDatePicker } from "./CollectorShiftDatePicker";
 import type { AssignmentWithMatch } from "@/lib/assignments/types";
 import { getMatchMasterMetadataMap } from "@/lib/match-master-metadata";
@@ -162,16 +169,6 @@ function Section({
         <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {(() => {
             const ordered = [...items].sort((left, right) => {
-              // Keep unfinished work first, ordered by nearest SLA; completed-today
-              // cards stay visible after active work for quick reference.
-              const leftCompleted = left.status === "Completed" ? 1 : 0;
-              const rightCompleted = right.status === "Completed" ? 1 : 0;
-              if (leftCompleted !== rightCompleted) return leftCompleted - rightCompleted;
-              const leftSla = Date.parse(left.sla);
-              const rightSla = Date.parse(right.sla);
-              const safeLeftSla = Number.isFinite(leftSla) ? leftSla : Number.MAX_SAFE_INTEGER;
-              const safeRightSla = Number.isFinite(rightSla) ? rightSla : Number.MAX_SAFE_INTEGER;
-              if (safeLeftSla !== safeRightSla) return safeLeftSla - safeRightSla;
               const shiftOrder = (left.shift_date ?? "9999-99-99").localeCompare(right.shift_date ?? "9999-99-99");
               if (shiftOrder !== 0) return shiftOrder;
               return left.created_at.localeCompare(right.created_at);
@@ -215,18 +212,56 @@ export default async function CollectorDashboardPage({
     isCurrentDistributionAssignment
   );
 
-  // The dashboard now has one operational locker board. Show all unfinished
-  // assignments still in the live distribution (including previous shifts),
-  // any In Progress work, and today's completions for reference. Older completed
-  // work is intentionally available only through Find an older match.
-  const inProgress = currentAssignments.filter((a) => a.status === "In Progress");
-  const completedToday = assignments.filter(
-    (a) => a.status === "Completed" && a.completed_at && toCairoDateString(a.completed_at) === today
-  );
-  const lockerAssignments = assignments.filter(
-    (a) => a.status !== "Completed" || (a.completed_at && toCairoDateString(a.completed_at) === today)
+  // A) Selected Shift Work — use shift_date (not match_date), matching admin behavior.
+  const selectedShiftWork = currentAssignments.filter(
+    (a) => isCurrentShiftDate(a.shift_date, selectedShiftDate)
   );
 
+  // Show all not-started assignments still present in the current Distribution,
+  // including rows assigned on previous shifts. Otherwise collectors can see
+  // the rows only in the long table while today's/upcoming cards remain empty.
+  const notStartedAssignments = currentDistribution.filter(
+    (a) => a.status === "Not Started"
+  );
+
+  // B) Currently In Progress — regardless of shift/match date.
+  const inProgress = currentAssignments.filter(
+    (a) => a.status === "In Progress"
+  );
+
+  // C) Upcoming — Not Started, and either shift-dated in the future or
+  // not-yet-shift-dated with a future-or-today match date.
+  const upcoming = currentAssignments.filter((a) => {
+    if (a.status !== "Not Started") return false;
+    if (a.shift_date) return isUpcomingShiftDate(a.shift_date, today);
+    return isOnOrAfterCalendarDate(a.match.match_date, today);
+  });
+
+  // D) Completed Today — by actual completion timestamp, in Cairo.
+  const completedToday = assignments.filter(
+    (a) =>
+      a.status === "Completed" &&
+      a.completed_at &&
+      toCairoDateString(a.completed_at) === today
+  );
+
+  // E) SLA Warnings / Overdue — computed live from the stored absolute SLA.
+  // Phase 3 owns persisting an 'Overdue' status and firing the 30-minute
+  // warning; until then this is a live comparison, not stored state.
+  const nowMs = Date.now();
+
+  const slaAttention = assignments.filter(
+    (a) =>
+      a.status !== "Completed" &&
+      new Date(a.sla).getTime() <= nowMs
+  );
+
+  const matchdayStats = [
+    { label: "Selected shift work", value: selectedShiftWork.length, note: "Assignments for selected shift" },
+    { label: "In progress", value: inProgress.length, note: "On the pitch now" },
+    { label: "Completed today", value: completedToday.length, note: "Full-time" },
+    { label: "SLA attention", value: slaAttention.length, note: "Needs attention" },
+  ];
 
   return (
     <div className="relative isolate -mx-3 space-y-8 overflow-hidden rounded-2xl px-3 py-3 sm:-mx-5 sm:px-5 sm:py-5 lg:-mx-6 lg:px-6">
@@ -299,6 +334,32 @@ export default async function CollectorDashboardPage({
         </div>
       </section>
 
+      <section aria-label="Matchday overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {matchdayStats.map((stat, index) => {
+          const href = index === 0
+            ? "#collector-todays-work"
+            : index === 1
+              ? "#collector-in-progress"
+              : index === 2
+                ? "#collector-completed-today"
+                : "#collector-sla-attention";
+
+          return (
+            <a
+              key={stat.label}
+              href={href}
+              aria-label={`${stat.label}: ${stat.value}. ${stat.note}. Scroll to matching assignments.`}
+              className="group relative block min-w-0 overflow-hidden rounded-xl border border-pitch-700 bg-pitch-900/85 p-4 text-left shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-0.5 hover:border-pitch-500 hover:bg-pitch-800/90 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clock-amber focus-visible:ring-offset-2 focus-visible:ring-offset-pitch-950 active:translate-y-0"
+            >
+              <div aria-hidden="true" className={index === 3 ? "absolute inset-y-0 left-0 w-1 bg-clock-red" : index === 1 ? "absolute inset-y-0 left-0 w-1 bg-sky-400" : "absolute inset-y-0 left-0 w-1 bg-clock-amber"} />
+              <span aria-hidden="true" className="absolute right-3 top-3 text-sm text-chalk-200/60 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-clock-amber">↘</span>
+              <p className="pl-2 pr-5 text-xs text-chalk-200">{stat.label}</p>
+              <p className="pl-2 pt-2 font-mono text-3xl font-semibold tracking-tight text-chalk-50">{stat.value.toLocaleString()}</p>
+              <p className="pl-2 pt-1 text-[11px] text-chalk-200">{stat.note}</p>
+            </a>
+          );
+        })}
+      </section>
 
       <div id="locker-room" className="space-y-2">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-pitch-500">The squad room</p>
@@ -307,16 +368,59 @@ export default async function CollectorDashboardPage({
             <h2 className="font-display text-2xl text-chalk-50">Your matchday lockers</h2>
             <p className="mt-1 text-sm text-chalk-200">Every card is one of your real assignments. Open a locker to see details and start work.</p>
           </div>
-          <span className="rounded-full border border-pitch-700 bg-pitch-900/75 px-3 py-1.5 font-mono text-xs text-chalk-100">{lockerAssignments.length} lockers</span>
+          <span className="rounded-full border border-pitch-700 bg-pitch-900/75 px-3 py-1.5 font-mono text-xs text-chalk-100">{currentDistribution.length} assigned</span>
         </div>
+      </div>
+
+      <div id="collector-todays-work" className="scroll-mt-24">
+      <Section
+        matchMetadata={matchMetadata}
+        title={selectedShiftDate === today ? "Today's Work" : `Shift Work · ${selectedShiftDate}`}
+        items={selectedShiftWork}
+        emptyLabel={`No assignments scheduled for shift date ${selectedShiftDate}.`}
+      />
       </div>
 
       <Section
         matchMetadata={matchMetadata}
-        title="Your Matchday Lockers"
-        items={lockerAssignments}
-        emptyLabel="No active assignments right now. Older completed matches are available in the archive below."
+        title="Not Started (All Shifts)"
+        items={notStartedAssignments}
+        emptyLabel="No not-started assignments in your current distribution."
       />
+
+      <div id="collector-in-progress" className="scroll-mt-24">
+      <Section
+        matchMetadata={matchMetadata}
+        title="Currently In Progress"
+        items={inProgress}
+        emptyLabel="Nothing in progress right now."
+      />
+      </div>
+
+      <Section
+        matchMetadata={matchMetadata}
+        title="Upcoming Assignments"
+        items={upcoming}
+        emptyLabel="No upcoming assignments."
+      />
+
+      <div id="collector-completed-today" className="scroll-mt-24">
+      <Section
+        matchMetadata={matchMetadata}
+        title="Completed Today"
+        items={completedToday}
+        emptyLabel="Nothing completed yet today."
+      />
+      </div>
+
+      <div id="collector-sla-attention" className="scroll-mt-24">
+      <Section
+        matchMetadata={matchMetadata}
+        title="SLA Warnings / Overdue"
+        items={slaAttention}
+        emptyLabel="Nothing overdue."
+      />
+      </div>
 
       <CollectorHistoricalMatchSearch />
     </div>
