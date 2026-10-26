@@ -45,13 +45,17 @@ export async function GET() {
       const cached = cacheById.get(source.match_id);
       if (!cached) { newRows += 1; continue; }
       const previous = (cached.match_data ?? {}) as Record<string, unknown>;
+      // SLA values can be represented differently by Google Sheets (formatted
+      // display text vs normalized timestamp). Compare SLA only through the same
+      // parser used by the cache sync, not as raw strings.
       const fields = Object.keys(source).filter((key) => {
+        if (key === "sla") return false;
         const before = previous[key] == null ? "" : String(previous[key]).trim();
         const afterValue = source[key as keyof typeof source];
         const after = afterValue == null ? "" : String(afterValue).trim();
         return before !== after;
       });
-      if (cached.sla_sort_at !== parseMatchMasterSla(source.sla) && !fields.includes("sla")) fields.push("sla");
+      if (cached.sla_sort_at !== parseMatchMasterSla(source.sla)) fields.push("sla");
       if (fields.length) changes.push({ matchId: source.match_id, fields });
     }
     return NextResponse.json({
