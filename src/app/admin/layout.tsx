@@ -14,7 +14,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Sync Preview", href: "/admin/sync" },
   { label: "Collectors", href: "/admin/collectors" },
   { label: "Deductions", href: "/admin/deductions" },
-  { label: "FF Shots", href: "/admin/ff-shots" },
   { label: "Bonus", href: "/admin/bonus" },
   { label: "Expected", href: "/admin/expected" },
   { label: "Over Target", href: "/admin/over-target" },
