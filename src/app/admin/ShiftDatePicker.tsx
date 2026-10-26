@@ -1,19 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 export function ShiftDatePicker({ selectedDate }: { selectedDate: string }) {
   const router = useRouter();
   const [date, setDate] = useState(selectedDate);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setDate(selectedDate);
+  }, [selectedDate]);
 
   function showMatches() {
     if (!date) return;
-    router.push(`/admin?shiftDate=${encodeURIComponent(date)}`);
+    if (date === selectedDate) return;
+    startTransition(() => {
+      router.push(`/admin?shiftDate=${encodeURIComponent(date)}`, { scroll: false });
+    });
   }
 
   function showToday() {
-    router.push("/admin");
+    setDate("");
+    startTransition(() => {
+      router.push("/admin", { scroll: false });
+    });
   }
 
   return (
@@ -30,15 +41,16 @@ export function ShiftDatePicker({ selectedDate }: { selectedDate: string }) {
       <button
         type="button"
         onClick={showMatches}
-        disabled={!date}
-        className="rounded-md border border-clock-amber/50 bg-clock-amber/10 px-3 py-1.5 text-xs font-semibold text-clock-amber transition hover:bg-clock-amber/20 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={!date || isPending || date === selectedDate}
+        className="rounded-md border border-clock-amber bg-clock-amber px-3 py-1.5 text-xs font-bold text-pitch-950 shadow-sm transition hover:bg-clock-amber/90 disabled:cursor-wait disabled:opacity-60"
       >
-        Show Matches
+        {isPending ? "Loading shift…" : "Show Matches"}
       </button>
       <button
         type="button"
         onClick={showToday}
-        className="px-1 py-1.5 text-xs text-white/65 underline underline-offset-2 hover:text-white"
+        disabled={isPending}
+        className="rounded-md border border-pitch-600 bg-pitch-800 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-pitch-700 disabled:cursor-wait disabled:opacity-60"
       >
         Today
       </button>
