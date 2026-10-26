@@ -15,13 +15,34 @@ function parseSla(value: string | null): string | null {
     const meridiem = us[7]?.toUpperCase();
     if (meridiem === "PM" && hour < 12) hour += 12;
     if (meridiem === "AM" && hour === 12) hour = 0;
-    const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+
+    // Google Sheets SLA values without an explicit timezone are Cairo wall-clock
+    // times. Validate the civil date first, then attach Cairo's UTC+03:00 offset
+    // before converting to the UTC instant stored in the cache.
+    const civil = new Date(Date.UTC(year, month - 1, day));
+    if (
+      civil.getUTCFullYear() !== year ||
+      civil.getUTCMonth() !== month - 1 ||
+      civil.getUTCDate() !== day ||
+      hour < 0 || hour > 23 ||
+      minute < 0 || minute > 59 ||
+      second < 0 || second > 59
+    ) return null;
+
+    const cairoLocal = String(year).padStart(4, "0") + "-" +
+      String(month).padStart(2, "0") + "-" +
+      String(day).padStart(2, "0") + "T" +
+      String(hour).padStart(2, "0") + ":" +
+      String(minute).padStart(2, "0") + ":" +
+      String(second).padStart(2, "0") + "+03:00";
+    const date = new Date(cairoLocal);
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
+
+  // Values with an explicit ISO timezone already identify an absolute instant.
   const parsed = Date.parse(raw);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
-
 function toCacheRow(row: MatchMasterRow, syncedAt: string) {
   return {
     match_id: row.match_id,
