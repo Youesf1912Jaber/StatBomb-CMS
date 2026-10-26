@@ -40,7 +40,7 @@ export default async function AdminDashboardPage({
 }) {
   const today = getCairoToday();
   const requestedShiftDate = searchParams?.shiftDate ?? "";
-  const isValidShiftDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(requestedShiftDate)
+  const isValidShiftDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedShiftDate)
     && !Number.isNaN(Date.parse(requestedShiftDate))
     && new Date(requestedShiftDate).toISOString().slice(0, 10) === requestedShiftDate;
   const currentShiftDate = isValidShiftDate ? requestedShiftDate : today;
