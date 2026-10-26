@@ -16,17 +16,28 @@ export async function GET() {
   if (profileError || profile?.role !== "admin") return NextResponse.json({ error: "Admin access required." }, { status: 403 });
 
   try {
-    const [sourceRows, cacheResult] = await Promise.all([
-      readMatchesMasterSheet(),
-      createServiceRoleClient().from("match_master_cache")
+    const sourceRows = await readMatchesMasterSheet();
+    const service = createServiceRoleClient();
+    const cachedRows: Array<{ match_id: string; match_data: Record<string, unknown> | null; sla_sort_at: string | null; eta_date: string | null }> = [];
+    // Supabase REST responses are capped, commonly at 1,000 rows. Fetch every page.
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await service.from("match_master_cache")
         .select("match_id, match_data, sla_sort_at, eta_date")
-        .order("match_id", { ascending: true }),
-    ]);
-    if (cacheResult.error) throw cacheResult.error;
+        .order("match_id", { ascending: true })
+        .range(offset, offset + 999);
+      if (error) throw error;
+      cachedRows.push(...(data ?? []).map((row) => ({
+        match_id: row.match_id,
+        match_data: row.match_data as Record<string, unknown> | null,
+        sla_sort_at: row.sla_sort_at,
+        eta_date: row.eta_date,
+      })));
+      if (!data || data.length < 1000) break;
+    }
 
     const counts = new Map<string, number>();
     for (const row of sourceRows) counts.set(row.match_id, (counts.get(row.match_id) ?? 0) + 1);
-    const cacheById = new Map((cacheResult.data ?? []).map((row) => [row.match_id, row]));
+    const cacheById = new Map(cachedRows.map((row) => [row.match_id, row]));
     const changes: Array<{ matchId: string; fields: string[] }> = [];
     let newRows = 0;
     for (const source of sourceRows) {
@@ -49,6 +60,7 @@ export async function GET() {
       newMatches: newRows,
       duplicateIdsSkipped: [...counts.values()].filter((count) => count > 1).length,
       sample: changes.slice(0, 12),
+      pendingChanges: changes,
     });
   } catch (error) {
     console.error("Match Master change check failed", error);
