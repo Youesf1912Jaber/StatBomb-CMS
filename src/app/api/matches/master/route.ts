@@ -1,46 +1,15 @@
 import { NextResponse } from "next/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { createClient } from "@/lib/supabase/server";
-import { getCachedMatchMasterRows } from "@/lib/match-master-sheet-cache";
 import { normalizeMatchId, normalizeDistributionHalf } from "@/lib/sync/distribution-identity";
+import type { MatchMasterRow } from "@/lib/sync/google-sheets";
 import { normalizeEtaDate } from "@/lib/match-master-date";
-import { PreviewInputError } from "@/lib/sync/preview";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type DistributionSummary = { halves: string[]; tasks: string[] };
-type MatchWithDistribution = Awaited<ReturnType<typeof getCachedMatchMasterRows>>[number] & {
-  distribution: DistributionSummary | null;
-};
-
-function parseSlaTimestamp(value: string | null | undefined): number | null {
-  if (!value?.trim()) return null;
-  const raw = value.trim();
-  const usDate = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
-  if (usDate) {
-    const month = Number(usDate[1]), day = Number(usDate[2]), year = Number(usDate[3]);
-    let hour = Number(usDate[4] ?? 0);
-    const minute = Number(usDate[5] ?? 0), second = Number(usDate[6] ?? 0);
-    const meridiem = usDate[7]?.toUpperCase();
-    if (meridiem === "PM" && hour < 12) hour += 12;
-    if (meridiem === "AM" && hour === 12) hour = 0;
-    const timestamp = new Date(year, month - 1, day, hour, minute, second).getTime();
-    return Number.isFinite(timestamp) ? timestamp : null;
-  }
-  const timestamp = Date.parse(raw);
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function sortByNearestSla<T extends { sla: string | null }>(rows: T[]): T[] {
-  return rows.map((row, index) => ({ row, index, sla: parseSlaTimestamp(row.sla) }))
-    .sort((a, b) => {
-      if (a.sla === null && b.sla === null) return a.index - b.index;
-      if (a.sla === null) return 1;
-      if (b.sla === null) return -1;
-      return a.sla - b.sla || a.index - b.index;
-    })
-    .map(({ row }) => row);
-}
+type MatchWithDistribution = MatchMasterRow & { distribution: DistributionSummary | null };
 
 function matchesQuery(match: { match_id: string; home_team: string | null; away_team: string | null }, query: string): boolean {
   const q = query.trim().toLocaleLowerCase();
@@ -57,7 +26,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const view = url.searchParams.get("view") ?? "days";
     const etaDate = url.searchParams.get("etaDate") ?? "";
-    const query = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
+    const query = (url.searchParams.get("q") ?? "").trim().replace(/[,%_()]/g, "").slice(0, 120);
     if (view !== "days" && view !== "matches") {
       return NextResponse.json({ success: false, error: "Invalid Match Master view." }, { status: 400 });
     }
@@ -65,22 +34,37 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, error: "Choose an ETA day or enter a search." }, { status: 400 });
     }
 
-    const matches = await getCachedMatchMasterRows();
+    const supabase = createClient();
     if (view === "days" && !query) {
-      const counts = new Map<string, number>();
-      for (const match of matches) {
-        const date = normalizeEtaDate(match.eta);
-        if (date) counts.set(date, (counts.get(date) ?? 0) + 1);
-      }
-      const days = [...counts.entries()].map(([date, count]) => ({ date, count })).sort((a, b) => b.date.localeCompare(a.date));
+      const { data, error } = await supabase.rpc("get_match_master_eta_days");
+      if (error) throw error;
+      const days = (data ?? []).map((row) => ({ date: row.eta_date, count: Number(row.match_count) }));
       return NextResponse.json({ success: true, days });
     }
 
-    const selected = matches.filter((match) => {
-      const dateMatches = !etaDate || normalizeEtaDate(match.eta) === etaDate;
-      return dateMatches && matchesQuery(match, query);
-    });
-    const supabase = createClient();
+    let cacheQuery = supabase
+      .from("match_master_cache")
+      .select("match_id, eta_date, sla_sort_at, home_team, away_team, match_data")
+      .order("sla_sort_at", { ascending: true, nullsFirst: false })
+      .order("match_id", { ascending: true })
+      .limit(1000);
+
+    if (etaDate) cacheQuery = cacheQuery.eq("eta_date", etaDate);
+    if (query) {
+      const pattern = `%${query}%`;
+      cacheQuery = cacheQuery.or(`match_id.ilike.${pattern},home_team.ilike.${pattern},away_team.ilike.${pattern}`);
+    }
+
+    const { data: cachedRows, error: cacheError } = await cacheQuery;
+    if (cacheError) throw cacheError;
+
+    const selected = (cachedRows ?? []).map((row) => ({
+      ...((row.match_data ?? {}) as unknown as MatchMasterRow),
+      match_id: normalizeMatchId(row.match_id) ?? row.match_id,
+      eta: row.eta_date ?? ((row.match_data as Record<string, unknown> | null)?.eta as string | null) ?? null,
+      sla: row.sla_sort_at ?? ((row.match_data as Record<string, unknown> | null)?.sla as string | null) ?? null,
+    })).filter((match) => matchesQuery(match, query));
+
     const externalIds = [...new Set(selected.map((match) => match.match_id))];
     const externalIdToInternalId = new Map<string, string>();
     for (let offset = 0; offset < externalIds.length; offset += 400) {
@@ -117,7 +101,7 @@ export async function GET(request: Request) {
       distributionByExternalId.set(externalId, current);
     }
 
-    const matchesWithDistribution: MatchWithDistribution[] = selected.map((match) => {
+    const matches: MatchWithDistribution[] = selected.map((match) => {
       const distribution = distributionByExternalId.get(match.match_id);
       return {
         ...match,
@@ -128,10 +112,9 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ success: true, count: matchesWithDistribution.length, matches: sortByNearestSla(matchesWithDistribution) });
+    return NextResponse.json({ success: true, count: matches.length, matches });
   } catch (error) {
-    const message = error instanceof PreviewInputError ? error.safeMessage : "The Match Master sheet could not be read.";
-    const status = error instanceof PreviewInputError ? 422 : 500;
-    return NextResponse.json({ success: false, error: message }, { status });
+    console.error("Match Master cache query failed", error);
+    return NextResponse.json({ success: false, error: "Match Master data could not be loaded from cache." }, { status: 500 });
   }
 }
