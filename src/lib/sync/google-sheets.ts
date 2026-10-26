@@ -48,7 +48,10 @@ function safeGoogleError(status: number): never {
   throw new PreviewInputError("Google Sheets could not be read.");
 }
 
-async function serviceAccountToken(): Promise<string> {
+let cachedGoogleAccessToken: { token: string; expiresAt: number } | null = null;
+let googleAccessTokenRequest: Promise<string> | null = null;
+
+async function requestServiceAccountToken(): Promise<{ token: string; expiresIn: number }> {
   const email = required("GOOGLE_SERVICE_ACCOUNT_EMAIL");
   const privateKey = required("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").replace(/\\n/g, "\n");
   const now = Math.floor(Date.now() / 1000);
@@ -76,9 +79,32 @@ async function serviceAccountToken(): Promise<string> {
     cache: "no-store",
   });
   if (!response.ok) safeGoogleError(response.status);
-  const data = (await response.json()) as { access_token?: string };
+  const data = (await response.json()) as { access_token?: string; expires_in?: number };
   if (!data.access_token) throw new PreviewInputError("Google Sheets authorization failed.");
-  return data.access_token;
+  return { token: data.access_token, expiresIn: Number.isFinite(data.expires_in) ? Number(data.expires_in) : 3600 };
+}
+
+async function serviceAccountToken(): Promise<string> {
+  const now = Date.now();
+  // Refresh one minute before expiry to avoid racing a token that is about to expire.
+  if (cachedGoogleAccessToken && cachedGoogleAccessToken.expiresAt > now + 60_000) {
+    return cachedGoogleAccessToken.token;
+  }
+  if (googleAccessTokenRequest) return googleAccessTokenRequest;
+
+  googleAccessTokenRequest = requestServiceAccountToken()
+    .then(({ token, expiresIn }) => {
+      cachedGoogleAccessToken = {
+        token,
+        expiresAt: Date.now() + Math.max(60, expiresIn) * 1000,
+      };
+      return token;
+    })
+    .finally(() => {
+      googleAccessTokenRequest = null;
+    });
+
+  return googleAccessTokenRequest;
 }
 
 type SpreadsheetSheet = { properties?: { sheetId?: number; title?: string } };
@@ -1044,8 +1070,11 @@ export async function readDistributionRowsForMatch(matchId: string): Promise<Dis
   return mapRows(fullValues.slice(1), 2);
 }
 
-export async function readDistributionRowsForPreview(): Promise<DistributionMatchRow[]> {
-  const pull = await pullDistributionSheet();
+export async function readDistributionRowsForPreview(
+  existingPull?: GoogleSheetsPull,
+): Promise<DistributionMatchRow[]> {
+  // Reuse the caller's successful pull when the same request already read the sheet.
+  const pull = existingPull ?? await pullDistributionSheet();
   // pullDistributionSheet already fetched the configured range including headers.
   // Reuse that response instead of making a second full-sheet API request.
   const matrix = [pull.rows.headers, ...pull.rows.rows];
