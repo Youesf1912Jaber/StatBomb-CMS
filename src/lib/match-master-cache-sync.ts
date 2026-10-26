@@ -42,7 +42,23 @@ export async function syncMatchMasterCache() {
   }
 
   const syncedAt = new Date().toISOString();
-  const cacheRows = sourceRows.map((row) => toCacheRow(row, syncedAt));
+  // The source sheet can repeat a Match ID across rows. The cache intentionally
+  // has one row per match, so retain the row with the earliest valid SLA.
+  const rowByMatchId = new Map<string, ReturnType<typeof toCacheRow>>();
+  for (const source of sourceRows) {
+    const candidate = toCacheRow(source, syncedAt);
+    const current = rowByMatchId.get(candidate.match_id);
+    if (!current) {
+      rowByMatchId.set(candidate.match_id, candidate);
+      continue;
+    }
+    const candidateSla = candidate.sla_sort_at ? Date.parse(candidate.sla_sort_at) : Number.POSITIVE_INFINITY;
+    const currentSla = current.sla_sort_at ? Date.parse(current.sla_sort_at) : Number.POSITIVE_INFINITY;
+    if (candidateSla < currentSla || (candidateSla === currentSla && !current.eta_date && Boolean(candidate.eta_date))) {
+      rowByMatchId.set(candidate.match_id, candidate);
+    }
+  }
+  const cacheRows = [...rowByMatchId.values()];
   const supabase = createServiceRoleClient();
 
   for (let offset = 0; offset < cacheRows.length; offset += 500) {
