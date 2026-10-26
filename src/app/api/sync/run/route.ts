@@ -93,14 +93,47 @@ export async function POST(request: Request) {
     });
 
     const reconcileStartedAt = Date.now();
-    await persistReconciledDistributionPresence(serviceClient, {
-      distributionRows,
-      assignments: context.assignments,
-      matches: context.matches,
-    });
-    console.info("[sync.run] distribution_reconciled", {
-      duration_ms: Date.now() - reconcileStartedAt,
-    });
+    const configuredMaxRows = Number(process.env.GOOGLE_SHEETS_MAX_ROWS ?? "10000");
+    const maxRows = Number.isInteger(configuredMaxRows) && configuredMaxRows > 0
+      ? Math.min(configuredMaxRows, 100_000)
+      : 500;
+    const previouslyPresentCount = context.assignments.filter((assignment) => assignment.distribution_present).length;
+    const invalidRowRatio = result.summary.total_rows > 0
+      ? result.summary.rows_errored / result.summary.total_rows
+      : 0;
+
+    // Presence reconciliation can mark many assignments as removed from the
+    // sheet. Never do that from an empty, truncated, or broadly invalid snapshot.
+    const unsafeSnapshotReason =
+      pull.rows.rows.length >= maxRows
+        ? "source_row_limit_reached"
+        : distributionRows.length === 0 && previouslyPresentCount > 0
+          ? "no_valid_distribution_identities"
+          : invalidRowRatio > 0.2
+            ? "too_many_invalid_source_rows"
+            : null;
+
+    if (unsafeSnapshotReason) {
+      console.warn("[sync.run] distribution_reconciliation_skipped", {
+        reason: unsafeSnapshotReason,
+        source_row_count: pull.rows.rows.length,
+        valid_distribution_rows: distributionRows.length,
+        previously_present_assignments: previouslyPresentCount,
+        invalid_rows: result.summary.rows_errored,
+        total_rows: result.summary.total_rows,
+      });
+    } else {
+      await persistReconciledDistributionPresence(serviceClient, {
+        distributionRows,
+        assignments: context.assignments,
+        matches: context.matches,
+        profiles: context.profiles,
+      });
+      console.info("[sync.run] distribution_reconciled", {
+        duration_ms: Date.now() - reconcileStartedAt,
+        valid_distribution_rows: distributionRows.length,
+      });
+    }
     const update = await serviceClient
       .from("sync_runs")
       .update({
