@@ -621,6 +621,22 @@ export function parsePreviewWorkbook(
 
   const candidates: PreviewCandidate[] = [];
   const seenKeys = new Set<string>();
+
+  // Index the context once so preview cost grows roughly linearly with rows.
+  const matchesByExternalId = new Map(
+    context.matches.map((match) => [match.external_id.toLowerCase(), match]),
+  );
+  const profilesByHrCode = new Map<string, ProfileRow>();
+  for (const profile of context.profiles) {
+    const code = profile.hr_code?.toLowerCase();
+    if (code && !profilesByHrCode.has(code)) profilesByHrCode.set(code, profile);
+  }
+  const assignmentsByLogicalKey = new Map<string, AssignmentRow>();
+  for (const assignment of context.assignments) {
+    const key = `${assignment.match_id}|${assignment.task}|${assignment.half}`;
+    if (!assignmentsByLogicalKey.has(key)) assignmentsByLogicalKey.set(key, assignment);
+  }
+
   let dataRowNumber = 1;
 
   workbook.SheetNames.forEach((sheetName) => {
@@ -639,7 +655,7 @@ export function parsePreviewWorkbook(
       const rawTask = asString(fields.task);
       const rawCollectorName = asString(fields.collector_name);
       const match = rawExternalId
-        ? context.matches.find((candidate) => candidate.external_id.toLowerCase() === rawExternalId.toLowerCase()) ?? null
+        ? matchesByExternalId.get(rawExternalId.toLowerCase()) ?? null
         : null;
       const { task, warning: taskWarning } = normalizeTask(fields.task);
       const half = normalizeHalf(fields.half);
@@ -660,9 +676,7 @@ export function parsePreviewWorkbook(
       });
       const assignment =
         match && task && half
-          ? context.assignments.find(
-              (candidate) => candidate.match_id === match.id && candidate.task === task && candidate.half === half
-            ) ?? null
+          ? assignmentsByLogicalKey.get(`${match.id}|${task}|${half}`) ?? null
           : null;
 
       if (!rawExternalId) rowIssues.push(issue(rowNumber, "error", "validation_error", "Match identifier is required."));
@@ -770,7 +784,7 @@ export function parsePreviewSourceRows(
   }
   const assignmentsByLogicalKey = new Map<string, AssignmentRow>();
   for (const assignment of context.assignments) {
-    const key = `${assignment.match_id}| ${assignment.task}|${assignment.half}`.replace("| ", "|");
+    const key = `${assignment.match_id}|${assignment.task}|${assignment.half}`;
     if (!assignmentsByLogicalKey.has(key)) assignmentsByLogicalKey.set(key, assignment);
   }
 
@@ -793,7 +807,7 @@ export function parsePreviewSourceRows(
     const website = asString(fields.official_website_url);
     const normalizedWebsite = website ? normalizeUrl(website) : null;
     const matchCandidate = normalizedMatchCandidate(fields, externalId, kickoff.time);
-    const collector = findCollector(fields, context.profiles);
+    const collector = findCollector(fields, context.profiles, profilesByHrCode);
     (Object.keys(fields) as Array<keyof RawRowFields>).forEach((field) => {
       if (fieldTooLong(rawFields[field])) issues.push(issue(rowNumber, "error", "validation_error", `${field} exceeds the maximum allowed length.`));
     });
