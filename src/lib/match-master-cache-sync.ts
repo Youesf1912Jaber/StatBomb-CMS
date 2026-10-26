@@ -4,7 +4,7 @@ import { normalizeEtaDate } from "@/lib/match-master-date";
 import { readMatchesMasterSheet, type MatchMasterRow } from "@/lib/sync/google-sheets";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
-function parseSla(value: string | null): string | null {
+export function parseMatchMasterSla(value: string | null): string | null {
   if (!value?.trim()) return null;
   const raw = value.trim();
   const us = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
@@ -47,7 +47,7 @@ function toCacheRow(row: MatchMasterRow, syncedAt: string) {
   return {
     match_id: row.match_id,
     eta_date: normalizeEtaDate(row.eta),
-    sla_sort_at: parseSla(row.sla),
+    sla_sort_at: parseMatchMasterSla(row.sla),
     home_team: row.home_team,
     away_team: row.away_team,
     match_data: row,
