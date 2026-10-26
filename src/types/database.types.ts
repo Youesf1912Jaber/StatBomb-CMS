@@ -348,6 +348,36 @@ export type SyncRowIssueRow = {
 export interface Database {
   public: {
     Tables: {
+      match_master_cache: {
+        Row: {
+          match_id: string;
+          eta_date: string | null;
+          sla_sort_at: string | null;
+          home_team: string | null;
+          away_team: string | null;
+          match_data: Record<string, unknown>;
+          synced_at: string;
+        };
+        Insert: {
+          match_id: string;
+          eta_date?: string | null;
+          sla_sort_at?: string | null;
+          home_team?: string | null;
+          away_team?: string | null;
+          match_data: Record<string, unknown>;
+          synced_at?: string;
+        };
+        Update: {
+          match_id?: string;
+          eta_date?: string | null;
+          sla_sort_at?: string | null;
+          home_team?: string | null;
+          away_team?: string | null;
+          match_data?: Record<string, unknown>;
+          synced_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: ProfileRow;
         Insert: {
@@ -699,6 +729,10 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      get_match_master_eta_days: {
+        Args: Record<string, never>;
+        Returns: { eta_date: string; match_count: number }[];
+      };
       is_admin: {
         Args: Record<string, never>;
         Returns: boolean;
