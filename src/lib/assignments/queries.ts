@@ -249,13 +249,14 @@ export async function getAdminDashboardAssignmentsForShift(
   supabase: Client,
   shiftDate: string
 ): Promise<AssignmentWithMatch[]> {
-  const [year, month, day] = shiftDate.split("-");
-  const dmyShiftDate = year && month && day ? `${Number(day)}/${Number(month)}/${year}` : shiftDate;
+  // shift_date is a PostgreSQL date column, so filter with ISO YYYY-MM-DD only.
+  // Comparing it with a sheet-formatted D/M/YYYY string makes PostgreSQL throw
+  // 22008 (date/time field value out of range) for dates such as 26/10/2026.
   const { data, error } = await supabase
     .from("assignments")
     .select("*")
     .eq("hidden_from_admin_dashboard", false)
-    .or(`shift_date.eq.${shiftDate},shift_date.eq.${dmyShiftDate},status.eq."In Progress",status.eq."Overdue"`)
+    .or(`shift_date.eq.${shiftDate},status.eq."In Progress",status.eq."Overdue"`)
     .order("shift_date", { ascending: false })
     .order("created_at", { ascending: false });
 
