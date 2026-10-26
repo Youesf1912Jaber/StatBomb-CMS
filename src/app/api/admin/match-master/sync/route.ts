@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { syncMatchMasterCache } from "@/lib/match-master-cache-sync";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { parseMatchMasterSla, syncMatchMasterCache } from "@/lib/match-master-cache-sync";
 import { readMatchesMasterSheet } from "@/lib/sync/google-sheets";
-import { createServiceRoleClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +40,7 @@ export async function GET() {
         const after = afterValue == null ? "" : String(afterValue).trim();
         return before !== after;
       });
+      if (cached.sla_sort_at !== parseMatchMasterSla(source.sla) && !fields.includes("sla")) fields.push("sla");
       if (fields.length) changes.push({ matchId: source.match_id, fields });
     }
     return NextResponse.json({
