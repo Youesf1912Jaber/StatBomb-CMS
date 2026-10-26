@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell, type NavItem } from "@/components/AppShell";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
-import { getAdminDashboardAssignments } from "@/lib/assignments/queries";
+import { getAdminSlaAlertAssignments } from "@/lib/assignments/queries";
 import { toSlaAlertItems } from "@/lib/assignments/sla-alarm";
 import { createClient } from "@/lib/supabase/server";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
@@ -37,9 +37,13 @@ export default async function AdminLayout({
   }
 
   const supabase = createClient();
-  const unreadCount = await getUnreadNotificationCount(supabase, profile.id);
-  const assignments = await getAdminDashboardAssignments(supabase);
+  const [unreadCount, assignments] = await Promise.all([
+    getUnreadNotificationCount(supabase, profile.id),
+    getAdminSlaAlertAssignments(supabase),
+  ]);
 
+  // The shared layout needs only live, non-completed assignments for SLA
+  // alerts. Historical completed work belongs to the dashboard/archive view.
   const collectorIds = [...new Set(assignments.map((assignment) => assignment.collector_id))];
   const collectorNames: Record<string, string> = {};
   if (collectorIds.length > 0) {

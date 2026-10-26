@@ -200,3 +200,41 @@ export async function getAssignmentTaskTimers(
   if (error) throw error;
   return data ?? [];
 }
+
+
+/**
+ * Small, live subset for the shared admin shell. The shell only renders SLA
+ * alerts, so completed historical assignments are intentionally not fetched
+ * on every admin route transition.
+ */
+export async function getAdminSlaAlertAssignments(supabase: Client): Promise<AssignmentWithMatch[]> {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("hidden_from_admin_dashboard", false)
+    .eq("distribution_present", true)
+    .neq("status", "Completed");
+
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
+
+/**
+ * Small, live subset for the collector shell. Include assignments still
+ * present in the active distribution plus in-progress/overdue work, but never
+ * load completed historical work just to build navigation SLA alerts.
+ */
+export async function getCollectorSlaAlertAssignments(
+  supabase: Client,
+  collectorId: string
+): Promise<AssignmentWithMatch[]> {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("collector_id", collectorId)
+    .neq("status", "Completed")
+    .or('distribution_present.eq.true,status.eq."In Progress",status.eq."Overdue"');
+
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
