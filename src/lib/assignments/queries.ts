@@ -305,7 +305,12 @@ export async function getCollectorDashboardAssignmentsForShift(
     .from("assignments")
     .select("*")
     .eq("collector_id", collectorId)
-    .or(`distribution_present.eq.true,status.eq."In Progress",completed_at.gte.${recentCompletionCutoff}`)
+    // Always include every assignment for the selected shift, including older
+    // completed work. The previous 36-hour completion cutoff accidentally hid
+    // completed assignments when the collector selected an older shift.
+    // Outside that shift, load only live unfinished distribution rows, active
+    // work, and recent completions. Older history remains on-demand in the archive.
+    .or(`shift_date.eq.${shiftDate},and(distribution_present.eq.true,status.neq."Completed"),status.eq."In Progress",completed_at.gte.${recentCompletionCutoff}`)
     .order("shift_date", { ascending: false })
     .order("created_at", { ascending: false });
 

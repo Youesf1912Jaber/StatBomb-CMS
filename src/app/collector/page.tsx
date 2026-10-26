@@ -422,46 +422,6 @@ export default async function CollectorDashboardPage({
       />
       </div>
 
-      <section>
-        <h2 className="font-display text-lg text-chalk-50">
-          Current Distribution
-        </h2>
-
-        <p className="mb-2 text-sm text-chalk-200">
-          {currentDistribution.length} assignment
-          {currentDistribution.length === 1 ? "" : "s"} currently distributed
-          to you, including previous shifts.
-        </p>
-
-        {currentDistribution.length === 0 ? (
-          <p className="rounded-card border border-dashed border-pitch-700 px-4 py-6 text-center text-sm text-chalk-200">
-            Nothing currently distributed to you.
-          </p>
-        ) : (
-          <AssignmentTable
-            assignments={currentDistribution}
-            detailsBasePath="/collector/assignments"
-            liveRefresh
-            realtimeRefresh={false}
-          />
-        )}
-      </section>
-
-      <section>
-        <h2 className="font-display text-lg text-chalk-50">
-          Current & Active Assignments
-        </h2>
-
-        <p className="mb-2 text-sm text-chalk-200">
-          Your current distribution, selected shift, and unfinished work. Search the archive below for older matches.
-        </p>
-
-        <AssignmentTable
-          assignments={assignments}
-          detailsBasePath="/collector/assignments"
-        />
-      </section>
-
       <CollectorHistoricalMatchSearch />
     </div>
   );
