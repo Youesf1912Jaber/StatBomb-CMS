@@ -205,7 +205,9 @@ export function MatchMasterPreviewClient() {
             <p className="mt-1 text-xl font-semibold text-chalk-50">{checkingChanges ? "Checking…" : changeCheck?.duplicateIdsSkipped ?? "—"}</p>
           </div>
         </div>
-        {changeCheck?.pendingChanges?.length ? (
+        {checkingChanges ? (
+          <p className="mt-3 rounded-lg border border-pitch-700 bg-pitch-950 p-3 text-sm text-chalk-200">Checking the latest sheet and cache state… Previous results are hidden until this check finishes.</p>
+        ) : changeCheck?.pendingChanges?.length ? (
           <div className="mt-3 overflow-hidden">
             <p className="mb-2 text-sm font-semibold text-chalk-200">Matches still needing an update ({changeCheck.pendingChanges.length})</p>
             <div className="max-h-80 overflow-auto rounded-lg border border-pitch-700">
