@@ -9,16 +9,21 @@ interface AssignmentWorkControlsProps {
   assignmentId: string;
   status: AssignmentStatus;
   hasActiveTaskTimer?: boolean;
+  startedAt?: string | null;
 }
 
 export function AssignmentWorkControls({
   assignmentId,
   status,
   hasActiveTaskTimer = false,
+  startedAt = null,
 }: AssignmentWorkControlsProps) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  // A restored/reassigned overdue item that has never been started must offer Start Work.
+  const canStart = status === "Not Started" || (status === "Overdue" && !startedAt);
+  const canComplete = status === "In Progress" || (status === "Overdue" && Boolean(startedAt));
 
   function handleStart() {
     setError(null);
@@ -51,7 +56,7 @@ export function AssignmentWorkControls({
 
   return (
     <div>
-      {status === "Not Started" && (
+      {canStart && (
         <button
           onClick={handleStart}
           disabled={isPending}
@@ -61,7 +66,7 @@ export function AssignmentWorkControls({
         </button>
       )}
 
-      {(status === "In Progress" || status === "Overdue") && (
+      {canComplete && (
         <button
           onClick={handleComplete}
           disabled={isPending || hasActiveTaskTimer}
@@ -75,7 +80,7 @@ export function AssignmentWorkControls({
         <p className="text-sm text-chalk-200">This assignment is complete.</p>
       )}
 
-      {hasActiveTaskTimer && (status === "In Progress" || status === "Overdue") && (
+      {hasActiveTaskTimer && canComplete && (
         <p className="mt-2 text-sm text-chalk-200">
           End the running task before completing the assignment.
         </p>
