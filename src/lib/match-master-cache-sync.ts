@@ -82,6 +82,33 @@ export async function syncMatchMasterCache() {
   const cacheRows = [...rowByMatchId.values()];
   const supabase = createServiceRoleClient();
 
+  // Compare the sheet snapshot with the current cache before writing, so the
+  // Admin UI can report how many existing match details (including SLA) changed.
+  const existingCache = new Map<string, { match_data: Record<string, unknown> | null; sla_sort_at: string | null; eta_date: string | null }>();
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.from("match_master_cache")
+      .select("match_id, match_data, sla_sort_at, eta_date")
+      .order("match_id", { ascending: true })
+      .range(offset, offset + 999);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      existingCache.set(row.match_id, {
+        match_data: row.match_data as Record<string, unknown> | null,
+        sla_sort_at: row.sla_sort_at,
+        eta_date: row.eta_date,
+      });
+    }
+    if (!data || data.length < 1000) break;
+  }
+
+  const changedRows = cacheRows.filter((row) => {
+    const previous = existingCache.get(row.match_id);
+    if (!previous) return false; // New rows are not counted as updated details.
+    return previous.sla_sort_at !== row.sla_sort_at ||
+      previous.eta_date !== row.eta_date ||
+      JSON.stringify(previous.match_data) !== JSON.stringify(row.match_data);
+  }).length;
+
   for (let offset = 0; offset < cacheRows.length; offset += 500) {
     const { error } = await supabase.from("match_master_cache").upsert(cacheRows.slice(offset, offset + 500), { onConflict: "match_id" });
     if (error) throw error;
@@ -107,6 +134,7 @@ export async function syncMatchMasterCache() {
 
   return {
     sourceRows: cacheRows.length,
+    changedRows,
     deletedStaleRows: staleIds.length,
     syncedAt,
   };
