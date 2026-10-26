@@ -3,6 +3,7 @@ import { syncMatchMasterCache } from "@/lib/match-master-cache-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const secret = process.env.MATCH_MASTER_CRON_SECRET;
