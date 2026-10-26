@@ -253,16 +253,40 @@ export async function getAdminDashboardAssignmentsForShift(
   // Only assignments still present in the live Distribution are included for
   // the selected shift, and stale Overdue rows removed/reassigned in the Sheet
   // are excluded. Keep In Progress work visible even if its row was removed.
-  const { data, error } = await supabase
-    .from("assignments")
-    .select("*")
-    .eq("hidden_from_admin_dashboard", false)
-    .or(`and(shift_date.eq.${shiftDate},distribution_present.eq.true),status.eq."In Progress",and(status.eq."Overdue",distribution_present.eq.true)`)
-    .order("shift_date", { ascending: false })
-    .order("created_at", { ascending: false });
+  // Split the broad OR into two selective, parallel queries. This lets Postgres
+  // use the shift-date and status/distribution indexes independently instead of
+  // planning one OR across today's assignments and all active work.
+  const [shiftResult, activeResult] = await Promise.all([
+    supabase
+      .from("assignments")
+      .select("*")
+      .eq("hidden_from_admin_dashboard", false)
+      .eq("shift_date", shiftDate)
+      .eq("distribution_present", true)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("assignments")
+      .select("*")
+      .eq("hidden_from_admin_dashboard", false)
+      .or('status.eq."In Progress",and(status.eq."Overdue",distribution_present.eq.true)')
+      .order("created_at", { ascending: false }),
+  ]);
 
-  if (error) throw error;
-  return attachMatches(supabase, data ?? []);
+  if (shiftResult.error) throw shiftResult.error;
+  if (activeResult.error) throw activeResult.error;
+
+  const uniqueAssignments = new Map<string, Database["public"]["Tables"]["assignments"]["Row"]>();
+  for (const assignment of [...(shiftResult.data ?? []), ...(activeResult.data ?? [])]) {
+    uniqueAssignments.set(assignment.id, assignment);
+  }
+
+  const assignments = [...uniqueAssignments.values()].sort((a, b) => {
+    const shiftOrder = String(b.shift_date ?? "").localeCompare(String(a.shift_date ?? ""));
+    if (shiftOrder !== 0) return shiftOrder;
+    return String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""));
+  });
+
+  return attachMatches(supabase, assignments);
 }
 
 /**
