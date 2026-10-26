@@ -305,7 +305,10 @@ export async function getCollectorDashboardAssignmentsForShift(
     .from("assignments")
     .select("*")
     .eq("collector_id", collectorId)
-    .or(`distribution_present.eq.true,status.eq."In Progress",completed_at.gte.${recentCompletionCutoff}`)
+    // Only live unfinished distribution rows, active work, and recent completions
+    // for the locker board. Historical completed assignments remain searchable
+    // through the explicit archive endpoint and are not loaded on initial page view.
+    .or(`and(distribution_present.eq.true,status.neq."Completed"),status.eq."In Progress",completed_at.gte.${recentCompletionCutoff}`)
     .order("shift_date", { ascending: false })
     .order("created_at", { ascending: false });
 
