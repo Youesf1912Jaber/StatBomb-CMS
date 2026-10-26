@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { normalizeMatchId, normalizeDistributionHalf } from "@/lib/sync/distribution-identity";
 import type { MatchMasterRow } from "@/lib/sync/google-sheets";
 import { normalizeEtaDate } from "@/lib/match-master-date";
+import { syncMatchMasterCache } from "@/lib/match-master-cache-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,8 +37,16 @@ export async function GET(request: Request) {
 
     const supabase = createClient();
     if (view === "days" && !query) {
-      const { data, error } = await supabase.rpc("get_match_master_eta_days");
+      let { data, error } = await supabase.rpc("get_match_master_eta_days");
       if (error) throw error;
+      // Bootstrap only when the cache is empty. Normal requests never read Google Sheets.
+      if (!data?.length) {
+        await syncMatchMasterCache();
+        const refreshed = await supabase.rpc("get_match_master_eta_days");
+        data = refreshed.data;
+        error = refreshed.error;
+        if (error) throw error;
+      }
       const days = (data ?? []).map((row) => ({ date: row.eta_date, count: Number(row.match_count) }));
       return NextResponse.json({ success: true, days });
     }
