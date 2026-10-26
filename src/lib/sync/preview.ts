@@ -468,12 +468,15 @@ function issue(
 
 function findCollector(
   fields: RawRowFields,
-  profiles: ProfileRow[]
+  profiles: ProfileRow[],
+  profilesByHrCode?: Map<string, ProfileRow>,
 ): { profile: ProfileRow | null; unknown: boolean; admin: boolean } {
   const hrCode = asString(fields.collector_hr_code)?.toLowerCase();
   const name = asString(fields.collector_name)?.toLowerCase();
   if (!hrCode && (!name || name === "#n/a")) return { profile: null, unknown: true, admin: false };
-  const matchingProfile = profiles.find((candidate) => Boolean(hrCode && candidate.hr_code?.toLowerCase() === hrCode));
+  const matchingProfile = hrCode
+    ? profilesByHrCode?.get(hrCode) ?? profiles.find((candidate) => candidate.hr_code?.toLowerCase() === hrCode)
+    : undefined;
   const assignable = Boolean(
     matchingProfile &&
     (matchingProfile.role === "collector" || matchingProfile.role === "admin") &&
@@ -482,9 +485,11 @@ function findCollector(
   );
   if (assignable && matchingProfile) return { profile: matchingProfile, unknown: false, admin: false };
   if (matchingProfile?.role === "admin") return { profile: null, unknown: false, admin: true };
-  const profile = profiles.find((candidate) => Boolean(
-    hrCode && candidate.hr_code?.toLowerCase() === hrCode && candidate.role === "collector"
-  ));
+  const profile = matchingProfile?.role === "collector"
+    ? matchingProfile
+    : profiles.find((candidate) => Boolean(
+      hrCode && candidate.hr_code?.toLowerCase() === hrCode && candidate.role === "collector"
+    ));
   return { profile: profile ?? null, unknown: !profile && !matchingProfile, admin: false };
 }
 
@@ -645,7 +650,7 @@ export function parsePreviewWorkbook(
       const website = asString(fields.official_website_url);
       const normalizedWebsite = website ? normalizeUrl(website) : null;
       const matchCandidate = normalizedMatchCandidate(fields, rawExternalId, time);
-      const collector = findCollector(fields, context.profiles);
+      const collector = findCollector(fields, context.profiles, profilesByHrCode);
       (Object.keys(fields) as Array<keyof RawRowFields>).forEach((field) => {
         if (fieldTooLong(untrustedFields[field])) {
           rowIssues.push(
@@ -752,6 +757,23 @@ export function parsePreviewSourceRows(
   });
   const candidates: PreviewCandidate[] = [];
   const seenKeys = new Set<string>();
+
+  // Build lookup maps once. The old implementation scanned the full matches,
+  // assignments, and profiles arrays for every source row (O(rows × DB rows)).
+  const matchesByExternalId = new Map(
+    context.matches.map((match) => [match.external_id.toLowerCase(), match]),
+  );
+  const profilesByHrCode = new Map<string, ProfileRow>();
+  for (const profile of context.profiles) {
+    const code = profile.hr_code?.toLowerCase();
+    if (code && !profilesByHrCode.has(code)) profilesByHrCode.set(code, profile);
+  }
+  const assignmentsByLogicalKey = new Map<string, AssignmentRow>();
+  for (const assignment of context.assignments) {
+    const key = `${assignment.match_id}| ${assignment.task}|${assignment.half}`.replace("| ", "|");
+    if (!assignmentsByLogicalKey.has(key)) assignmentsByLogicalKey.set(key, assignment);
+  }
+
   rows.forEach((row, index) => {
     const rowNumber = index + 1;
     const rawFields = getFields(row);
@@ -761,7 +783,7 @@ export function parsePreviewSourceRows(
     const rawTask = asString(fields.task);
     const collectorName = asString(fields.collector_name);
     const match = externalId
-      ? context.matches.find((item) => item.external_id.toLowerCase() === externalId.toLowerCase()) ?? null
+      ? matchesByExternalId.get(externalId.toLowerCase()) ?? null
       : null;
     const { task, warning } = normalizeTask(fields.task);
     const half = normalizeHalf(fields.half);
@@ -776,7 +798,7 @@ export function parsePreviewSourceRows(
       if (fieldTooLong(rawFields[field])) issues.push(issue(rowNumber, "error", "validation_error", `${field} exceeds the maximum allowed length.`));
     });
     const assignment = match && task && half
-      ? context.assignments.find((item) => item.match_id === match.id && item.task === task && item.half === half) ?? null
+      ? assignmentsByLogicalKey.get(`${match.id}|${task}|${half}`) ?? null
       : null;
     if (!externalId) issues.push(issue(rowNumber, "error", "validation_error", "Match identifier is required."));
     else if (!match && !matchCandidate) issues.push(issue(rowNumber, "error", "validation_error", "Required match fields are missing or invalid."));
@@ -825,18 +847,23 @@ export async function loadPreviewContext(client: Client): Promise<{
   assignments: AssignmentRow[];
   profiles: ProfileRow[];
 }> {
+  // Fetch only the columns used by preview/reconciliation. These tables can be
+  // large; transferring notes, timestamps, and unrelated profile data on every
+  // sync adds latency without changing any preview decisions.
   const [matches, assignments, profiles] = await Promise.all([
-    client.from("matches").select("*"),
-    client.from("assignments").select("*"),
-    client.from("profiles").select("*").is("deleted_at", null),
+    client.from("matches").select("id,external_id"),
+    client.from("assignments").select(
+      "id,match_id,collector_id,raw_task_value,task,half,sla,shift_date,distribution_present"
+    ),
+    client.from("profiles").select("id,hr_code,role,deleted_at,suspended_at").is("deleted_at", null),
   ]);
   if (matches.error) throw new Error("Unable to load matches for preview.");
   if (assignments.error) throw new Error("Unable to load assignments for preview.");
   if (profiles.error) throw new Error("Unable to load collectors for preview.");
   return {
-    matches: matches.data ?? [],
-    assignments: assignments.data ?? [],
-    profiles: profiles.data ?? [],
+    matches: (matches.data ?? []) as unknown as MatchRow[],
+    assignments: (assignments.data ?? []) as unknown as AssignmentRow[],
+    profiles: (profiles.data ?? []) as unknown as ProfileRow[],
   };
 }
 
