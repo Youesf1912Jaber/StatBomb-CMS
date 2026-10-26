@@ -264,10 +264,33 @@ export async function getAdminDashboardAssignmentsForShift(
   return attachMatches(supabase, data ?? []);
 }
 
-/** Explicit archive lookup by Match ID; called only when an admin searches. */
+/**
+ * Collector dashboard query: current distribution, selected shift, and active
+ * work only. Older completed assignments are retrieved through archive search.
+ */
+export async function getCollectorDashboardAssignmentsForShift(
+  supabase: Client,
+  collectorId: string,
+  shiftDate: string
+): Promise<AssignmentWithMatch[]> {
+  const recentCompletionCutoff = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("collector_id", collectorId)
+    .or(`shift_date.eq.${shiftDate},distribution_present.eq.true,status.eq."In Progress",status.eq."Overdue",completed_at.gte.${recentCompletionCutoff}`)
+    .order("shift_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
+
+/** Explicit archive lookup by Match ID; called only when an admin/collector searches. */
 export async function searchHistoricalAssignmentsByMatchId(
   supabase: Client,
-  query: string
+  query: string,
+  collectorId?: string
 ): Promise<AssignmentWithMatch[]> {
   const normalizedQuery = query.trim().replace(/[,%_]/g, "");
   if (normalizedQuery.length < 2 || normalizedQuery.length > 80) return [];
@@ -282,13 +305,18 @@ export async function searchHistoricalAssignmentsByMatchId(
   const matchIds = (matches ?? []).map((match) => match.id);
   if (matchIds.length === 0) return [];
 
-  const { data: assignments, error: assignmentsError } = await supabase
+  let assignmentsQuery = supabase
     .from("assignments")
     .select("*")
     .in("match_id", matchIds)
     .order("created_at", { ascending: false })
     .limit(100);
 
+  if (collectorId) {
+    assignmentsQuery = assignmentsQuery.eq("collector_id", collectorId);
+  }
+
+  const { data: assignments, error: assignmentsError } = await assignmentsQuery;
   if (assignmentsError) throw assignmentsError;
   return attachMatches(supabase, assignments ?? []);
 }
