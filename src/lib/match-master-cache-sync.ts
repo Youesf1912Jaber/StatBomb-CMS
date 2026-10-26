@@ -104,9 +104,16 @@ export async function syncMatchMasterCache() {
   const changedRows = cacheRows.filter((row) => {
     const previous = existingCache.get(row.match_id);
     if (!previous) return false; // New rows are not counted as updated details.
+    const previousData = previous.match_data ?? {};
+    const metadataChanged = Object.keys(row.match_data).some((key) => {
+      const before = previousData[key] == null ? "" : String(previousData[key]).trim();
+      const currentValue = row.match_data[key as keyof MatchMasterRow];
+      const after = currentValue == null ? "" : String(currentValue).trim();
+      return before !== after;
+    });
     return previous.sla_sort_at !== row.sla_sort_at ||
       previous.eta_date !== row.eta_date ||
-      JSON.stringify(previous.match_data) !== JSON.stringify(row.match_data);
+      metadataChanged;
   }).length;
 
   for (let offset = 0; offset < cacheRows.length; offset += 500) {
