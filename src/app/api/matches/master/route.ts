@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
 import { createClient } from "@/lib/supabase/server";
-import { fetchAllMatches } from "@/lib/match-master-preview";
-import { readMatchesMasterSheet } from "@/lib/sync/google-sheets";
+import { getCachedMatchMasterRows } from "@/lib/match-master-sheet-cache";
 import { normalizeMatchId, normalizeDistributionHalf } from "@/lib/sync/distribution-identity";
 import { normalizeEtaDate } from "@/lib/match-master-date";
 import { PreviewInputError } from "@/lib/sync/preview";
@@ -10,7 +9,7 @@ import { PreviewInputError } from "@/lib/sync/preview";
 export const runtime = "nodejs";
 
 type DistributionSummary = { halves: string[]; tasks: string[] };
-type MatchWithDistribution = Awaited<ReturnType<typeof readMatchesMasterSheet>>[number] & {
+type MatchWithDistribution = Awaited<ReturnType<typeof getCachedMatchMasterRows>>[number] & {
   distribution: DistributionSummary | null;
 };
 
@@ -66,7 +65,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, error: "Choose an ETA day or enter a search." }, { status: 400 });
     }
 
-    const matches = await readMatchesMasterSheet();
+    const matches = await getCachedMatchMasterRows();
     if (view === "days" && !query) {
       const counts = new Map<string, number>();
       for (const match of matches) {
@@ -82,11 +81,17 @@ export async function GET(request: Request) {
       return dateMatches && matchesQuery(match, query);
     });
     const supabase = createClient();
-    const databaseMatches = await fetchAllMatches(supabase);
+    const externalIds = [...new Set(selected.map((match) => match.match_id))];
     const externalIdToInternalId = new Map<string, string>();
-    for (const match of databaseMatches) {
-      const externalId = normalizeMatchId(match.external_id);
-      if (externalId) externalIdToInternalId.set(externalId, match.id);
+    for (let offset = 0; offset < externalIds.length; offset += 400) {
+      const { data, error } = await supabase.from("matches")
+        .select("id, external_id")
+        .in("external_id", externalIds.slice(offset, offset + 400));
+      if (error) throw error;
+      for (const match of data ?? []) {
+        const externalId = normalizeMatchId(match.external_id);
+        if (externalId) externalIdToInternalId.set(externalId, match.id);
+      }
     }
 
     const internalIds = [...new Set(selected.map((match) => externalIdToInternalId.get(match.match_id)).filter((id): id is string => Boolean(id)))];
