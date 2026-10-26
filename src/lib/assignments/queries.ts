@@ -238,3 +238,56 @@ export async function getCollectorSlaAlertAssignments(
   if (error) throw error;
   return attachMatches(supabase, data ?? []);
 }
+
+
+/**
+ * Default admin dashboard query: today's selected shift plus live work that
+ * still needs attention. Historical completed assignments are retrieved only
+ * through the explicit archive search endpoint.
+ */
+export async function getAdminDashboardAssignmentsForShift(
+  supabase: Client,
+  shiftDate: string
+): Promise<AssignmentWithMatch[]> {
+  const [year, month, day] = shiftDate.split("-");
+  const dmyShiftDate = year && month && day ? `${Number(day)}/${Number(month)}/${year}` : shiftDate;
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("hidden_from_admin_dashboard", false)
+    .or(`shift_date.eq.${shiftDate},shift_date.eq.${dmyShiftDate},status.eq."In Progress",status.eq."Overdue"`)
+    .order("shift_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
+
+/** Explicit archive lookup by Match ID; called only when an admin searches. */
+export async function searchHistoricalAssignmentsByMatchId(
+  supabase: Client,
+  query: string
+): Promise<AssignmentWithMatch[]> {
+  const normalizedQuery = query.trim().replace(/[,%_]/g, "");
+  if (normalizedQuery.length < 2 || normalizedQuery.length > 80) return [];
+
+  const { data: matches, error: matchesError } = await supabase
+    .from("matches")
+    .select("id, external_id")
+    .ilike("external_id", `%${normalizedQuery}%`)
+    .limit(50);
+
+  if (matchesError) throw matchesError;
+  const matchIds = (matches ?? []).map((match) => match.id);
+  if (matchIds.length === 0) return [];
+
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("assignments")
+    .select("*")
+    .in("match_id", matchIds)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (assignmentsError) throw assignmentsError;
+  return attachMatches(supabase, assignments ?? []);
+}
