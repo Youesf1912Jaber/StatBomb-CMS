@@ -250,13 +250,14 @@ export async function getAdminDashboardAssignmentsForShift(
   shiftDate: string
 ): Promise<AssignmentWithMatch[]> {
   // shift_date is a PostgreSQL date column, so filter with ISO YYYY-MM-DD only.
-  // Comparing it with a sheet-formatted D/M/YYYY string makes PostgreSQL throw
-  // 22008 (date/time field value out of range) for dates such as 26/10/2026.
+  // Only assignments still present in the live Distribution are included for
+  // the selected shift, and stale Overdue rows removed/reassigned in the Sheet
+  // are excluded. Keep In Progress work visible even if its row was removed.
   const { data, error } = await supabase
     .from("assignments")
     .select("*")
     .eq("hidden_from_admin_dashboard", false)
-    .or(`shift_date.eq.${shiftDate},status.eq."In Progress",status.eq."Overdue"`)
+    .or(`and(shift_date.eq.${shiftDate},distribution_present.eq.true),status.eq."In Progress",and(status.eq."Overdue",distribution_present.eq.true)`)
     .order("shift_date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -265,8 +266,10 @@ export async function getAdminDashboardAssignmentsForShift(
 }
 
 /**
- * Collector dashboard query: current distribution, selected shift, and active
- * work only. Older completed assignments are retrieved through archive search.
+ * Collector dashboard query: current distribution and genuinely active work only.
+ * Stale Overdue assignments whose Distribution rows were removed/reassigned are
+ * hidden; In Progress work and recent completions remain visible. Older completed
+ * assignments are retrieved through archive search.
  */
 export async function getCollectorDashboardAssignmentsForShift(
   supabase: Client,
@@ -278,7 +281,7 @@ export async function getCollectorDashboardAssignmentsForShift(
     .from("assignments")
     .select("*")
     .eq("collector_id", collectorId)
-    .or(`shift_date.eq.${shiftDate},distribution_present.eq.true,status.eq."In Progress",status.eq."Overdue",completed_at.gte.${recentCompletionCutoff}`)
+    .or(`distribution_present.eq.true,status.eq."In Progress",completed_at.gte.${recentCompletionCutoff}`)
     .order("shift_date", { ascending: false })
     .order("created_at", { ascending: false });
 
