@@ -82,6 +82,7 @@ export default async function AssignmentDetailsPage({ params }: { params: { id: 
           <AssignmentWorkControls
             assignmentId={assignment.id}
             status={assignment.status}
+            startedAt={assignment.started_at}
             hasActiveTaskTimer={taskTimers.some((timer) => timer.ended_at === null)}
           />
           <AddOfficialMatchButton
