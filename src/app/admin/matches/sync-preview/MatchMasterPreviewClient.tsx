@@ -16,6 +16,7 @@ type PreviewRow = {
   reason: string;
   duplicateRows: number[];
 };
+type ChangeCheck = { changedMatches: number; newMatches: number; duplicateIdsSkipped: number; sample: Array<{ matchId: string; fields: string[] }> };
 type PreviewData = {
   summary: Record<string, number>;
   rows: PreviewRow[];
@@ -39,6 +40,23 @@ export function MatchMasterPreviewClient() {
   const [awayTeam, setAwayTeam] = useState("");
   const [applying, setApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<string | null>(null);
+  const [changeCheck, setChangeCheck] = useState<ChangeCheck | null>(null);
+  const [checkingChanges, setCheckingChanges] = useState(false);
+  const [refreshingDetails, setRefreshingDetails] = useState(false);
+
+  async function loadChangeCheck() {
+    setCheckingChanges(true);
+    try {
+      const response = await fetch("/api/admin/match-master/sync", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Unable to check for sheet changes.");
+      setChangeCheck(payload as ChangeCheck);
+    } catch (reason: unknown) {
+      setApplyResult(reason instanceof Error ? reason.message : "Unable to check for sheet changes.");
+    } finally {
+      setCheckingChanges(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/admin/matches/sync-preview", { cache: "no-store" })
@@ -48,6 +66,7 @@ export function MatchMasterPreviewClient() {
         setData(payload);
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load preview."));
+    void loadChangeCheck();
   }, []);
 
   async function applyMatchMaster() {
@@ -139,6 +158,62 @@ export function MatchMasterPreviewClient() {
           </div>
         ))}
       </div>
+      <section className="rounded-card border border-clock-amber/40 bg-pitch-900 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg text-chalk-50">Google Sheet Changes</h2>
+            <p className="mt-1 text-sm text-chalk-300">Check whether existing Match Master details changed in the source sheet, including SLA. Refreshing updates the Match Master cache; it does not change assignments or edit the sheet.</p>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              setRefreshingDetails(true);
+              setApplyResult(null);
+              try {
+                const response = await fetch("/api/admin/match-master/sync", { method: "POST" });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.error ?? "Unable to refresh Match Master details.");
+                setApplyResult("Match Master refreshed: " + (payload.changedRows ?? 0) + " existing matches updated, " + (payload.sourceRows ?? 0) + " source matches synced.");
+                await loadChangeCheck();
+                const refreshed = await fetch("/api/admin/matches/sync-preview", { cache: "no-store" });
+                const refreshedPayload = await refreshed.json();
+                if (refreshed.ok) setData(refreshedPayload);
+              } catch (reason: unknown) {
+                setApplyResult(reason instanceof Error ? reason.message : "Unable to refresh Match Master details.");
+              } finally {
+                setRefreshingDetails(false);
+              }
+            }}
+            disabled={refreshingDetails || checkingChanges}
+            className="rounded-[8px] bg-clock-amber px-4 py-2 text-sm font-semibold text-pitch-950 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {refreshingDetails ? "Updating details…" : "Check & Update Match Details"}
+          </button>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-pitch-700 bg-pitch-950 p-3">
+            <p className="text-xs text-chalk-300">Changed existing matches</p>
+            <p className="mt-1 text-xl font-semibold text-chalk-50">{checkingChanges ? "Checking…" : changeCheck?.changedMatches ?? "—"}</p>
+          </div>
+          <div className="rounded-lg border border-pitch-700 bg-pitch-950 p-3">
+            <p className="text-xs text-chalk-300">New matches in sheet</p>
+            <p className="mt-1 text-xl font-semibold text-chalk-50">{checkingChanges ? "Checking…" : changeCheck?.newMatches ?? "—"}</p>
+          </div>
+          <div className="rounded-lg border border-pitch-700 bg-pitch-950 p-3">
+            <p className="text-xs text-chalk-300">Duplicate IDs skipped by checker</p>
+            <p className="mt-1 text-xl font-semibold text-chalk-50">{checkingChanges ? "Checking…" : changeCheck?.duplicateIdsSkipped ?? "—"}</p>
+          </div>
+        </div>
+        {changeCheck?.sample?.length ? (
+          <div className="mt-3 overflow-x-auto">
+            <p className="mb-2 text-sm font-semibold text-chalk-200">Sample detected changes</p>
+            <table className="w-full text-left text-sm">
+              <thead className="text-chalk-300"><tr><th className="px-2 py-1">Match ID</th><th className="px-2 py-1">Changed fields</th></tr></thead>
+              <tbody>{changeCheck.sample.map((item) => <tr key={item.matchId} className="border-t border-pitch-700"><td className="px-2 py-2">{item.matchId}</td><td className="px-2 py-2">{item.fields.join(", ")}</td></tr>)}</tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
       <div className="rounded-card border border-clock-amber/40 bg-pitch-900 p-4">
         <p className="text-sm text-chalk-200">
           Candidates: <strong>{data.apply.candidates}</strong> · Blocked duplicate conflicts: <strong>{data.apply.blockedDuplicateConflicts}</strong> · Exact duplicate deduped: <strong>{data.apply.duplicateExactDeduped}</strong> · Invalid metadata: <strong>{data.apply.invalidMetadata}</strong>
