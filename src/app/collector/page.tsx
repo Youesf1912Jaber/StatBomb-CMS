@@ -227,10 +227,6 @@ export default async function CollectorDashboardPage({
     (a) => a.status !== "Completed" || (a.completed_at && toCairoDateString(a.completed_at) === today)
   );
 
-  const nowMs = Date.now();
-  const slaAttention = assignments.filter(
-    (a) => a.status !== "Completed" && new Date(a.sla).getTime() <= nowMs
-  );
 
   return (
     <div className="relative isolate -mx-3 space-y-8 overflow-hidden rounded-2xl px-3 py-3 sm:-mx-5 sm:px-5 sm:py-5 lg:-mx-6 lg:px-6">
