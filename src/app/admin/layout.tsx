@@ -10,8 +10,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/admin" },
   { label: "Match Master", href: "/admin/matches" },
   { label: "Match Master Preview", href: "/admin/matches/sync-preview" },
-  { label: "Distribution Preview", href: "/admin/distribution/preview" },
-  { label: "Sync Preview", href: "/admin/sync" },
   { label: "Collectors", href: "/admin/collectors" },
   { label: "Deductions", href: "/admin/deductions" },
   { label: "Bonus", href: "/admin/bonus" },
