@@ -46,6 +46,7 @@ export function MatchMasterPreviewClient() {
 
   async function loadChangeCheck() {
     setCheckingChanges(true);
+    setChangeCheck(null);
     try {
       const response = await fetch("/api/admin/match-master/sync", { cache: "no-store" });
       const payload = await response.json();
