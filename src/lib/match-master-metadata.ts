@@ -1,7 +1,7 @@
 import "server-only";
 
-import { unstable_cache } from "next/cache";
-import { normalizeMatchId, readMatchesMasterSheet } from "@/lib/sync/google-sheets";
+import { normalizeMatchId } from "@/lib/sync/google-sheets";
+import { getCachedMatchMasterRows } from "@/lib/match-master-sheet-cache";
 
 export type MatchMasterMetadata = {
   competition: string | null;
@@ -17,12 +17,6 @@ export type MatchMasterMetadata = {
  * the full Google Sheet on every navigation while still picking up edits
  * without a manual deployment.
  */
-const getCachedMatchMasterRows = unstable_cache(
-  async () => readMatchesMasterSheet(),
-  ["match-master-metadata-rows-v1"],
-  { revalidate: 300 }
-);
-
 export async function getMatchMasterMetadataMap(): Promise<Map<string, MatchMasterMetadata>> {
   const rows = await getCachedMatchMasterRows();
   const metadata = new Map<string, MatchMasterMetadata>();
