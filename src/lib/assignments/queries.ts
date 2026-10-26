@@ -200,3 +200,123 @@ export async function getAssignmentTaskTimers(
   if (error) throw error;
   return data ?? [];
 }
+
+
+/**
+ * Small, live subset for the shared admin shell. The shell only renders SLA
+ * alerts, so completed historical assignments are intentionally not fetched
+ * on every admin route transition.
+ */
+export async function getAdminSlaAlertAssignments(supabase: Client): Promise<AssignmentWithMatch[]> {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("hidden_from_admin_dashboard", false)
+    .eq("distribution_present", true)
+    .neq("status", "Completed");
+
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
+
+/**
+ * Small, live subset for the collector shell. Include assignments still
+ * present in the active distribution plus in-progress/overdue work, but never
+ * load completed historical work just to build navigation SLA alerts.
+ */
+export async function getCollectorSlaAlertAssignments(
+  supabase: Client,
+  collectorId: string
+): Promise<AssignmentWithMatch[]> {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("collector_id", collectorId)
+    .neq("status", "Completed")
+    .or('distribution_present.eq.true,status.eq."In Progress",status.eq."Overdue"');
+
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
+
+
+/**
+ * Default admin dashboard query: today's selected shift plus live work that
+ * still needs attention. Historical completed assignments are retrieved only
+ * through the explicit archive search endpoint.
+ */
+export async function getAdminDashboardAssignmentsForShift(
+  supabase: Client,
+  shiftDate: string
+): Promise<AssignmentWithMatch[]> {
+  // shift_date is a PostgreSQL date column, so filter with ISO YYYY-MM-DD only.
+  // Comparing it with a sheet-formatted D/M/YYYY string makes PostgreSQL throw
+  // 22008 (date/time field value out of range) for dates such as 26/10/2026.
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("hidden_from_admin_dashboard", false)
+    .or(`shift_date.eq.${shiftDate},status.eq."In Progress",status.eq."Overdue"`)
+    .order("shift_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
+
+/**
+ * Collector dashboard query: current distribution, selected shift, and active
+ * work only. Older completed assignments are retrieved through archive search.
+ */
+export async function getCollectorDashboardAssignmentsForShift(
+  supabase: Client,
+  collectorId: string,
+  shiftDate: string
+): Promise<AssignmentWithMatch[]> {
+  const recentCompletionCutoff = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("collector_id", collectorId)
+    .or(`shift_date.eq.${shiftDate},distribution_present.eq.true,status.eq."In Progress",status.eq."Overdue",completed_at.gte.${recentCompletionCutoff}`)
+    .order("shift_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
+
+/** Explicit archive lookup by Match ID; called only when an admin/collector searches. */
+export async function searchHistoricalAssignmentsByMatchId(
+  supabase: Client,
+  query: string,
+  collectorId?: string
+): Promise<AssignmentWithMatch[]> {
+  const normalizedQuery = query.trim().replace(/[,%_]/g, "");
+  if (normalizedQuery.length < 2 || normalizedQuery.length > 80) return [];
+
+  const { data: matches, error: matchesError } = await supabase
+    .from("matches")
+    .select("id, external_id")
+    .ilike("external_id", `%${normalizedQuery}%`)
+    .limit(50);
+
+  if (matchesError) throw matchesError;
+  const matchIds = (matches ?? []).map((match) => match.id);
+  if (matchIds.length === 0) return [];
+
+  let assignmentsQuery = supabase
+    .from("assignments")
+    .select("*")
+    .in("match_id", matchIds)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (collectorId) {
+    assignmentsQuery = assignmentsQuery.eq("collector_id", collectorId);
+  }
+
+  const { data: assignments, error: assignmentsError } = await assignmentsQuery;
+  if (assignmentsError) throw assignmentsError;
+  return attachMatches(supabase, assignments ?? []);
+}

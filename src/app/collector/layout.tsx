@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell, type NavItem } from "@/components/AppShell";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
-import { getAssignmentsForCollector } from "@/lib/assignments/queries";
+import { getCollectorSlaAlertAssignments } from "@/lib/assignments/queries";
 import { toSlaAlertItems, type SlaAlertAssignment } from "@/lib/assignments/sla-alarm";
 import { createClient } from "@/lib/supabase/server";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
@@ -38,7 +38,7 @@ async function loadSlaAlertAssignments(
     return [];
   }
 
-  const assignments = await getAssignmentsForCollector(supabase, collectorId);
+  const assignments = await getCollectorSlaAlertAssignments(supabase, collectorId);
   return toSlaAlertItems(assignments, () => collectorName);
 }
 

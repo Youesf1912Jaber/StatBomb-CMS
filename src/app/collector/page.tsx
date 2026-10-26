@@ -6,7 +6,8 @@ import {
   isCurrentDistributionAssignment,
   isOperationalAssignment,
 } from "@/lib/assignments/distribution-presence";
-import { getAssignmentsForCollector } from "@/lib/assignments/queries";
+import { getCollectorDashboardAssignmentsForShift } from "@/lib/assignments/queries";
+import { CollectorHistoricalMatchSearch } from "@/components/CollectorHistoricalMatchSearch";
 import {
   getCairoToday,
   isCurrentShiftDate,
@@ -195,16 +196,16 @@ export default async function CollectorDashboardPage({
   const firstName = (profile.full_name ?? profile.email).split(" ")[0];
 
   const supabase = createClient();
-  const [assignments, matchMetadata] = await Promise.all([
-    getAssignmentsForCollector(supabase, profile.id),
-    getMatchMasterMetadataMap().catch(() => new Map<string, { competition: string | null; country: string | null }>()),
-  ]);
   const today = getCairoToday();
   const requestedShiftDate = searchParams?.shiftDate ?? "";
   const isValidShiftDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedShiftDate)
     && !Number.isNaN(Date.parse(requestedShiftDate))
     && new Date(requestedShiftDate).toISOString().slice(0, 10) === requestedShiftDate;
   const selectedShiftDate = isValidShiftDate ? requestedShiftDate : today;
+  const [assignments, matchMetadata] = await Promise.all([
+    getCollectorDashboardAssignmentsForShift(supabase, profile.id, selectedShiftDate),
+    getMatchMasterMetadataMap().catch(() => new Map<string, { competition: string | null; country: string | null }>()),
+  ]);
 
   const currentAssignments = assignments.filter(isOperationalAssignment);
   const currentDistribution = assignments.filter(
@@ -448,11 +449,11 @@ export default async function CollectorDashboardPage({
 
       <section>
         <h2 className="font-display text-lg text-chalk-50">
-          All Assignments
+          Current & Active Assignments
         </h2>
 
         <p className="mb-2 text-sm text-chalk-200">
-          Search or filter anything not covered above, including past matches.
+          Your current distribution, selected shift, and unfinished work. Search the archive below for older matches.
         </p>
 
         <AssignmentTable
@@ -460,6 +461,8 @@ export default async function CollectorDashboardPage({
           detailsBasePath="/collector/assignments"
         />
       </section>
+
+      <CollectorHistoricalMatchSearch />
     </div>
   );
 }

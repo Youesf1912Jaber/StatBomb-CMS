@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { getAdminDashboardAssignments } from "@/lib/assignments/queries";
+import { getAdminDashboardAssignmentsForShift } from "@/lib/assignments/queries";
+import { AdminHistoricalMatchSearch } from "@/components/AdminHistoricalMatchSearch";
 import { AssignmentTable } from "@/components/AssignmentTable";
 import { getCairoToday, isCurrentShiftDate } from "@/lib/dates";
 import { AdminBulkCompleteButton } from "./AdminBulkCompleteButton";
@@ -37,14 +38,14 @@ export default async function AdminDashboardPage({
 }: {
   searchParams?: { shiftDate?: string };
 }) {
-  const supabase = createClient();
-  const assignments = await getAdminDashboardAssignments(supabase);
   const today = getCairoToday();
   const requestedShiftDate = searchParams?.shiftDate ?? "";
-  const isValidShiftDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedShiftDate)
+  const isValidShiftDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(requestedShiftDate)
     && !Number.isNaN(Date.parse(requestedShiftDate))
     && new Date(requestedShiftDate).toISOString().slice(0, 10) === requestedShiftDate;
   const currentShiftDate = isValidShiftDate ? requestedShiftDate : today;
+  const supabase = createClient();
+  const assignments = await getAdminDashboardAssignmentsForShift(supabase, currentShiftDate);
   const currentShiftAssignments = assignments.filter(
     (assignment) => isCurrentShiftDate(assignment.shift_date, currentShiftDate)
   );
@@ -115,7 +116,7 @@ export default async function AdminDashboardPage({
       </section>
 
       <section aria-label="Assignment overview" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <SummaryCard label="All assignments" value={assignments.length} note="Across all collectors and shifts" accent="bg-clock-amber" href="#all-distributed-matches" />
+        <SummaryCard label="Current & active" value={assignments.length} note="Selected shift and active work" accent="bg-clock-amber" href="#all-distributed-matches" />
         <SummaryCard label="In progress" value={inProgressCount} note="Collectors currently working" accent="bg-sky-400" href="#status-in-progress" />
         <SummaryCard label="Completed" value={completedCount} note="Finished assignments" accent="bg-emerald-400" href="#status-completed" />
         <SummaryCard
@@ -172,20 +173,18 @@ export default async function AdminDashboardPage({
       <section id="all-distributed-matches" className="min-w-0 scroll-mt-24 space-y-3">
         <div className="flex flex-col gap-2 border-b border-pitch-700 pb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-clock-amber">Full assignment register</p>
-            <h2 className="mt-1 font-display text-2xl text-chalk-50">All Distributed Matches</h2>
-            <p className="mt-1 text-sm text-chalk-200">Search, filter, and review assignments across every collector and shift.</p>
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-clock-amber">Live assignment register</p>
+            <h2 className="mt-1 font-display text-2xl text-chalk-50">Current & Active Assignments</h2>
+            <p className="mt-1 text-sm text-chalk-200">This view loads the selected shift and unfinished work. Use the archive search below for older matches.</p>
           </div>
           <span className="w-fit rounded-full border border-pitch-700 bg-pitch-950/80 px-3 py-1.5 text-xs text-chalk-200">
-            {allDistributedAssignments.length.toLocaleString()} total
+            {allDistributedAssignments.length.toLocaleString()} loaded
           </span>
         </div>
         {allDistributedAssignments.length === 0 ? (
           <div className="rounded-xl border border-dashed border-pitch-700 px-6 py-16 text-center">
             <p className="text-sm text-chalk-200">
-              No matches or assignments yet — these are populated by the sync pipeline in a later
-              phase, or can be created directly via the <code>create_assignment</code> RPC in the
-              meantime.
+              No current-shift or active assignments found.
             </p>
           </div>
         ) : (
@@ -199,6 +198,8 @@ export default async function AdminDashboardPage({
           />
         )}
       </section>
+
+      <AdminHistoricalMatchSearch />
     </div>
   );
 }
