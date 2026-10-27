@@ -393,7 +393,7 @@ async function readAllBonusRecords(): Promise<BonusRecord[]> {
 const getCachedBonusRecords = unstable_cache(
   readAllBonusRecords,
   ["bonus-records-v1"],
-  { revalidate: 15, tags: ["bonus-records"] }
+  { revalidate: 5, tags: ["bonus-records"] }
 );
 
 export async function getAllBonusRecords(): Promise<BonusRecord[]> {

@@ -3,6 +3,7 @@ import { BonusResolutionControl } from "@/components/BonusResolutionControl";
 import { BonusDeleteControl } from "@/components/BonusDeleteControl";
 import { getAllBonusRecords } from "@/lib/bonus/sheet";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
+import { BonusLiveRefresh } from "@/components/BonusLiveRefresh";
 
 export const runtime = "nodejs";
 
@@ -109,6 +110,9 @@ export default async function AdminBonusPage({
         <p className="mt-1 text-sm text-chalk-200">
           All Bonus submissions. Amount is calculated by Google Sheets; Admin controls Resolution.
         </p>
+        <div className="mt-2">
+          <BonusLiveRefresh />
+        </div>
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3">
