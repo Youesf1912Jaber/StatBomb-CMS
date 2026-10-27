@@ -16,7 +16,8 @@ type PreviewRow = {
   reason: string;
   duplicateRows: number[];
 };
-type ChangeCheck = { changedMatches: number; newMatches: number; duplicateIdsSkipped: number; sample: Array<{ matchId: string; fields: string[] }>; pendingChanges?: Array<{ matchId: string; fields: string[] }> };
+type ChangeDetail = { field: string; before: string; after: string };
+type ChangeCheck = { changedMatches: number; newMatches: number; duplicateIdsSkipped: number; sample: Array<{ matchId: string; fields: string[]; details: ChangeDetail[] }>; pendingChanges?: Array<{ matchId: string; fields: string[]; details: ChangeDetail[] }> };
 type PreviewData = {
   summary: Record<string, number>;
   rows: PreviewRow[];
@@ -210,10 +211,24 @@ export function MatchMasterPreviewClient() {
         ) : changeCheck?.pendingChanges?.length ? (
           <div className="mt-3 overflow-hidden">
             <p className="mb-2 text-sm font-semibold text-chalk-200">Matches still needing an update ({changeCheck.pendingChanges.length})</p>
-            <div className="max-h-80 overflow-auto rounded-lg border border-pitch-700">
+            <div className="max-h-[32rem] overflow-auto rounded-lg border border-pitch-700">
               <table className="w-full text-left text-sm">
-                <thead className="sticky top-0 bg-pitch-950 text-chalk-300"><tr><th className="px-2 py-2">Match ID</th><th className="px-2 py-2">Fields still different</th></tr></thead>
-                <tbody>{changeCheck.pendingChanges.map((item) => <tr key={item.matchId} className="border-t border-pitch-700"><td className="px-2 py-2">{item.matchId}</td><td className="px-2 py-2">{item.fields.join(", ")}</td></tr>)}</tbody>
+                <thead className="sticky top-0 bg-pitch-950 text-chalk-300">
+                  <tr>
+                    <th className="px-2 py-2">Match ID</th>
+                    <th className="px-2 py-2">Column / Field</th>
+                    <th className="px-2 py-2">Before</th>
+                    <th className="px-2 py-2">After</th>
+                  </tr>
+                </thead>
+                <tbody>{changeCheck.pendingChanges.flatMap((item) => item.details.map((detail, index) => (
+                  <tr key={item.matchId + "-" + detail.field} className="border-t border-pitch-700 align-top">
+                    {index === 0 ? <td className="px-2 py-2 font-semibold" rowSpan={item.details.length}>{item.matchId}</td> : null}
+                    <td className="px-2 py-2">{detail.field}</td>
+                    <td className="max-w-64 break-words px-2 py-2 text-clock-red">{detail.before}</td>
+                    <td className="max-w-64 break-words px-2 py-2 text-emerald-300">{detail.after}</td>
+                  </tr>
+                )))}</tbody>
               </table>
             </div>
           </div>
