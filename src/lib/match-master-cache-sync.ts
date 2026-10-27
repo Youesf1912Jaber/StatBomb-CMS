@@ -111,7 +111,12 @@ export async function syncMatchMasterCache() {
       const after = currentValue == null ? "" : String(currentValue).trim();
       return before !== after;
     });
-    return previous.sla_sort_at !== row.sla_sort_at ||
+    const previousSlaMs = previous.sla_sort_at ? Date.parse(previous.sla_sort_at) : null;
+    const nextSlaMs = row.sla_sort_at ? Date.parse(row.sla_sort_at) : null;
+    const slaChanged = previousSlaMs === null && nextSlaMs === null
+      ? false
+      : previousSlaMs === null || nextSlaMs === null || previousSlaMs !== nextSlaMs;
+    return slaChanged ||
       previous.eta_date !== row.eta_date ||
       metadataChanged;
   }).length;
