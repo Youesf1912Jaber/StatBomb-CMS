@@ -38,7 +38,7 @@ export async function GET() {
     const counts = new Map<string, number>();
     for (const row of sourceRows) counts.set(row.match_id, (counts.get(row.match_id) ?? 0) + 1);
     const cacheById = new Map(cachedRows.map((row) => [row.match_id, row]));
-    const changes: Array<{ matchId: string; fields: string[] }> = [];
+    const changes: Array<{ matchId: string; fields: string[]; details: Array<{ field: string; before: string; after: string }> }> = [];
     let newRows = 0;
     for (const source of sourceRows) {
       if ((counts.get(source.match_id) ?? 0) > 1) continue;
@@ -48,21 +48,27 @@ export async function GET() {
       // SLA values can be represented differently by Google Sheets (formatted
       // display text vs normalized timestamp). Compare SLA only through the same
       // parser used by the cache sync, not as raw strings.
-      const fields = Object.keys(source).filter((key) => {
-        if (key === "sla") return false;
-        const before = previous[key] == null ? "" : String(previous[key]).trim();
+      const details: Array<{ field: string; before: string; after: string }> = [];
+      for (const key of Object.keys(source)) {
+        const beforeValue = previous[key];
         const afterValue = source[key as keyof typeof source];
+        const before = beforeValue == null ? "" : String(beforeValue).trim();
         const after = afterValue == null ? "" : String(afterValue).trim();
-        return before !== after;
-      });
-      const sourceSla = parseMatchMasterSla(source.sla);
-      const cachedSlaMs = cached.sla_sort_at ? Date.parse(cached.sla_sort_at) : null;
-      const sourceSlaMs = sourceSla ? Date.parse(sourceSla) : null;
-      const slaMatches = cachedSlaMs === null && sourceSlaMs === null
-        ? true
-        : cachedSlaMs !== null && sourceSlaMs !== null && cachedSlaMs === sourceSlaMs;
-      if (!slaMatches) fields.push("sla");
-      if (fields.length) changes.push({ matchId: source.match_id, fields });
+        if (key === "sla") {
+          // Compare the actual instants, but preserve source/cache display values
+          // in the diff so admins can see exactly what changed.
+          const sourceSla = parseMatchMasterSla(source.sla);
+          const cachedSlaMs = cached.sla_sort_at ? Date.parse(cached.sla_sort_at) : null;
+          const sourceSlaMs = sourceSla ? Date.parse(sourceSla) : null;
+          const slaMatches = cachedSlaMs === null && sourceSlaMs === null
+            ? true
+            : cachedSlaMs !== null && sourceSlaMs !== null && cachedSlaMs === sourceSlaMs;
+          if (!slaMatches) details.push({ field: key, before: before || (cached.sla_sort_at ?? "—"), after: after || "—" });
+          continue;
+        }
+        if (before !== after) details.push({ field: key, before: before || "—", after: after || "—" });
+      }
+      if (details.length) changes.push({ matchId: source.match_id, fields: details.map((item) => item.field), details });
     }
     return NextResponse.json({
       success: true,
