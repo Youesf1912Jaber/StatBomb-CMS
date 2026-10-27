@@ -55,7 +55,13 @@ export async function GET() {
         const after = afterValue == null ? "" : String(afterValue).trim();
         return before !== after;
       });
-      if (cached.sla_sort_at !== parseMatchMasterSla(source.sla)) fields.push("sla");
+      const sourceSla = parseMatchMasterSla(source.sla);
+      const cachedSlaMs = cached.sla_sort_at ? Date.parse(cached.sla_sort_at) : null;
+      const sourceSlaMs = sourceSla ? Date.parse(sourceSla) : null;
+      const slaMatches = cachedSlaMs === null && sourceSlaMs === null
+        ? true
+        : cachedSlaMs !== null && sourceSlaMs !== null && cachedSlaMs === sourceSlaMs;
+      if (!slaMatches) fields.push("sla");
       if (fields.length) changes.push({ matchId: source.match_id, fields });
     }
     return NextResponse.json({
