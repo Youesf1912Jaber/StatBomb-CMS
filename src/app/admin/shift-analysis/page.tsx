@@ -239,7 +239,7 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Collector</p><p className="mt-1 break-words text-sm font-semibold text-chalk-50">{profile?.full_name ?? profile?.email ?? "—"}</p><p className="mt-1 font-mono text-[10px] text-chalk-300">{profile?.hr_code ?? "—"}</p></div>
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Shift date</p><p className="mt-1 text-sm font-semibold text-chalk-50">{formatDate(assignment.shift_date)}</p></div>
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Assignment status</p><div className="mt-2"><StatusPill status={assignment.status} /></div></div>
-                  <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Tracked task time</p><p className="mt-1 font-mono text-sm font-semibold text-chalk-50">{duration(seconds)}</p></div>
+                  <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Tracked task time</p><p className="mt-1 font-mono text-sm font-semibold text-chalk-50"><LiveTrackedDuration timers={matchTimers} /></p></div>
                 </div>
                 <div className="overflow-x-auto rounded-lg border border-pitch-800">
                   <table className="w-full min-w-[720px] text-left text-xs">
