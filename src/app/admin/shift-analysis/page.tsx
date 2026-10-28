@@ -10,6 +10,9 @@ export const dynamic = "force-dynamic";
 type SearchParams = { from?: string; to?: string; task?: string; collector?: string; status?: string };
 type Assignment = Awaited<ReturnType<typeof getAllAssignments>>[number];
 
+function normalizeHrCode(value: string | null | undefined) {
+  return (value ?? "").trim().toUpperCase().replace(/\s+/g, "");
+}
 function dateValue(value: string | null | undefined) {
   return value ? value.slice(0, 10) : "";
 }
@@ -44,7 +47,7 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
   const validTask = params.task && (ASSIGNMENT_TASK_NAMES as readonly string[]).includes(params.task) ? params.task : "";
   const from = params.from ?? "";
   const to = params.to ?? "";
-  const selectedCollector = params.collector ?? "";
+  const requestedCollector = params.collector ?? "";
   const selectedStatus = params.status ?? "";
   const supabase = createClient();
 
@@ -60,6 +63,13 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
   const timers = (timerResult.data ?? []) as AssignmentTaskTimerRow[];
   const profiles = profileResult.data ?? [];
   const profileById = new Map(profiles.map((p) => [p.id, p]));
+  // Accept both current profile IDs and legacy HR-Code query parameters.
+  // A stale/invalid collector parameter should never make the whole page look empty.
+  const requestedProfile = profiles.find((profile) =>
+    profile.id === requestedCollector ||
+    normalizeHrCode(profile.hr_code) === normalizeHrCode(requestedCollector)
+  );
+  const selectedCollector = requestedProfile?.id ?? "";
   // Only analyze assignments whose owner is still listed in Admin > Collectors.
   const currentRosterAssignments = allAssignments.filter((assignment) => profileById.has(assignment.collector_id));
   const timersByAssignment = new Map<string, AssignmentTaskTimerRow[]>();
