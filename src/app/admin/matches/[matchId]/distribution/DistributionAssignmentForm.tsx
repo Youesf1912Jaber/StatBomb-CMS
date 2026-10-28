@@ -30,6 +30,9 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [collectorHrCode, setCollectorHrCode] = useState("");
+  const [collectorSearch, setCollectorSearch] = useState("");
+  const [collectorSuggestionsOpen, setCollectorSuggestionsOpen] = useState(false);
+  const [activeCollectorSuggestion, setActiveCollectorSuggestion] = useState(0);
   const [task, setTask] = useState("");
   const [half, setHalf] = useState(HALF_OPTIONS[0] ?? "Half 1");
   const [shiftDate, setShiftDate] = useState("");
@@ -49,8 +52,37 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
   const uniqueCustomTasks = [...new Set(customTasks)];
   const availableTasks = [...DISTRIBUTION_TASK_OPTIONS, ...uniqueCustomTasks];
 
+  const normalizedCollectorSearch = collectorSearch.trim().toLocaleLowerCase();
+  const filteredCollectors = normalizedCollectorSearch
+    ? collectors
+        .filter((collector) =>
+          collector.hr_code.toLocaleLowerCase().includes(normalizedCollectorSearch) ||
+          collector.full_name.toLocaleLowerCase().includes(normalizedCollectorSearch)
+        )
+        .sort((a, b) => {
+          const aCode = a.hr_code.toLocaleLowerCase().startsWith(normalizedCollectorSearch) ? 0 : 1;
+          const bCode = b.hr_code.toLocaleLowerCase().startsWith(normalizedCollectorSearch) ? 0 : 1;
+          if (aCode !== bCode) return aCode - bCode;
+          const aName = a.full_name.toLocaleLowerCase().startsWith(normalizedCollectorSearch) ? 0 : 1;
+          const bName = b.full_name.toLocaleLowerCase().startsWith(normalizedCollectorSearch) ? 0 : 1;
+          return aName - bName || a.hr_code.localeCompare(b.hr_code);
+        })
+        .slice(0, 8)
+    : collectors.slice(0, 8);
+
+  function selectCollector(collector: TeamSheetCollector) {
+    setCollectorHrCode(collector.hr_code);
+    setCollectorSearch(collector.hr_code + " — " + collector.full_name);
+    setCollectorSuggestionsOpen(false);
+    setActiveCollectorSuggestion(0);
+    setError(null);
+  }
+
   function resetEntry() {
     setCollectorHrCode("");
+    setCollectorSearch("");
+    setCollectorSuggestionsOpen(false);
+    setActiveCollectorSuggestion(0);
     setTask("");
     setHalf(HALF_OPTIONS[0] ?? "Half 1");
     setShiftDate("");
@@ -173,12 +205,67 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
         </div>
         {error && <p role="alert" className="rounded-[8px] border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">{error}</p>}
         <div className="grid gap-4 sm:grid-cols-4">
-          <label className="text-sm text-chalk-200">Collector
-            <select required value={collectorHrCode} onChange={(event) => setCollectorHrCode(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50">
-              <option value="">Select a collector</option>
-              {collectors.map((collector) => <option key={collector.hr_code} value={collector.hr_code}>{collector.full_name} ({collector.hr_code})</option>)}
-            </select>
-          </label>
+          <div className="relative text-sm text-chalk-200">
+            <label htmlFor="distribution-collector-search" className="block">Collector</label>
+            <input
+              id="distribution-collector-search"
+              type="search"
+              autoComplete="off"
+              required
+              value={collectorSearch}
+              placeholder="Search HR Code or name…"
+              aria-label="Search collector by HR Code or name"
+              aria-expanded={collectorSuggestionsOpen}
+              aria-controls="distribution-collector-suggestions"
+              aria-autocomplete="list"
+              role="combobox"
+              onFocus={() => setCollectorSuggestionsOpen(true)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setCollectorSearch(value);
+                setCollectorHrCode("");
+                setActiveCollectorSuggestion(0);
+                setCollectorSuggestionsOpen(true);
+                setError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setCollectorSuggestionsOpen(false);
+                } else if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setCollectorSuggestionsOpen(true);
+                  setActiveCollectorSuggestion((index) => Math.min(index + 1, Math.max(filteredCollectors.length - 1, 0)));
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setActiveCollectorSuggestion((index) => Math.max(index - 1, 0));
+                } else if (event.key === "Enter" && collectorSuggestionsOpen && filteredCollectors.length > 0) {
+                  event.preventDefault();
+                  selectCollector(filteredCollectors[activeCollectorSuggestion] ?? filteredCollectors[0]);
+                }
+              }}
+              className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50 placeholder:text-chalk-400 focus:border-clock-amber focus:outline-none focus:ring-1 focus:ring-clock-amber"
+            />
+            {collectorSuggestionsOpen && (
+              <div id="distribution-collector-suggestions" role="listbox" aria-label="Collector suggestions" className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-[8px] border border-pitch-700 bg-pitch-950 py-1 shadow-2xl">
+                {filteredCollectors.length > 0 ? filteredCollectors.map((collector, index) => (
+                  <button
+                    key={collector.hr_code}
+                    type="button"
+                    role="option"
+                    aria-selected={collectorHrCode === collector.hr_code || activeCollectorSuggestion === index}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setActiveCollectorSuggestion(index)}
+                    onClick={() => selectCollector(collector)}
+                    className={"flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-pitch-800 focus:bg-pitch-800 focus:outline-none " + (activeCollectorSuggestion === index ? "bg-pitch-800" : "")}
+                  >
+                    <span className="shrink-0 rounded-md border border-pitch-700 bg-pitch-900 px-2 py-1 font-mono text-xs font-semibold text-clock-amber">{collector.hr_code}</span>
+                    <span className="min-w-0 truncate text-chalk-50">{collector.full_name}</span>
+                  </button>
+                )) : <p className="px-3 py-3 text-sm text-chalk-300">No collectors match that HR Code or name.</p>}
+              </div>
+            )}
+            {collectorHrCode && <p className="mt-1 text-xs text-emerald-200">Selected: {collectorHrCode}</p>}
+          </div>
           <label className="text-sm text-chalk-200">Task
             <select required value={task} onChange={(event) => handleTaskSelectChange(event.target.value)} className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50">
               <option value="">Select a task</option>
