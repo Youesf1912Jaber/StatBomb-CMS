@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getAllAssignments } from "@/lib/assignments/queries";
-import { pullTeamSheet } from "@/lib/sync/google-sheets";
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
 import type { AssignmentTaskTimerRow } from "@/types/database.types";
 
@@ -11,9 +10,6 @@ export const dynamic = "force-dynamic";
 type SearchParams = { from?: string; to?: string; task?: string; collector?: string; status?: string };
 type Assignment = Awaited<ReturnType<typeof getAllAssignments>>[number];
 
-function normalizeHrCode(value: string | null | undefined) {
-  return (value ?? "").trim().toUpperCase().replace(/\s+/g, "");
-}
 function dateValue(value: string | null | undefined) {
   return value ? value.slice(0, 10) : "";
 }
@@ -52,13 +48,11 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
   const selectedStatus = params.status ?? "";
   const supabase = createClient();
 
-  const [allAssignments, timerResult, profileResult, teamSheetCollectors] = await Promise.all([
+  const [allAssignments, timerResult, profileResult] = await Promise.all([
     getAllAssignments(supabase),
     supabase.from("assignment_task_timers").select("*").order("started_at", { ascending: true }),
-    // Archived profiles are used only to resolve old assignment IDs.
-    // The Team Sheet is the source of truth for the current collector roster.
-    supabase.from("profiles").select("id, full_name, email, hr_code, deleted_at").eq("role", "collector"),
-    pullTeamSheet(),
+    // Match the Admin > Collectors page: every non-deleted profile, including protected admins.
+    supabase.from("profiles").select("id, full_name, email, hr_code, role, is_protected_admin").is("deleted_at", null).order("full_name"),
   ]);
   if (timerResult.error) throw timerResult.error;
   if (profileResult.error) throw profileResult.error;
@@ -66,16 +60,8 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
   const timers = (timerResult.data ?? []) as AssignmentTaskTimerRow[];
   const profiles = profileResult.data ?? [];
   const profileById = new Map(profiles.map((p) => [p.id, p]));
-  const rosterByHrCode = new Map(
-    teamSheetCollectors
-      .filter((collector) => collector.full_name && normalizeHrCode(collector.hr_code))
-      .map((collector) => [normalizeHrCode(collector.hr_code), collector] as const)
-  );
-  const currentRosterHrCodes = new Set(rosterByHrCode.keys());
-  const currentRosterAssignments = allAssignments.filter((assignment) => {
-    const profile = profileById.get(assignment.collector_id);
-    return currentRosterHrCodes.has(normalizeHrCode(profile?.hr_code));
-  });
+  // Only analyze assignments whose owner is still listed in Admin > Collectors.
+  const currentRosterAssignments = allAssignments.filter((assignment) => profileById.has(assignment.collector_id));
   const timersByAssignment = new Map<string, AssignmentTaskTimerRow[]>();
   for (const timer of timers) {
     const bucket = timersByAssignment.get(timer.assignment_id) ?? [];
@@ -90,7 +76,7 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
   });
   const collectorFiltered = dateFiltered.filter((a) => {
     if (!selectedCollector) return true;
-    return normalizeHrCode(profileById.get(a.collector_id)?.hr_code) === normalizeHrCode(selectedCollector);
+    return a.collector_id === selectedCollector;
   });
   const statusFiltered = collectorFiltered.filter((a) => !selectedStatus || a.status === selectedStatus);
   const filtered = statusFiltered.filter((a) => !validTask || (timersByAssignment.get(a.id) ?? []).some((t) => t.task_name === validTask));
@@ -112,11 +98,9 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
   const collectorStats = new Map<string, { name: string; hrCode: string; assignments: number; completed: number; taskSeconds: number; taskCount: number; notStarted: number; active: number }>();
   for (const assignment of filtered) {
     const profile = profileById.get(assignment.collector_id);
-    const hrKey = normalizeHrCode(profile?.hr_code);
-    const sheetCollector = rosterByHrCode.get(hrKey);
-    if (!sheetCollector) continue;
-    const name = sheetCollector.full_name;
-    const stats = collectorStats.get(hrKey) ?? { name, hrCode: sheetCollector.hr_code, assignments: 0, completed: 0, taskSeconds: 0, taskCount: 0, notStarted: 0, active: 0 };
+    if (!profile) continue;
+    const name = profile.full_name ?? profile.email ?? "—";
+    const stats = collectorStats.get(assignment.collector_id) ?? { name, hrCode: profile.hr_code ?? "—", assignments: 0, completed: 0, taskSeconds: 0, taskCount: 0, notStarted: 0, active: 0 };
     stats.assignments += 1;
     if (assignment.status === "Completed") stats.completed += 1;
     if (assignment.status === "Not Started") stats.notStarted += 1;
@@ -124,7 +108,7 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
     for (const timer of (timersByAssignment.get(assignment.id) ?? []).filter((t) => !validTask || t.task_name === validTask)) {
       if (timer.ended_at && timer.duration_seconds !== null) { stats.taskSeconds += timer.duration_seconds; stats.taskCount += 1; }
     }
-    collectorStats.set(hrKey, stats);
+    collectorStats.set(assignment.collector_id, stats);
   }
   const collectorRows = [...collectorStats.entries()].map(([id, s]) => ({ id, ...s, avg: s.taskCount ? Math.round(s.taskSeconds / s.taskCount) : null })).sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
 
@@ -168,7 +152,7 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
         <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-chalk-200">Collector
           <select name="collector" defaultValue={selectedCollector} className="mt-2 block min-h-10 w-full rounded-lg border border-pitch-700 bg-pitch-900 px-3 text-sm text-chalk-50">
             <option value="">All collectors</option>
-            {[...rosterByHrCode.values()].sort((a, b) => a.full_name.localeCompare(b.full_name)).map((collector) => <option key={normalizeHrCode(collector.hr_code)} value={collector.hr_code}>{collector.full_name} · {collector.hr_code}</option>)}
+            {[...profiles].sort((a, b) => (a.full_name ?? a.email ?? "").localeCompare(b.full_name ?? b.email ?? "")).map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name ?? profile.email ?? "—"}{profile.hr_code ? ` · ${profile.hr_code}` : ""}{profile.role === "admin" ? " · Admin" : ""}{profile.is_protected_admin ? " · Protected" : ""}</option>)}
           </select>
         </label>
         <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-chalk-200">Task
@@ -234,18 +218,17 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
         <div className="divide-y divide-pitch-800">
           {filtered.slice().sort((a, b) => (b.shift_date ?? b.match.match_date).localeCompare(a.shift_date ?? a.match.match_date)).map((assignment) => {
             const profile = profileById.get(assignment.collector_id);
-            const sheetCollector = rosterByHrCode.get(normalizeHrCode(profile?.hr_code));
             const matchTimers = (timersByAssignment.get(assignment.id) ?? []).filter((t) => !validTask || t.task_name === validTask);
             const seconds = matchTimers.reduce((sum, t) => sum + (t.duration_seconds ?? 0), 0);
             return <details key={assignment.id} className="group">
               <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-4 transition hover:bg-pitch-900/60 sm:px-5 [&::-webkit-details-marker]:hidden">
                 <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-pitch-700 bg-pitch-900 text-clock-amber transition group-open:rotate-90">›</span>
-                <span className="min-w-0 flex-1"><span className="block break-words font-semibold text-chalk-50">{assignment.match.home_team} <span className="text-clock-amber">vs</span> {assignment.match.away_team}</span><span className="mt-1 block text-xs text-chalk-300">Match ID {assignment.match.external_id} · {formatDate(assignment.match.match_date)} · {sheetCollector?.full_name ?? "—"} · {assignment.task} · {assignment.half}</span></span>
+                <span className="min-w-0 flex-1"><span className="block break-words font-semibold text-chalk-50">{assignment.match.home_team} <span className="text-clock-amber">vs</span> {assignment.match.away_team}</span><span className="mt-1 block text-xs text-chalk-300">Match ID {assignment.match.external_id} · {formatDate(assignment.match.match_date)} · {profile?.full_name ?? profile?.email ?? "—"} · {assignment.task} · {assignment.half}</span></span>
                 <span className="font-mono text-xs text-chalk-200">{duration(seconds)}</span><StatusPill status={assignment.status} />
               </summary>
               <div className="border-t border-pitch-800 bg-black/10 px-3 py-4 sm:px-5">
                 <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-                  <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Collector</p><p className="mt-1 break-words text-sm font-semibold text-chalk-50">{sheetCollector?.full_name ?? "—"}</p><p className="mt-1 font-mono text-[10px] text-chalk-300">{sheetCollector?.hr_code ?? "—"}</p></div>
+                  <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Collector</p><p className="mt-1 break-words text-sm font-semibold text-chalk-50">{profile?.full_name ?? profile?.email ?? "—"}</p><p className="mt-1 font-mono text-[10px] text-chalk-300">{profile?.hr_code ?? "—"}</p></div>
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Shift date</p><p className="mt-1 text-sm font-semibold text-chalk-50">{formatDate(assignment.shift_date ?? assignment.match.match_date)}</p></div>
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Assignment status</p><div className="mt-2"><StatusPill status={assignment.status} /></div></div>
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Tracked task time</p><p className="mt-1 font-mono text-sm font-semibold text-chalk-50">{duration(seconds)}</p></div>
