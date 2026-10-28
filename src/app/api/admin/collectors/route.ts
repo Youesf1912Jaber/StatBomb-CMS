@@ -195,14 +195,14 @@ export async function POST(request: Request) {
       for (const row of sheetRows) {
         const hrCode = row.hr_code.replace(/[\u200b-\u200f\u202a-\u202e]/g, "").trim().toUpperCase();
         const email = row.email.trim().toLowerCase();
-        const fullName = row.full_name.replace(/\\s+/g, " ").trim();
+        const fullName = row.full_name.replace(/\s+/g, " ").trim();
         if (!hrCode || seenHr.has(hrCode)) {
           errors += 1;
           rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: !hrCode ? "Missing HR-Code in the Team sheet." : "Duplicate HR-Code in the Team sheet." });
           continue;
         }
         seenHr.add(hrCode);
-        if (!fullName || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+        if (!fullName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           errors += 1;
           rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: !fullName ? "Name is required." : "A valid email is required to create or sync this member." });
           continue;
