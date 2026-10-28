@@ -201,7 +201,7 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
                 <td className="whitespace-nowrap px-4 py-3 font-medium text-chalk-50">{row.name.replace("  ", " ")}</td>
                 <td className="whitespace-nowrap px-4 py-3 font-mono text-chalk-50">{row.avg === null ? "—" : duration(row.avg)}</td>
                 <td className="px-4 py-3 tabular-nums text-chalk-100">{row.completed}</td><td className="px-4 py-3 tabular-nums text-sky-200">{row.active}</td>
-                <td className="whitespace-nowrap px-4 py-3 font-mono text-chalk-100">{duration(row.seconds)}</td>
+                <td className="whitespace-nowrap px-4 py-3 font-mono text-chalk-100"><LiveTrackedDuration timers={timerInScope.filter((timer) => timer.task_name === row.name)} /></td>
                 <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="h-1.5 w-24 overflow-hidden rounded-full bg-pitch-800"><div className="h-full rounded-full bg-clock-amber" style={{ width: `${row.completed + row.active ? row.completed / (row.completed + row.active) * 100 : 0}%` }} /></div><span className="text-xs text-chalk-200">{row.completed + row.active ? Math.round(row.completed / (row.completed + row.active) * 100) : 0}%</span></div></td>
               </tr>)}
             </tbody>
