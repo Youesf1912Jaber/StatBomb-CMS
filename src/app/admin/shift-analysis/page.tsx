@@ -93,8 +93,6 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
   const filtered = statusFiltered.filter((a) => !validTask || (timersByAssignment.get(a.id) ?? []).some((t) => t.task_name === validTask));
 
   const timerInScope = filtered.flatMap((a) => timersByAssignment.get(a.id) ?? []).filter((t) => !validTask || t.task_name === validTask);
-  const completedTimers = timerInScope.filter((t) => t.ended_at && t.duration_seconds !== null);
-  const totalTrackedSeconds = completedTimers.reduce((sum, t) => sum + (t.duration_seconds ?? 0), 0);
   const activeTimers = timerInScope.filter((t) => !t.ended_at);
   const taskCounts = new Map<string, { completed: number; active: number; seconds: number; count: number }>();
   for (const name of ASSIGNMENT_TASK_NAMES) taskCounts.set(name, { completed: 0, active: 0, seconds: 0, count: 0 });
