@@ -9,6 +9,7 @@ import { getUnreadNotificationCount } from "@/lib/notifications/queries";
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/collector" },
+  { label: "Tracking Analysis", href: "/collector/tracking-analysis" },
   { label: "My Teammates", href: "/collector/teammates" },
   { label: "My Deductions", href: "/collector/deductions" },
   { label: "My FF Shots", href: "/collector/ff-shots" },
