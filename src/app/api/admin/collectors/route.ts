@@ -172,7 +172,7 @@ export async function POST(request: Request) {
 
       const allProfiles = profilesResult.data ?? [];
       const activeProfiles = allProfiles.filter((profile) => !profile.deleted_at);
-      const profilesByHr = new Map(activeProfiles.filter((profile) => profile.hr_code).map((profile) => [profile.hr_code!.replace(/[\\u200b-\\u200f\\u202a-\\u202e]/g, "").trim().toUpperCase(), profile]));
+      const profilesByHr = new Map(activeProfiles.filter((profile) => profile.hr_code).map((profile) => [profile.hr_code!.replace(/[\u200b-\u200f\u202a-\u202e]/g, "").trim().toUpperCase(), profile]));
       const profilesByEmail = new Map(activeProfiles.map((profile) => [profile.email.trim().toLowerCase(), profile]));
       const archivedByHr = new Map(allProfiles.filter((profile) => profile.deleted_at && profile.hr_code).map((profile) => [profile.hr_code!.trim().toUpperCase(), profile]));
       const archivedByEmail = new Map(allProfiles.filter((profile) => profile.deleted_at).map((profile) => [profile.email.trim().toLowerCase(), profile]));
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
       let skipped = 0;
       let errors = 0;
       for (const row of sheetRows) {
-        const hrCode = row.hr_code.replace(/[\\u200b-\\u200f\\u202a-\\u202e]/g, "").trim().toUpperCase();
+        const hrCode = row.hr_code.replace(/[\u200b-\u200f\u202a-\u202e]/g, "").trim().toUpperCase();
         const email = row.email.trim().toLowerCase();
         const fullName = row.full_name.replace(/\\s+/g, " ").trim();
         if (!hrCode || seenHr.has(hrCode)) {
@@ -256,7 +256,7 @@ export async function POST(request: Request) {
           }
           profilesByHr.delete(existing.hr_code?.trim().toUpperCase() ?? "");
           profilesByEmail.delete(existing.email.trim().toLowerCase());
-          if (saved.data.hr_code) profilesByHr.set(saved.data.hr_code.replace(/[\\u200b-\\u200f\\u202a-\\u202e]/g, "").trim().toUpperCase(), saved.data);
+          if (saved.data.hr_code) profilesByHr.set(saved.data.hr_code.replace(/[\u200b-\u200f\u202a-\u202e]/g, "").trim().toUpperCase(), saved.data);
           profilesByEmail.set(saved.data.email.trim().toLowerCase(), saved.data);
           updated += 1;
           rows.push({ hr_code: hrCode, full_name: fullName, outcome: "updated", message: plan.message });
