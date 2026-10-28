@@ -185,12 +185,12 @@ export default async function CollectorShiftAnalysisPage({ params, searchParams 
             return <details key={assignment.id} className="group">
               <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-4 transition hover:bg-pitch-900/60 sm:px-5 [&::-webkit-details-marker]:hidden">
                 <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-pitch-700 bg-pitch-900 text-clock-amber transition group-open:rotate-90">›</span>
-                <span className="min-w-0 flex-1"><span className="block break-words font-semibold text-chalk-50">{assignment.match.home_team} <span className="text-clock-amber">vs</span> {assignment.match.away_team}</span><span className="mt-1 block text-xs text-chalk-300">Match ID {assignment.match.external_id} · {formatDate(assignment.shift_date ?? assignment.match.match_date)} · {assignment.task} · {assignment.half}</span></span>
+                <span className="min-w-0 flex-1"><span className="block break-words font-semibold text-chalk-50">{assignment.match.home_team} <span className="text-clock-amber">vs</span> {assignment.match.away_team}</span><span className="mt-1 block text-xs text-chalk-300">Match ID {assignment.match.external_id} · {formatDate(assignment.shift_date)} · {assignment.task} · {assignment.half}</span></span>
                 <span className="font-mono text-xs text-chalk-200">{duration(seconds)}</span><StatusPill status={assignment.status} />
               </summary>
               <div className="border-t border-pitch-800 bg-black/10 px-3 py-4 sm:px-5">
                 <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3">
-                  <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Shift date</p><p className="mt-1 text-sm font-semibold text-chalk-50">{formatDate(assignment.shift_date ?? assignment.match.match_date)}</p></div>
+                  <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Shift date</p><p className="mt-1 text-sm font-semibold text-chalk-50">{formatDate(assignment.shift_date)}</p></div>
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Assignment status</p><div className="mt-2"><StatusPill status={assignment.status} /></div></div>
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Tracked task time</p><p className="mt-1 font-mono text-sm font-semibold text-chalk-50">{duration(seconds)}</p></div>
                 </div>
