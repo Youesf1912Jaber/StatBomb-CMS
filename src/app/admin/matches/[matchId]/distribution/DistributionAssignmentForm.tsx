@@ -219,7 +219,13 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
               aria-controls="distribution-collector-suggestions"
               aria-autocomplete="list"
               role="combobox"
-              onFocus={() => setCollectorSuggestionsOpen(true)}
+              onFocus={(event) => {
+                if (collectorHrCode) {
+                  event.currentTarget.select();
+                } else {
+                  setCollectorSuggestionsOpen(true);
+                }
+              }}
               onChange={(event) => {
                 const value = event.target.value;
                 setCollectorSearch(value);
