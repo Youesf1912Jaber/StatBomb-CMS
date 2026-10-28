@@ -166,59 +166,139 @@ export async function POST(request: Request) {
       if (body.action !== "sync-team-roster") throw new Error("Unsupported collector operation.");
       const [sheetRows, profilesResult] = await Promise.all([
         pullTeamSheet(),
-        admin.service.from("profiles").select("*").is("deleted_at", null),
+        admin.service.from("profiles").select("*"),
       ]);
       if (profilesResult.error) throw new Error("Unable to inspect team members.");
-      const profilesByHr = new Map((profilesResult.data ?? []).filter((profile) => profile.hr_code).map((profile) => [profile.hr_code!.trim().toUpperCase(), profile]));
+
+      const allProfiles = profilesResult.data ?? [];
+      const activeProfiles = allProfiles.filter((profile) => !profile.deleted_at);
+      const profilesByHr = new Map(activeProfiles.filter((profile) => profile.hr_code).map((profile) => [profile.hr_code!.replace(/[\\u200b-\\u200f\\u202a-\\u202e]/g, "").trim().toUpperCase(), profile]));
+      const profilesByEmail = new Map(activeProfiles.map((profile) => [profile.email.trim().toLowerCase(), profile]));
+      const archivedByHr = new Map(allProfiles.filter((profile) => profile.deleted_at && profile.hr_code).map((profile) => [profile.hr_code!.trim().toUpperCase(), profile]));
+      const archivedByEmail = new Map(allProfiles.filter((profile) => profile.deleted_at).map((profile) => [profile.email.trim().toLowerCase(), profile]));
+      const authUsers: Array<{ id: string; email: string }> = [];
+      for (let page = 1; page <= 20; page += 1) {
+        const users = await admin.service.auth.admin.listUsers({ page, perPage: 1000 });
+        if (users.error) throw new Error("Unable to inspect Auth accounts for Team Sheet sync.");
+        authUsers.push(...users.data.users.filter((user) => user.email).map((user) => ({ id: user.id, email: user.email!.trim().toLowerCase() })));
+        if (users.data.users.length < 1000) break;
+      }
+      const authByEmail = new Map(authUsers.map((user) => [user.email, user]));
+
       const seenHr = new Set<string>();
-      const rows: Array<{ hr_code: string; outcome: "updated" | "skipped" | "error"; message: string }> = [];
+      const seenEmail = new Set<string>();
+      const rows: Array<{ hr_code: string; full_name?: string; outcome: "created" | "updated" | "skipped" | "error"; message: string }> = [];
+      let created = 0;
       let updated = 0;
       let skipped = 0;
       let errors = 0;
       for (const row of sheetRows) {
-        if (!row.hr_code || seenHr.has(row.hr_code)) {
+        const hrCode = row.hr_code.replace(/[\\u200b-\\u200f\\u202a-\\u202e]/g, "").trim().toUpperCase();
+        const email = row.email.trim().toLowerCase();
+        const fullName = row.full_name.replace(/\\s+/g, " ").trim();
+        if (!hrCode || seenHr.has(hrCode)) {
           errors += 1;
-          rows.push({ hr_code: row.hr_code, outcome: "error", message: "Missing or duplicate HR-Code in the Team sheet." });
+          rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: !hrCode ? "Missing HR-Code in the Team sheet." : "Duplicate HR-Code in the Team sheet." });
           continue;
         }
-        seenHr.add(row.hr_code);
-        const existing = profilesByHr.get(row.hr_code);
-        const plan = planTeamRosterProfileUpdate(existing, row);
-        if (plan.outcome === "skipped") {
+        seenHr.add(hrCode);
+        if (!fullName || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+          errors += 1;
+          rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: !fullName ? "Name is required." : "A valid email is required to create or sync this member." });
+          continue;
+        }
+        if (seenEmail.has(email)) {
+          errors += 1;
+          rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: "Duplicate email in the Team sheet." });
+          continue;
+        }
+        seenEmail.add(email);
+
+        const existingByHr = profilesByHr.get(hrCode);
+        const existingByEmail = profilesByEmail.get(email);
+        if (existingByHr && existingByEmail && existingByHr.id !== existingByEmail.id) {
+          errors += 1;
+          rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: "HR-Code and email belong to different existing profiles." });
+          continue;
+        }
+        const existing = existingByHr ?? existingByEmail;
+        if (!existing && (archivedByHr.has(hrCode) || archivedByEmail.has(email))) {
           skipped += 1;
-          rows.push({ hr_code: row.hr_code, outcome: "skipped", message: plan.message });
+          rows.push({ hr_code: hrCode, full_name: fullName, outcome: "skipped", message: "This HR-Code or email belongs to an archived member. Restore that profile manually before syncing." });
           continue;
         }
-        if (plan.outcome === "error" || !existing) {
-          errors += 1;
-          rows.push({ hr_code: row.hr_code, outcome: "error", message: plan.outcome === "error" ? plan.message : "Name and a valid email are required." });
-          continue;
-        }
-        if (plan.authEmail) {
-          const authUpdate = await admin.service.auth.admin.updateUserById(existing.id, { email: plan.authEmail, email_confirm: true });
-          if (authUpdate.error) {
-            errors += 1;
-            rows.push({ hr_code: row.hr_code, outcome: "error", message: "Unable to update the Auth email." });
+
+        if (existing) {
+          const plan = planTeamRosterProfileUpdate(existing, { ...row, hr_code: hrCode, full_name: fullName, email });
+          if (plan.outcome === "skipped") {
+            skipped += 1;
+            rows.push({ hr_code: hrCode, full_name: fullName, outcome: "skipped", message: plan.message });
             continue;
           }
-        }
-        const saved = await admin.service.from("profiles").update(plan.fields).eq("id", existing.id).select("id").single();
-        if (saved.error) {
-          errors += 1;
-          rows.push({ hr_code: row.hr_code, outcome: "error", message: "Unable to update the profile roster fields." });
+          if (plan.outcome === "error") {
+            errors += 1;
+            rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: plan.message });
+            continue;
+          }
+          if (plan.authEmail) {
+            const authUpdate = await admin.service.auth.admin.updateUserById(existing.id, { email: plan.authEmail, email_confirm: true });
+            if (authUpdate.error) {
+              errors += 1;
+              rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: "Unable to update the Auth email." });
+              continue;
+            }
+          }
+          const saved = await admin.service.from("profiles").update(plan.fields).eq("id", existing.id).select("*").single();
+          if (saved.error) {
+            errors += 1;
+            rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: "Unable to update the profile roster fields." });
+            continue;
+          }
+          profilesByHr.delete(existing.hr_code?.trim().toUpperCase() ?? "");
+          profilesByEmail.delete(existing.email.trim().toLowerCase());
+          if (saved.data.hr_code) profilesByHr.set(saved.data.hr_code.replace(/[\\u200b-\\u200f\\u202a-\\u202e]/g, "").trim().toUpperCase(), saved.data);
+          profilesByEmail.set(saved.data.email.trim().toLowerCase(), saved.data);
+          updated += 1;
+          rows.push({ hr_code: hrCode, full_name: fullName, outcome: "updated", message: plan.message });
+          const audit = await admin.service.from("activity_logs").insert({ user_id: admin.user.id, assignment_id: null, action: "collector_updated", old_value: { profile_id: existing.id }, new_value: { profile_id: existing.id, hr_code: hrCode, source: "Team sheet" } });
+          if (audit.error) console.error("Team roster update audit failed", audit.error.message);
           continue;
         }
-        updated += 1;
-        rows.push({ hr_code: row.hr_code, outcome: "updated", message: plan.message });
-        await admin.service.from("activity_logs").insert({
-          user_id: admin.user.id,
-          assignment_id: null,
-          action: "collector_updated",
-          old_value: { profile_id: existing.id },
-          new_value: { profile_id: existing.id, hr_code: row.hr_code, source: "Team sheet" },
-        });
+
+        let authUser = authByEmail.get(email);
+        let createdAuthId: string | null = null;
+        if (!authUser) {
+          const authCreated = await admin.service.auth.admin.createUser({ email, email_confirm: true, password: randomBytes(32).toString("base64url") });
+          if (authCreated.error || !authCreated.data.user) {
+            errors += 1;
+            rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: "Unable to create the Auth account for this member." });
+            continue;
+          }
+          authUser = { id: authCreated.data.user.id, email };
+          createdAuthId = authUser.id;
+          authByEmail.set(email, authUser);
+        }
+        const profileSaved = await admin.service.from("profiles").upsert({
+          id: authUser.id, email, full_name: fullName, hr_code: hrCode,
+          phone: row.phone, team: row.team, status: row.status, role: "collector",
+        }, { onConflict: "id" }).select("*").single();
+        if (profileSaved.error || !profileSaved.data) {
+          if (createdAuthId) {
+            const rollback = await admin.service.auth.admin.deleteUser(createdAuthId);
+            if (rollback.error) console.error("Unable to roll back orphan Auth user after Team Sheet sync failure.", rollback.error.message);
+          }
+          errors += 1;
+          rows.push({ hr_code: hrCode, full_name: fullName, outcome: "error", message: "Unable to create the profile from this Team Sheet row. Check duplicate HR-Code/email constraints." });
+          continue;
+        }
+        profilesByHr.set(hrCode, profileSaved.data);
+        profilesByEmail.set(email, profileSaved.data);
+        created += 1;
+        rows.push({ hr_code: hrCode, full_name: fullName, outcome: "created", message: "Created a new collector account and profile from the Team sheet. Set the team temporary password if needed." });
+        const audit = await admin.service.from("activity_logs").insert({ user_id: admin.user.id, assignment_id: null, action: "collector_profile_provisioned", old_value: null, new_value: { profile_id: authUser.id, hr_code: hrCode, email, source: "Team sheet" } });
+        if (audit.error) console.error("Team roster creation audit failed", audit.error.message);
       }
-      return NextResponse.json({ result: { updated, skipped, errors, rows } });
+      return NextResponse.json({ result: { created, updated, skipped, errors, rows } });
     } catch (error) {
       if (isCollectorAuthorizationError(error)) {
         return NextResponse.json({ error: error.message }, { status: error.status });
