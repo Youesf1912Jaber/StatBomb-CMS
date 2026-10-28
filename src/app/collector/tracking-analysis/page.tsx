@@ -200,11 +200,11 @@ export default async function TrackingAnalysisPage({ searchParams }: { searchPar
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-3 flex justify-end"><Link href={`/admin/assignments/${assignment.id}`} className="text-xs font-semibold text-clock-amber transition hover:text-white">Open assignment details ↗</Link></div>
+                <div className="mt-3 flex justify-end"><Link href={`/collector/assignments/${assignment.id}`} className="text-xs font-semibold text-clock-amber transition hover:text-white">Open assignment details ↗</Link></div>
               </div>
             </details>;
           })}
-          {assignments.length === 0 && <p className="px-5 py-12 text-center text-sm text-chalk-300">No assignments are currently associated with this profile.</p>}
+          {assignments.length === 0 && <p className="px-5 py-12 text-center text-sm text-chalk-300">No assignments are currently assigned to your account.</p>}
         </div>
       </section>
     </div>
