@@ -245,8 +245,11 @@ export function DistributionAssignmentForm({ matchId, collectors }: Distribution
                   event.preventDefault();
                   setActiveCollectorSuggestion((index) => Math.max(index - 1, 0));
                 } else if (event.key === "Enter" && collectorSuggestionsOpen && filteredCollectors.length > 0) {
-                  event.preventDefault();
-                  selectCollector(filteredCollectors[activeCollectorSuggestion] ?? filteredCollectors[0]);
+                  const selectedSuggestion = filteredCollectors[activeCollectorSuggestion] ?? filteredCollectors[0];
+                  if (selectedSuggestion) {
+                    event.preventDefault();
+                    selectCollector(selectedSuggestion);
+                  }
                 }
               }}
               className="mt-1 block w-full rounded-[8px] border border-pitch-700 bg-pitch-950 px-3 py-2 text-sm text-chalk-50 placeholder:text-chalk-400 focus:border-clock-amber focus:outline-none focus:ring-1 focus:ring-clock-amber"
