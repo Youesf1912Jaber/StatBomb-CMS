@@ -132,19 +132,19 @@ export default async function CollectorShiftAnalysisPage({ params, searchParams 
 
       <form method="get" className="grid gap-3 rounded-xl border border-pitch-700 bg-pitch-950/90 p-4 sm:grid-cols-2 lg:grid-cols-[1.2fr_1.2fr_1.5fr_1.2fr_auto_auto] lg:items-end">
         <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-chalk-200">From date
-          <input type="date" name="from" value={from} max={to || undefined} className="mt-2 block min-h-10 w-full rounded-lg border border-pitch-700 bg-pitch-900 px-3 text-sm text-chalk-50" />
+          <input type="date" name="from" defaultValue={from} max={to || undefined} className="mt-2 block min-h-10 w-full rounded-lg border border-pitch-700 bg-pitch-900 px-3 text-sm text-chalk-50" />
         </label>
         <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-chalk-200">To date
-          <input type="date" name="to" value={to} min={from || undefined} className="mt-2 block min-h-10 w-full rounded-lg border border-pitch-700 bg-pitch-900 px-3 text-sm text-chalk-50" />
+          <input type="date" name="to" defaultValue={to} min={from || undefined} className="mt-2 block min-h-10 w-full rounded-lg border border-pitch-700 bg-pitch-900 px-3 text-sm text-chalk-50" />
         </label>
         <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-chalk-200">Task
-          <select name="task" value={selectedTask} className="mt-2 block min-h-10 w-full rounded-lg border border-pitch-700 bg-pitch-900 px-3 text-sm text-chalk-50">
+          <select name="task" defaultValue={selectedTask} className="mt-2 block min-h-10 w-full rounded-lg border border-pitch-700 bg-pitch-900 px-3 text-sm text-chalk-50">
             <option value="">All tasks</option>
             {ASSIGNMENT_TASK_NAMES.map((name) => <option key={name} value={name}>{name.replace("  ", " ")}</option>)}
           </select>
         </label>
         <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-chalk-200">Status
-          <select name="status" value={selectedStatus} className="mt-2 block min-h-10 w-full rounded-lg border border-pitch-700 bg-pitch-900 px-3 text-sm text-chalk-50">
+          <select name="status" defaultValue={selectedStatus} className="mt-2 block min-h-10 w-full rounded-lg border border-pitch-700 bg-pitch-900 px-3 text-sm text-chalk-50">
             <option value="">All statuses</option><option value="Completed">Completed</option><option value="In Progress">In Progress</option><option value="Overdue">Overdue</option><option value="Not Started">Not Started</option>
           </select>
         </label>
