@@ -103,9 +103,26 @@ export async function getAssignmentsForCollector(
 
 /** All assignments visible to the caller (admin — RLS allows this). */
 export async function getAllAssignments(supabase: Client): Promise<AssignmentWithMatch[]> {
-  const { data, error } = await supabase.from("assignments").select("*");
-  if (error) throw error;
-  return attachMatches(supabase, data ?? []);
+  // PostgREST caps a single response at the configured max row count (commonly 1,000).
+  // Fetch every page in a stable order so analytics and historical drill-downs
+  // don't silently omit older/newer shifts when the assignments table grows.
+  const assignments: Database["public"]["Tables"]["assignments"]["Row"][] = [];
+
+  for (let from = 0; ; from += ASSIGNMENTS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select("*")
+      .order("id", { ascending: true })
+      .range(from, from + ASSIGNMENTS_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const page = data ?? [];
+    assignments.push(...page);
+    if (page.length < ASSIGNMENTS_PAGE_SIZE) break;
+  }
+
+  return attachMatches(supabase, assignments);
 }
 
 /** Admin Dashboard assignments. Hidden rows remain in the database and history. */
