@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAllAssignments } from "@/lib/assignments/queries";
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
 import type { AssignmentTaskTimerRow } from "@/types/database.types";
+import { LiveTrackedDuration } from "@/components/LiveTrackedDuration";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,8 +91,6 @@ export default async function CollectorShiftAnalysisPage({ params, searchParams 
     timersByAssignment.set(timer.assignment_id, bucket);
   }
 
-  const endedTimers = collectorTimers.filter((timer) => timer.ended_at && timer.duration_seconds !== null);
-  const trackedSeconds = endedTimers.reduce((sum, timer) => sum + (timer.duration_seconds ?? 0), 0);
   const completed = assignments.filter((assignment) => assignment.status === "Completed").length;
   const notStarted = assignments.filter((assignment) => assignment.status === "Not Started").length;
   const active = assignments.filter((assignment) => assignment.status === "In Progress" || assignment.status === "Overdue").length;
@@ -125,8 +124,8 @@ export default async function CollectorShiftAnalysisPage({ params, searchParams 
           </div>
           <aside className="min-w-[190px] rounded-xl border border-clock-amber/35 bg-[#031c1a]/90 p-5">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-chalk-200">Tracked task time</p>
-            <p className="mt-3 font-display text-3xl font-bold tabular-nums text-white">{duration(trackedSeconds)}</p>
-            <p className="mt-1 text-xs text-chalk-200">Ended timers · this profile</p>
+            <p className="mt-3 font-display text-3xl font-bold tabular-nums text-white"><LiveTrackedDuration timers={collectorTimers} /></p>
+            <p className="mt-1 text-xs text-chalk-200">Ended + running timers · this profile</p>
           </aside>
         </div>
       </header>
@@ -170,7 +169,7 @@ export default async function CollectorShiftAnalysisPage({ params, searchParams 
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-pitch-900 text-[10px] uppercase tracking-wide text-chalk-200"><tr><th className="px-4 py-3">Task</th><th className="px-4 py-3">Avg duration</th><th className="px-4 py-3">Completed timers</th><th className="px-4 py-3">Running</th><th className="px-4 py-3">Total tracked</th></tr></thead>
             <tbody className="divide-y divide-pitch-800">
-              {taskRows.map((row) => <tr key={row.name} className="transition hover:bg-pitch-900/70"><td className="whitespace-nowrap px-4 py-3 font-medium text-chalk-50">{row.name.replace("  ", " ")}</td><td className="whitespace-nowrap px-4 py-3 font-mono text-chalk-50">{row.avg === null ? "—" : duration(row.avg)}</td><td className="px-4 py-3 tabular-nums text-emerald-200">{row.count}</td><td className="px-4 py-3 tabular-nums text-sky-200">{row.running}</td><td className="whitespace-nowrap px-4 py-3 font-mono text-chalk-100">{duration(row.seconds)}</td></tr>)}
+              {taskRows.map((row) => <tr key={row.name} className="transition hover:bg-pitch-900/70"><td className="whitespace-nowrap px-4 py-3 font-medium text-chalk-50">{row.name.replace("  ", " ")}</td><td className="whitespace-nowrap px-4 py-3 font-mono text-chalk-50">{row.avg === null ? "—" : duration(row.avg)}</td><td className="px-4 py-3 tabular-nums text-emerald-200">{row.count}</td><td className="px-4 py-3 tabular-nums text-sky-200">{row.running}</td><td className="whitespace-nowrap px-4 py-3 font-mono text-chalk-100"><LiveTrackedDuration timers={collectorTimers.filter((timer) => timer.task_name === row.name)} /></td></tr>)}
             </tbody>
           </table>
         </div>
@@ -181,18 +180,17 @@ export default async function CollectorShiftAnalysisPage({ params, searchParams 
         <div className="divide-y divide-pitch-800">
           {assignments.map((assignment) => {
             const matchTimers = timersByAssignment.get(assignment.id) ?? [];
-            const seconds = matchTimers.filter((timer) => timer.ended_at && timer.duration_seconds !== null).reduce((sum, timer) => sum + (timer.duration_seconds ?? 0), 0);
             return <details key={assignment.id} className="group">
               <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 px-4 py-4 transition hover:bg-pitch-900/60 sm:px-5 [&::-webkit-details-marker]:hidden">
                 <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-pitch-700 bg-pitch-900 text-clock-amber transition group-open:rotate-90">›</span>
                 <span className="min-w-0 flex-1"><span className="block break-words font-semibold text-chalk-50">{assignment.match.home_team} <span className="text-clock-amber">vs</span> {assignment.match.away_team}</span><span className="mt-1 block text-xs text-chalk-300">Match ID {assignment.match.external_id} · {formatDate(assignment.shift_date)} · {assignment.task} · {assignment.half}</span></span>
-                <span className="font-mono text-xs text-chalk-200">{duration(seconds)}</span><StatusPill status={assignment.status} />
+                <span className="font-mono text-xs text-chalk-200"><LiveTrackedDuration timers={matchTimers} /></span><StatusPill status={assignment.status} />
               </summary>
               <div className="border-t border-pitch-800 bg-black/10 px-3 py-4 sm:px-5">
                 <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3">
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Shift date</p><p className="mt-1 text-sm font-semibold text-chalk-50">{formatDate(assignment.shift_date)}</p></div>
                   <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Assignment status</p><div className="mt-2"><StatusPill status={assignment.status} /></div></div>
-                  <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Tracked task time</p><p className="mt-1 font-mono text-sm font-semibold text-chalk-50">{duration(seconds)}</p></div>
+                  <div className="rounded-lg border border-pitch-800 bg-pitch-900/70 p-3"><p className="text-[9px] uppercase tracking-wide text-chalk-300">Tracked task time</p><p className="mt-1 font-mono text-sm font-semibold text-chalk-50"><LiveTrackedDuration timers={matchTimers} /></p></div>
                 </div>
                 <div className="overflow-x-auto rounded-lg border border-pitch-800">
                   <table className="w-full min-w-[720px] text-left text-xs">
@@ -201,7 +199,7 @@ export default async function CollectorShiftAnalysisPage({ params, searchParams 
                       {ASSIGNMENT_TASK_NAMES.filter((name) => !selectedTask || name === selectedTask).map((name) => {
                         const timer = matchTimers.find((item) => item.task_name === name);
                         const timerStatus = !timer ? "Not started" : timer.ended_at ? "Ended" : "Running";
-                        return <tr key={name} className="hover:bg-pitch-900/50"><td className="px-3 py-2.5 font-medium text-chalk-50">{name.replace("  ", " ")}</td><td className="whitespace-nowrap px-3 py-2.5 text-chalk-200">{timer ? new Date(timer.started_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—"}</td><td className="whitespace-nowrap px-3 py-2.5 text-chalk-200">{timer?.ended_at ? new Date(timer.ended_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—"}</td><td className="whitespace-nowrap px-3 py-2.5 font-mono text-chalk-50">{timer?.ended_at && timer.duration_seconds !== null ? duration(timer.duration_seconds) : timer && !timer.ended_at ? "Running" : "—"}</td><td className="px-3 py-2.5"><StatusPill status={timerStatus} /></td></tr>;
+                        return <tr key={name} className="hover:bg-pitch-900/50"><td className="px-3 py-2.5 font-medium text-chalk-50">{name.replace("  ", " ")}</td><td className="whitespace-nowrap px-3 py-2.5 text-chalk-200">{timer ? new Date(timer.started_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—"}</td><td className="whitespace-nowrap px-3 py-2.5 text-chalk-200">{timer?.ended_at ? new Date(timer.ended_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—"}</td><td className="whitespace-nowrap px-3 py-2.5 font-mono text-chalk-50">{timer ? <LiveTrackedDuration timers={[timer]} /> : "—"}</td><td className="px-3 py-2.5"><StatusPill status={timerStatus} /></td></tr>;
                       })}
                     </tbody>
                   </table>
