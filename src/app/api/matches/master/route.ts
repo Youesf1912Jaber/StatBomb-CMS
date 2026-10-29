@@ -51,10 +51,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, days });
     }
 
-    const { data: activeWindowRows, error: activeWindowError } = await supabase.rpc("get_match_master_active_window");
-    if (activeWindowError) throw activeWindowError;
-    const activeWindow = activeWindowRows?.[0] ?? null;
-
+    // Historical ETA dates and Match ID searches must query the full retained
+    // cache. The 10-day window is only the default day-picker, not an archive
+    // deletion or a restriction on explicit searches.
     let cacheQuery = supabase
       .from("match_master_cache")
       .select("match_id, eta_date, sla_sort_at, home_team, away_team, match_data")
@@ -62,21 +61,19 @@ export async function GET(request: Request) {
       .order("match_id", { ascending: true })
       .limit(1000);
 
-    // Historical rows remain in the cache as archive, but Match Master only
-    // exposes rows inside the persisted active window.
-    if (!activeWindow) {
-      return NextResponse.json({ success: true, count: 0, matches: [], activeWindow: null });
-    }
-    cacheQuery = cacheQuery.gte("eta_date", activeWindow.window_start_date).lte("eta_date", activeWindow.window_end_date);
     if (etaDate) {
-      if (etaDate < activeWindow.window_start_date || etaDate > activeWindow.window_end_date) {
-        return NextResponse.json({ success: true, count: 0, matches: [], archived: true, activeWindow });
-      }
+      // Apply the date filter before the result limit so old days remain searchable.
       cacheQuery = cacheQuery.eq("eta_date", etaDate);
     }
     if (query) {
-      const pattern = `%${query}%`;
-      cacheQuery = cacheQuery.or(`match_id.ilike.${pattern},home_team.ilike.${pattern},away_team.ilike.${pattern}`);
+      if (/^\\d+$/.test(query)) {
+        // Match IDs are commonly numeric; exact lookup avoids missing an older
+        // row just because it falls outside the first page of the active cache.
+        cacheQuery = cacheQuery.eq("match_id", query);
+      } else {
+        const pattern = `%${query}%`;
+        cacheQuery = cacheQuery.or(`match_id.ilike.${pattern},home_team.ilike.${pattern},away_team.ilike.${pattern}`);
+      }
     }
 
     const { data: cachedRows, error: cacheError } = await cacheQuery;
@@ -136,7 +133,7 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ success: true, count: matches.length, matches, activeWindow });
+    return NextResponse.json({ success: true, count: matches.length, matches });
   } catch (error) {
     console.error("Match Master cache query failed", error);
     return NextResponse.json({ success: false, error: "Match Master data could not be loaded from cache." }, { status: 500 });
