@@ -2,8 +2,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell, type NavItem } from "@/components/AppShell";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
-import { getCollectorSlaAlertAssignments } from "@/lib/assignments/queries";
-import { toSlaAlertItems, type SlaAlertAssignment } from "@/lib/assignments/sla-alarm";
+import { getSlaAlertItems } from "@/lib/assignments/sla-alert-queries";
+import type { SlaAlertAssignment } from "@/lib/assignments/sla-alarm";
 import { createClient } from "@/lib/supabase/server";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
 
@@ -31,16 +31,13 @@ function isCollectorNotificationsPath(pathname: string): boolean {
 
 async function loadSlaAlertAssignments(
   supabase: ReturnType<typeof createClient>,
-  collectorId: string,
-  collectorName: string
 ): Promise<SlaAlertAssignment[]> {
   const pathname = headers().get("x-pathname") ?? "";
   if (isCollectorNotificationsPath(pathname)) {
     return [];
   }
 
-  const assignments = await getCollectorSlaAlertAssignments(supabase, collectorId);
-  return toSlaAlertItems(assignments, () => collectorName);
+  return getSlaAlertItems(supabase, "collector");
 }
 
 export default async function CollectorLayout({
@@ -59,13 +56,10 @@ export default async function CollectorLayout({
   }
 
   const supabase = createClient();
-  const unreadCount = await getUnreadNotificationCount(supabase, profile.id);
-  const collectorName = profile.full_name ?? profile.email;
-  const slaAlertAssignments = await loadSlaAlertAssignments(
-    supabase,
-    profile.id,
-    collectorName
-  );
+  const [unreadCount, slaAlertAssignments] = await Promise.all([
+    getUnreadNotificationCount(supabase, profile.id),
+    loadSlaAlertAssignments(supabase),
+  ]);
 
   return (
     <AppShell
