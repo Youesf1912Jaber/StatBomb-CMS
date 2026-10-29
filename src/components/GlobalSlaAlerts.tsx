@@ -1,15 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getAdminDashboardAssignments, getAssignmentsForCollector } from "@/lib/assignments/queries";
 import {
   isSlaWarningActive,
   nextSlaAlertCheck,
-  toSlaAlertItems,
   warningEventId,
   type SlaAlertAssignment,
 } from "@/lib/assignments/sla-alarm";
 import { createClient } from "@/lib/supabase/client";
+import { getSlaAlertItems } from "@/lib/assignments/sla-alert-queries";
 import { SlaAlertCard } from "./SlaAlertCard";
 
 const AUDIO_OWNER_KEY = "sla-alert-audio-owner";
@@ -83,40 +82,14 @@ export function GlobalSlaAlerts({
 
   const refreshAssignments = useCallback(async () => {
     const supabase = createClient();
-    const relevant =
-      role === "admin"
-        ? await getAdminDashboardAssignments(supabase)
-        : await getAssignmentsForCollector(supabase, profileId);
-
-    let collectorNames: Record<string, string> = {};
-    if (role === "admin") {
-      const collectorIds = [...new Set(relevant.map((assignment) => assignment.collector_id))];
-      if (collectorIds.length > 0) {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("id, full_name, email")
-          .in("id", collectorIds);
-        if (error) throw error;
-        collectorNames = Object.fromEntries(
-          (data ?? []).map((collector) => [
-            collector.id,
-            collector.full_name ?? collector.email,
-          ])
-        );
-      }
-    }
-
-    const nextItems = toSlaAlertItems(
-      relevant,
-      (collectorId) => collectorNames[collectorId] ?? collectorName
-    );
+    const nextItems = await getSlaAlertItems(supabase, role);
     setItems(nextItems);
     setSilencedEvents((current) => {
       const stored = getStoredSilences(nextItems);
       return new Set([...current, ...stored]);
     });
     setNow(Date.now());
-  }, [collectorName, profileId, role]);
+  }, [role]);
 
   useEffect(() => {
     setItems(assignments);
