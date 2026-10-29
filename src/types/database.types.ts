@@ -381,6 +381,51 @@ export interface Database {
         };
         Relationships: [];
       };
+      match_master_eta_fingerprints: {
+        Row: {
+          eta_date: string;
+          source_fingerprint: string;
+          match_count: number;
+          synced_at: string;
+        };
+        Insert: {
+          eta_date: string;
+          source_fingerprint: string;
+          match_count?: number;
+          synced_at?: string;
+        };
+        Update: {
+          eta_date?: string;
+          source_fingerprint?: string;
+          match_count?: number;
+          synced_at?: string;
+        };
+        Relationships: [];
+      };
+      match_master_active_window: {
+        Row: {
+          singleton: boolean;
+          window_start_date: string;
+          window_end_date: string;
+          active_match_count: number;
+          updated_at: string;
+        };
+        Insert: {
+          singleton?: boolean;
+          window_start_date: string;
+          window_end_date: string;
+          active_match_count?: number;
+          updated_at?: string;
+        };
+        Update: {
+          singleton?: boolean;
+          window_start_date?: string;
+          window_end_date?: string;
+          active_match_count?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: ProfileRow;
         Insert: {
@@ -735,6 +780,10 @@ export interface Database {
       get_match_master_eta_days: {
         Args: Record<string, never>;
         Returns: { eta_date: string; match_count: number }[];
+      };
+      get_match_master_active_window: {
+        Args: Record<string, never>;
+        Returns: { window_start_date: string; window_end_date: string; active_match_count: number }[];
       };
       get_sla_alert_assignments: {
         Args: { p_scope: string };

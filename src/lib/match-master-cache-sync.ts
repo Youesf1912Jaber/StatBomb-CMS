@@ -45,6 +45,16 @@ export function parseMatchMasterSla(value: string | null): string | null {
   const parsed = Date.parse(raw);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
 function toCacheRow(row: MatchMasterRow, syncedAt: string) {
   return {
     match_id: row.match_id,
@@ -53,9 +63,24 @@ function toCacheRow(row: MatchMasterRow, syncedAt: string) {
     home_team: row.home_team,
     away_team: row.away_team,
     match_data: row,
-    source_fingerprint: createHash("sha256").update(JSON.stringify(row)).digest("hex"),
+    source_fingerprint: createHash("sha256").update(stableStringify(row)).digest("hex"),
     synced_at: syncedAt,
   };
+}
+
+function fingerprintEtaDay(rows: ReturnType<typeof toCacheRow>[]): string {
+  // Match ID ordering makes the fingerprint independent of Google Sheets row order.
+  const canonicalRows = [...rows]
+    .sort((a, b) => a.match_id.localeCompare(b.match_id))
+    .map((row) => ({
+      match_id: row.match_id,
+      eta_date: row.eta_date,
+      sla_sort_at: row.sla_sort_at,
+      home_team: row.home_team,
+      away_team: row.away_team,
+      match_data: row.match_data,
+    }));
+  return createHash("sha256").update(stableStringify(canonicalRows)).digest("hex");
 }
 
 /** Refresh the materialized Match Master cache without exposing service-role credentials. */
@@ -85,8 +110,7 @@ export async function syncMatchMasterCache() {
   const cacheRows = [...rowByMatchId.values()];
   const supabase = createServiceRoleClient();
 
-  // Read only small index metadata, not each match_data JSON document. The
-  // fingerprint allows periodic syncs to skip unchanged cache rows entirely.
+  // Read compact cache metadata only; never download every match_data JSON payload.
   const existingCache = new Map<string, { source_fingerprint: string | null; sla_sort_at: string | null; eta_date: string | null }>();
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("match_master_cache")
@@ -104,7 +128,51 @@ export async function syncMatchMasterCache() {
     if (!data || data.length < 1000) break;
   }
 
+  const rowsByEtaDate = new Map<string, ReturnType<typeof toCacheRow>[]>();
+  for (const row of cacheRows) {
+    if (!row.eta_date) continue;
+    const dayRows = rowsByEtaDate.get(row.eta_date) ?? [];
+    dayRows.push(row);
+    rowsByEtaDate.set(row.eta_date, dayRows);
+  }
+
+  const existingDayFingerprints = new Map<string, { source_fingerprint: string; match_count: number }>();
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.from("match_master_eta_fingerprints")
+      .select("eta_date, source_fingerprint, match_count")
+      .order("eta_date", { ascending: true })
+      .range(offset, offset + 999);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      existingDayFingerprints.set(row.eta_date, {
+        source_fingerprint: row.source_fingerprint,
+        match_count: row.match_count,
+      });
+    }
+    if (!data || data.length < 1000) break;
+  }
+
+  const currentDayFingerprints = [...rowsByEtaDate.entries()].map(([eta_date, rows]) => ({
+    eta_date,
+    source_fingerprint: fingerprintEtaDay(rows),
+    match_count: rows.length,
+  }));
+  const unchangedDays = new Set<string>();
+  for (const day of currentDayFingerprints) {
+    const previous = existingDayFingerprints.get(day.eta_date);
+    if (
+      previous?.source_fingerprint === day.source_fingerprint &&
+      previous.match_count === day.match_count &&
+      rowsByEtaDate.get(day.eta_date)?.every((row) => existingCache.get(row.match_id)?.eta_date === day.eta_date)
+    ) {
+      unchangedDays.add(day.eta_date);
+    }
+  }
+
+  // Whole unchanged ETA days bypass per-row diff/upsert work. Missing IDs and
+  // ETA moves invalidate the fast path; rows without ETA keep row-level checks.
   const changedCacheRows = cacheRows.filter((row) => {
+    if (row.eta_date && unchangedDays.has(row.eta_date)) return false;
     const previous = existingCache.get(row.match_id);
     if (!previous) return true;
     const previousSlaMs = previous.sla_sort_at ? Date.parse(previous.sla_sort_at) : null;
@@ -122,13 +190,66 @@ export async function syncMatchMasterCache() {
     if (error) throw error;
   }
 
-  // Reuse the existing cache index instead of issuing another full scan.
+  // Reuse the existing cache index to remove IDs no longer present in the sheet.
   const sourceIds = new Set(cacheRows.map((row) => row.match_id));
   const staleIds = [...existingCache.keys()].filter((id) => !sourceIds.has(id));
-
   for (let offset = 0; offset < staleIds.length; offset += 500) {
     const { error } = await supabase.from("match_master_cache").delete().in("match_id", staleIds.slice(offset, offset + 500));
     if (error) throw error;
+  }
+
+  // Persist fingerprints only after cache writes/deletes succeed. Keep only dates
+  // currently present in the source so reintroduced dates always receive a full sync.
+  for (let offset = 0; offset < currentDayFingerprints.length; offset += 500) {
+    const { error } = await supabase.from("match_master_eta_fingerprints")
+      .upsert(currentDayFingerprints.slice(offset, offset + 500), { onConflict: "eta_date" });
+    if (error) throw error;
+  }
+  const sourceDates = new Set(currentDayFingerprints.map((day) => day.eta_date));
+  const obsoleteDates = [...existingDayFingerprints.keys()].filter((date) => !sourceDates.has(date));
+  for (let offset = 0; offset < obsoleteDates.length; offset += 500) {
+    const { error } = await supabase.from("match_master_eta_fingerprints").delete().in("eta_date", obsoleteDates.slice(offset, offset + 500));
+    if (error) throw error;
+  }
+
+  // Keep a persistent 10-calendar-day window anchored to the newest ETA date
+  // ever observed. It does not roll forward merely because the calendar changes,
+  // and a backdated row cannot move the window backwards.
+  const newestSourceEta = [...rowsByEtaDate.keys()].sort((a, b) => b.localeCompare(a))[0] ?? null;
+  const { data: savedWindow, error: windowReadError } = await supabase
+    .from("match_master_active_window")
+    .select("window_start_date, window_end_date")
+    .eq("singleton", true)
+    .maybeSingle();
+  if (windowReadError) throw windowReadError;
+
+  let windowEndDate = savedWindow?.window_end_date ?? newestSourceEta;
+  if (newestSourceEta && (!windowEndDate || newestSourceEta > windowEndDate)) {
+    windowEndDate = newestSourceEta;
+  }
+  let windowStartDate: string | null = savedWindow?.window_start_date ?? null;
+  if (windowEndDate && (!savedWindow || newestSourceEta && newestSourceEta > savedWindow.window_end_date)) {
+    const end = new Date(`${windowEndDate}T00:00:00.000Z`);
+    end.setUTCDate(end.getUTCDate() - 9);
+    windowStartDate = end.toISOString().slice(0, 10);
+  }
+
+  let activeMatchCount = 0;
+  if (windowStartDate && windowEndDate) {
+    const { count, error } = await supabase.from("match_master_cache")
+      .select("match_id", { count: "exact", head: true })
+      .gte("eta_date", windowStartDate)
+      .lte("eta_date", windowEndDate);
+    if (error) throw error;
+    activeMatchCount = count ?? 0;
+    const { error: windowWriteError } = await supabase.from("match_master_active_window").upsert({
+      singleton: true,
+      window_start_date: windowStartDate,
+      window_end_date: windowEndDate,
+      active_match_count: activeMatchCount,
+      updated_at: syncedAt,
+    }, { onConflict: "singleton" });
+    if (windowWriteError) throw windowWriteError;
   }
 
   return {
@@ -136,6 +257,15 @@ export async function syncMatchMasterCache() {
     changedRows,
     upsertedRows: changedCacheRows.length,
     deletedStaleRows: staleIds.length,
+    etaDaysChecked: currentDayFingerprints.length,
+    etaDaysUnchanged: unchangedDays.size,
+    etaDaysChanged: currentDayFingerprints.length - unchangedDays.size,
+    activeWindow: windowStartDate && windowEndDate ? {
+      startDate: windowStartDate,
+      endDate: windowEndDate,
+      matchCount: activeMatchCount,
+      warning: activeMatchCount > 300 ? "Active Match Master window exceeds 300 matches." : null,
+    } : null,
     syncedAt,
   };
 }
