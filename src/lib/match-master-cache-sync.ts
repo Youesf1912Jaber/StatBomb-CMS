@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "crypto";
+
 import { normalizeEtaDate } from "@/lib/match-master-date";
 import { readMatchesMasterSheet, type MatchMasterRow } from "@/lib/sync/google-sheets";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -51,6 +53,7 @@ function toCacheRow(row: MatchMasterRow, syncedAt: string) {
     home_team: row.home_team,
     away_team: row.away_team,
     match_data: row,
+    source_fingerprint: createHash("sha256").update(JSON.stringify(row)).digest("hex"),
     synced_at: syncedAt,
   };
 }
@@ -82,18 +85,18 @@ export async function syncMatchMasterCache() {
   const cacheRows = [...rowByMatchId.values()];
   const supabase = createServiceRoleClient();
 
-  // Compare the sheet snapshot with the current cache before writing, so the
-  // Admin UI can report how many existing match details (including SLA) changed.
-  const existingCache = new Map<string, { match_data: Record<string, unknown> | null; sla_sort_at: string | null; eta_date: string | null }>();
+  // Read only small index metadata, not each match_data JSON document. The
+  // fingerprint allows periodic syncs to skip unchanged cache rows entirely.
+  const existingCache = new Map<string, { source_fingerprint: string | null; sla_sort_at: string | null; eta_date: string | null }>();
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("match_master_cache")
-      .select("match_id, match_data, sla_sort_at, eta_date")
+      .select("match_id, source_fingerprint, sla_sort_at, eta_date")
       .order("match_id", { ascending: true })
       .range(offset, offset + 999);
     if (error) throw error;
     for (const row of data ?? []) {
       existingCache.set(row.match_id, {
-        match_data: row.match_data as Record<string, unknown> | null,
+        source_fingerprint: row.source_fingerprint,
         sla_sort_at: row.sla_sort_at,
         eta_date: row.eta_date,
       });
@@ -101,43 +104,27 @@ export async function syncMatchMasterCache() {
     if (!data || data.length < 1000) break;
   }
 
-  const changedRows = cacheRows.filter((row) => {
+  const changedCacheRows = cacheRows.filter((row) => {
     const previous = existingCache.get(row.match_id);
-    if (!previous) return false; // New rows are not counted as updated details.
-    const previousData = previous.match_data ?? {};
-    const metadataChanged = Object.keys(row.match_data).some((key) => {
-      const before = previousData[key] == null ? "" : String(previousData[key]).trim();
-      const currentValue = row.match_data[key as keyof MatchMasterRow];
-      const after = currentValue == null ? "" : String(currentValue).trim();
-      return before !== after;
-    });
+    if (!previous) return true;
     const previousSlaMs = previous.sla_sort_at ? Date.parse(previous.sla_sort_at) : null;
     const nextSlaMs = row.sla_sort_at ? Date.parse(row.sla_sort_at) : null;
     const slaChanged = previousSlaMs === null && nextSlaMs === null
       ? false
       : previousSlaMs === null || nextSlaMs === null || previousSlaMs !== nextSlaMs;
-    return slaChanged ||
+    return previous.source_fingerprint !== row.source_fingerprint ||
       previous.eta_date !== row.eta_date ||
-      metadataChanged;
-  }).length;
-
-  for (let offset = 0; offset < cacheRows.length; offset += 500) {
-    const { error } = await supabase.from("match_master_cache").upsert(cacheRows.slice(offset, offset + 500), { onConflict: "match_id" });
+      slaChanged;
+  });
+  const changedRows = changedCacheRows.filter((row) => existingCache.has(row.match_id)).length;
+  for (let offset = 0; offset < changedCacheRows.length; offset += 500) {
+    const { error } = await supabase.from("match_master_cache").upsert(changedCacheRows.slice(offset, offset + 500), { onConflict: "match_id" });
     if (error) throw error;
   }
 
-  const existingIds: string[] = [];
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await supabase.from("match_master_cache")
-      .select("match_id")
-      .order("match_id", { ascending: true })
-      .range(offset, offset + 999);
-    if (error) throw error;
-    existingIds.push(...(data ?? []).map((row) => row.match_id));
-    if (!data || data.length < 1000) break;
-  }
+  // Reuse the existing cache index instead of issuing another full scan.
   const sourceIds = new Set(cacheRows.map((row) => row.match_id));
-  const staleIds = existingIds.filter((id) => !sourceIds.has(id));
+  const staleIds = [...existingCache.keys()].filter((id) => !sourceIds.has(id));
 
   for (let offset = 0; offset < staleIds.length; offset += 500) {
     const { error } = await supabase.from("match_master_cache").delete().in("match_id", staleIds.slice(offset, offset + 500));
@@ -147,6 +134,7 @@ export async function syncMatchMasterCache() {
   return {
     sourceRows: cacheRows.length,
     changedRows,
+    upsertedRows: changedCacheRows.length,
     deletedStaleRows: staleIds.length,
     syncedAt,
   };
