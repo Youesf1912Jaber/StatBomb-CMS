@@ -381,6 +381,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      match_master_eta_fingerprints: {
+        Row: {
+          eta_date: string;
+          source_fingerprint: string;
+          match_count: number;
+          synced_at: string;
+        };
+        Insert: {
+          eta_date: string;
+          source_fingerprint: string;
+          match_count?: number;
+          synced_at?: string;
+        };
+        Update: {
+          eta_date?: string;
+          source_fingerprint?: string;
+          match_count?: number;
+          synced_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: ProfileRow;
         Insert: {
