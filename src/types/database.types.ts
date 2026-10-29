@@ -736,6 +736,20 @@ export interface Database {
         Args: Record<string, never>;
         Returns: { eta_date: string; match_count: number }[];
       };
+      get_sla_alert_assignments: {
+        Args: { p_scope: string };
+        Returns: {
+          assignment_id: string;
+          sla: string;
+          status: AssignmentStatus;
+          home_team: string;
+          away_team: string;
+          competition: string | null;
+          collector_name: string;
+          half: string;
+          task: string;
+        }[];
+      };
       is_admin: {
         Args: Record<string, never>;
         Returns: boolean;
