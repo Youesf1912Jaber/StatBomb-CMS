@@ -133,7 +133,7 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ success: true, count: matches.length, matches, activeWindow });
+    return NextResponse.json({ success: true, count: matches.length, matches });
   } catch (error) {
     console.error("Match Master cache query failed", error);
     return NextResponse.json({ success: false, error: "Match Master data could not be loaded from cache." }, { status: 500 });
