@@ -356,6 +356,7 @@ export interface Database {
           home_team: string | null;
           away_team: string | null;
           match_data: Record<string, unknown>;
+          source_fingerprint: string | null;
           synced_at: string;
         };
         Insert: {
@@ -365,6 +366,7 @@ export interface Database {
           home_team?: string | null;
           away_team?: string | null;
           match_data: Record<string, unknown>;
+          source_fingerprint?: string | null;
           synced_at?: string;
         };
         Update: {
@@ -374,6 +376,7 @@ export interface Database {
           home_team?: string | null;
           away_team?: string | null;
           match_data?: Record<string, unknown>;
+          source_fingerprint?: string | null;
           synced_at?: string;
         };
         Relationships: [];
