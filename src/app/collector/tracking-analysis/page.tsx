@@ -10,7 +10,7 @@ import { ShiftAnalysisLiveRefresh } from "@/components/ShiftAnalysisLiveRefresh"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Assignment = Awaited<ReturnType<typeof getAllAssignments>>[number];
+type Assignment = Awaited<ReturnType<typeof getAssignmentsForCollector>>[number];
 type SearchParams = { from?: string; to?: string; task?: string; status?: string };
 
 
