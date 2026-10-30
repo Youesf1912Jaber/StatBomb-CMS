@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AssignmentTaskTimerRow, Database, MatchRow } from "@/types/database.types";
+import type { AssignmentStatus, AssignmentTaskTimerRow, Database, MatchRow } from "@/types/database.types";
 import type { AssignmentWithMatch } from "./types";
 
 type Client = SupabaseClient<Database>;
@@ -125,7 +125,7 @@ export async function getAssignmentTaskTimersForAssignments(
 /** Admin analytics assignments constrained in Postgres before match hydration. */
 export async function getAdminShiftAnalysisAssignments(
   supabase: Client,
-  filters: { from?: string; to?: string; status?: string }
+  filters: { from?: string; to?: string; status?: AssignmentStatus }
 ): Promise<AssignmentWithMatch[]> {
   let query = supabase.from("assignments").select("*");
   if (filters.from) query = query.gte("shift_date", filters.from);
