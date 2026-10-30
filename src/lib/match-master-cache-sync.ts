@@ -84,8 +84,8 @@ function fingerprintEtaDay(rows: ReturnType<typeof toCacheRow>[]): string {
 }
 
 /** Refresh the materialized Match Master cache without exposing service-role credentials. */
-export async function syncMatchMasterCache() {
-  const sourceRows = await readMatchesMasterSheet();
+export async function syncMatchMasterCache(sourceRowsOverride?: MatchMasterRow[]) {
+  const sourceRows = sourceRowsOverride ?? await readMatchesMasterSheet();
   if (sourceRows.length === 0) {
     throw new Error("Match Master sync returned zero rows; refusing to replace the cache.");
   }
