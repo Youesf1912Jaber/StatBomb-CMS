@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPreviewFingerprint, fetchMatchMasterPreviewMatches } from "@/lib/match-master-preview";
 import { parseMatchMasterSla, syncMatchMasterCache } from "@/lib/match-master-cache-sync";
-import { readMatchesMasterSheetForPreview } from "@/lib/sync/google-sheets";
+import { readMatchesMasterSheetForPreview, type MatchMasterRow } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -167,7 +167,7 @@ export async function POST() {
   try {
     // One source snapshot powers both the cache update and the refreshed preview.
     const sourceRows = await readMatchesMasterSheetForPreview();
-    const syncResult = await syncMatchMasterCache(sourceRows);
+    const cacheSourceRows: MatchMasterRow[] = sourceRows.map(({ source_row: _sourceRow, raw_match_id: _rawMatchId, match_id_valid: _valid, ...row }) => row);\n    const syncResult = await syncMatchMasterCache(cacheSourceRows);
     const matches = await fetchMatchMasterPreviewMatches(supabase);
     const preview = classifyMatchMasterRows(sourceRows, matches);
     const plan = buildMatchMasterApplyPlan(sourceRows, matches);
