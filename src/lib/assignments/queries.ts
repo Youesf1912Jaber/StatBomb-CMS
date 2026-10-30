@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AssignmentStatus, AssignmentTaskTimerRow, Database, MatchRow } from "@/types/database.types";
+import type { AssignmentStatus, AssignmentTaskTimerRow, Database } from "@/types/database.types";
 import type { AssignmentMatchData, AssignmentWithMatch } from "./types";
 
 type Client = SupabaseClient<Database>;
