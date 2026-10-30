@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { buildMatchMasterApplyPlan, createMatchMasterPreviewFingerprint, fetchAllMatches, normalizeMatchMasterDate, normalizeMatchMasterKickoff } from "@/lib/match-master-preview";
-import { readMatchesMasterSheetForPreview } from "@/lib/sync/google-sheets";
+import { buildMatchMasterApplyPlan, createMatchMasterPreviewFingerprint, normalizeMatchMasterDate, normalizeMatchMasterKickoff } from "@/lib/match-master-preview";
+import { readMatchesMasterSheetForEtaWindow } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import type { MatchRow } from "@/types/database.types";
 import { acquireMatchMasterSyncLock, releaseMatchMasterSyncLock } from "@/lib/match-master-sync-lock";
@@ -70,10 +70,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const [sourceRows, currentMatches] = await Promise.all([
-      readMatchesMasterSheetForPreview(),
-      fetchAllMatches(supabase),
-    ]);
+    const sourceRows = await readMatchesMasterSheetForEtaWindow(7);
+    const sourceIds = [...new Set(sourceRows.map((row) => row.match_id).filter(Boolean))];
+    const currentMatches: MatchRow[] = [];
+    for (let offset = 0; offset < sourceIds.length; offset += 500) {
+      const { data, error } = await supabase.from("matches")
+        .select("*")
+        .in("external_id", sourceIds.slice(offset, offset + 500));
+      if (error) throw error;
+      currentMatches.push(...(data ?? []));
+    }
     const currentFingerprint = createMatchMasterPreviewFingerprint(sourceRows, currentMatches);
     if (currentFingerprint !== body.fingerprint) {
       return NextResponse.json({ error: "Source or Supabase Match Master data changed. Refresh the preview before applying." }, { status: 409 });
@@ -187,9 +193,12 @@ export async function POST(request: Request) {
         }
       }
     }
-    const finalMatches = await fetchAllMatches(service);
+    const { data: finalMatches, error: finalReadError } = await service.from("matches")
+      .select("external_id")
+      .in("external_id", inserts.map((item) => item.row.external_id));
+    if (finalReadError) throw finalReadError;
     const counts = new Map<string, number>();
-    for (const match of finalMatches) counts.set(match.external_id, (counts.get(match.external_id) ?? 0) + 1);
+    for (const match of finalMatches ?? []) counts.set(match.external_id, (counts.get(match.external_id) ?? 0) + 1);
     const duplicateExternalIds = [...counts.entries()].filter(([, count]) => count > 1).map(([external_id]) => external_id);
     const failedSample = failed.slice(0, 20);
     const failedByError = failed.reduce<Record<string, number>>((acc, item) => {
