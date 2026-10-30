@@ -4,6 +4,7 @@ import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPr
 import { parseMatchMasterSla, syncMatchMasterCache } from "@/lib/match-master-cache-sync";
 import { readMatchesMasterSheetForPreview, type MatchMasterRow } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { acquireMatchMasterSyncLock, releaseMatchMasterSyncLock } from "@/lib/match-master-sync-lock";
 
 export const runtime = "nodejs";
 
@@ -164,6 +165,11 @@ export async function POST() {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
 
+  const lock = await acquireMatchMasterSyncLock();
+  if (!lock) {
+    return NextResponse.json({ error: "Another Match Master sync or Apply operation is already running. Please try again shortly." }, { status: 409 });
+  }
+
   try {
     // One source snapshot powers both the cache update and the refreshed preview.
     const sourceRows = await readMatchesMasterSheetForPreview();
@@ -199,6 +205,8 @@ export async function POST() {
     });
   } catch (error) {
     console.error("Match Master Check & Update failed", error);
-    return NextResponse.json({ error: "Unable to check and update Match Master details." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to check and update Match Master details." }, { status: 500 });
+  } finally {
+    await releaseMatchMasterSyncLock(lock);
   }
 }
