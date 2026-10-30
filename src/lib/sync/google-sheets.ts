@@ -1524,7 +1524,7 @@ export async function readMatchesMasterSheetForEtaWindow(days = 7): Promise<Matc
   const base = `${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values`;
   const [headerPayload, etaPayload] = await Promise.all([
     googleRequest<{ values?: unknown[][] }>(`${base}/${encodeURIComponent(`${sheet.title}!A1:V1`)}`),
-    googleRequest<{ values?: unknown[][] }>(`${base}/${encodeURIComponent(`${sheet.title}!N:N`)}`),
+    googleRequest<{ values?: unknown[][] }>(`${base}/${encodeURIComponent(`${sheet.title}!M:M`)}`),
   ]);
   const rawHeaders = headerPayload.values?.[0] ?? [];
   const headers = rawHeaders.map((value) =>
@@ -1534,9 +1534,8 @@ export async function readMatchesMasterSheetForEtaWindow(days = 7): Promise<Matc
   const idIndex = headers.indexOf("id");
   if (etaIndex < 0 || idIndex < 0) throw new PreviewInputError("The Matches (T) sheet must contain ID and ETA headers.");
 
-  // Column N is the known ETA column in Matches (T); retain header-driven
-  // validation so a moved ETA column fails safely rather than reading wrong data.
-  if (etaIndex !== 13) throw new PreviewInputError("The ETA column moved from column N. Update the narrow ETA scan before syncing.");
+  // Column M is the ETA column in Matches (T); fail safely if its layout changes.
+  if (etaIndex !== 12) throw new PreviewInputError("The ETA column moved from column M. Update the narrow ETA scan before syncing.");
 
   const etaValues = etaPayload.values ?? [];
   const datedRows = etaValues.slice(1).map((row, index) => ({
@@ -1554,7 +1553,7 @@ export async function readMatchesMasterSheetForEtaWindow(days = 7): Promise<Matc
 
   const ranges = selectedRows.map((item) => `${sheet.title}!A${item.rowNumber}:V${item.rowNumber}`);
   const batchUrl = new URL(`${base}:batchGet`);
-  batchUrl.searchParams.set("ranges", ranges.join("&ranges="));
+  for (const range of ranges) batchUrl.searchParams.append("ranges", range);
   batchUrl.searchParams.set("valueRenderOption", "FORMATTED_VALUE");
   const batch = await googleRequest<{ valueRanges?: Array<{ values?: unknown[][] }> }>(batchUrl.toString());
 
