@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
-import { getAllAssignments } from "@/lib/assignments/queries";
+import { getAssignmentsForCollector, getAssignmentTaskTimersForAssignments } from "@/lib/assignments/queries";
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
 import type { AssignmentTaskTimerRow } from "@/types/database.types";
 import { LiveTrackedDuration } from "@/components/LiveTrackedDuration";
@@ -10,7 +10,7 @@ import { ShiftAnalysisLiveRefresh } from "@/components/ShiftAnalysisLiveRefresh"
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Assignment = Awaited<ReturnType<typeof getAllAssignments>>[number];
+type Assignment = Awaited<ReturnType<typeof getAssignmentsForCollector>>[number];
 type SearchParams = { from?: string; to?: string; task?: string; status?: string };
 
 
@@ -51,16 +51,13 @@ export default async function TrackingAnalysisPage({ searchParams }: { searchPar
   const allowedStatuses = ["Completed", "In Progress", "Overdue", "Not Started"];
   const selectedStatus = allowedStatuses.includes(requestedStatus) ? requestedStatus : "";
   const supabase = createClient();
-  const [assignmentsResult, timersResult] = await Promise.all([
-    getAllAssignments(supabase),
-    supabase.from("assignment_task_timers").select("*").order("started_at", { ascending: true }),
-  ]);
-
-  if (timersResult.error) throw timersResult.error;
-
-  const allCollectorAssignments = (assignmentsResult as Assignment[])
-    .filter((assignment) => assignment.collector_id === profile.id);
-  const timers = (timersResult.data ?? []) as AssignmentTaskTimerRow[];
+  // RLS remains the security boundary, while the explicit collector scope
+  // avoids loading every visible assignment/timer just to discard other users.
+  const allCollectorAssignments = await getAssignmentsForCollector(supabase, profile.id);
+  const timers = await getAssignmentTaskTimersForAssignments(
+    supabase,
+    allCollectorAssignments.map((assignment) => assignment.id)
+  );
   const allAssignmentIds = new Set(allCollectorAssignments.map((assignment) => assignment.id));
   const allCollectorTimers = timers.filter((timer) => allAssignmentIds.has(timer.assignment_id));
   const allTimersByAssignment = new Map<string, AssignmentTaskTimerRow[]>();
@@ -101,7 +98,10 @@ export default async function TrackingAnalysisPage({ searchParams }: { searchPar
 
   return (
     <div className="shift-analysis-page relative isolate mx-auto w-full min-w-0 max-w-[1600px] space-y-6 pb-10 sm:space-y-8">
-      <ShiftAnalysisLiveRefresh />
+      <ShiftAnalysisLiveRefresh
+        assignmentIds={allCollectorAssignments.map((assignment) => assignment.id)}
+        filters={{ from, to, status: selectedStatus }}
+      />
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center opacity-20" style={{ backgroundImage: 'url("/images/football/pitch-background-tactical.webp")' }} />
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(180deg,rgba(1,22,20,0.68)_0%,rgba(1,22,20,0.9)_55%,rgba(1,22,20,0.96)_100%)]" />
 
