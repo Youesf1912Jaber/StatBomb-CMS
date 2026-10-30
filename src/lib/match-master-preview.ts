@@ -8,6 +8,8 @@ import type { Database, MatchRow } from "@/types/database.types";
 
 const MATCHES_PAGE_SIZE = 1000;
 
+type MatchMasterPreviewMatch = Pick<MatchRow, "external_id" | "home_team" | "away_team" | "competition" | "match_date" | "kickoff_time">;
+
 export async function fetchAllMatches(client: SupabaseClient<Database>): Promise<MatchRow[]> {
   const rows: MatchRow[] = [];
   for (let from = 0; ; from += MATCHES_PAGE_SIZE) {
@@ -15,6 +17,22 @@ export async function fetchAllMatches(client: SupabaseClient<Database>): Promise
       .from("matches")
       .select("*")
       .order("id", { ascending: true })
+      .range(from, from + MATCHES_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < MATCHES_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+export async function fetchMatchMasterPreviewMatches(client: SupabaseClient<Database>): Promise<MatchMasterPreviewMatch[]> {
+  const rows: MatchMasterPreviewMatch[] = [];
+  for (let from = 0; ; from += MATCHES_PAGE_SIZE) {
+    const { data, error } = await client
+      .from("matches")
+      .select("external_id, home_team, away_team, competition, match_date, kickoff_time")
+      .order("external_id", { ascending: true })
       .range(from, from + MATCHES_PAGE_SIZE - 1);
     if (error) throw error;
     const page = data ?? [];
@@ -116,7 +134,7 @@ function sameNullableText(left: string | null, right: string | null): boolean {
   return (left ?? "").trim().toLowerCase() === (right ?? "").trim().toLowerCase();
 }
 
-function mappedFieldsMatch(source: MatchMasterPreviewRow, existing: MatchRow): boolean {
+function mappedFieldsMatch(source: MatchMasterPreviewRow, existing: MatchMasterPreviewMatch): boolean {
   return sameNullableText(source.home_team, existing.home_team) &&
     sameNullableText(source.away_team, existing.away_team) &&
     sameNullableText(source.competition_name, existing.competition) &&
@@ -137,7 +155,7 @@ function sourceSignature(source: MatchMasterPreviewRow): string {
 
 export function classifyMatchMasterRows(
   sourceRows: MatchMasterPreviewRow[],
-  matches: MatchRow[],
+  matches: MatchMasterPreviewMatch[],
 ): { rows: MatchMasterPreviewRowResult[]; summary: MatchMasterPreviewSummary } {
   const grouped = new Map<string, MatchMasterPreviewRow[]>();
   for (const source of sourceRows) {
@@ -219,7 +237,7 @@ export function classifyMatchMasterRows(
 
 export function buildMatchMasterApplyPlan(
   sourceRows: MatchMasterPreviewRow[],
-  matches: MatchRow[],
+  matches: MatchMasterPreviewMatch[],
 ): MatchMasterApplyPlan {
   const preview = classifyMatchMasterRows(sourceRows, matches);
   const byMatchId = new Map<string, MatchMasterPreviewRow[]>();
@@ -266,7 +284,7 @@ export function buildMatchMasterApplyPlan(
 
 export function createMatchMasterPreviewFingerprint(
   sourceRows: MatchMasterPreviewRow[],
-  matches: MatchRow[],
+  matches: MatchMasterPreviewMatch[],
 ): string {
   const payload = JSON.stringify({
     sourceRows,

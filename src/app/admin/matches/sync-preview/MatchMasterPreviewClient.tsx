@@ -45,30 +45,25 @@ export function MatchMasterPreviewClient() {
   const [checkingChanges, setCheckingChanges] = useState(false);
   const [refreshingDetails, setRefreshingDetails] = useState(false);
 
-  async function loadChangeCheck() {
+  async function loadPreviewSnapshot() {
     setCheckingChanges(true);
-    setChangeCheck(null);
     try {
-      const response = await fetch("/api/admin/match-master/sync", { cache: "no-store" });
+      const response = await fetch("/api/admin/matches/sync-preview", { cache: "no-store" });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Unable to check for sheet changes.");
-      setChangeCheck(payload as ChangeCheck);
+      if (!response.ok) throw new Error(payload.error ?? "Unable to load preview.");
+      setData(payload.preview);
+      setChangeCheck(payload.changeCheck as ChangeCheck);
     } catch (reason: unknown) {
-      setApplyResult(reason instanceof Error ? reason.message : "Unable to check for sheet changes.");
+      throw reason;
     } finally {
       setCheckingChanges(false);
     }
   }
 
   useEffect(() => {
-    fetch("/api/admin/matches/sync-preview", { cache: "no-store" })
-      .then(async (response) => {
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error ?? "Unable to load preview.");
-        setData(payload);
-      })
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load preview."));
-    void loadChangeCheck();
+    void loadPreviewSnapshot().catch((reason: unknown) =>
+      setError(reason instanceof Error ? reason.message : "Unable to load preview.")
+    );
   }, []);
 
   async function applyMatchMaster() {
@@ -103,9 +98,7 @@ export function MatchMasterPreviewClient() {
         errorSummary ? `Reasons: ${errorSummary}` : null,
         sample ? `Examples: ${sample}` : null,
       ].filter(Boolean).join(" "));
-      const refreshed = await fetch("/api/admin/matches/sync-preview", { cache: "no-store" });
-      const refreshedPayload = await refreshed.json();
-      if (refreshed.ok) setData(refreshedPayload);
+      await loadPreviewSnapshot();
     } catch (reason: unknown) {
       setApplyResult(reason instanceof Error ? reason.message : "Unable to apply Match Master records.");
     } finally {
@@ -149,7 +142,7 @@ export function MatchMasterPreviewClient() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl text-chalk-50">Match Master Sync Preview</h1>
-        <p className="mt-1 text-sm font-semibold text-clock-amber">READ-ONLY PREVIEW — No Supabase match data will be changed.</p>
+        <p className="mt-1 text-sm font-semibold text-clock-amber">READ-ONLY PREVIEW — Latest 7 ETA days only; no Supabase match data will be changed.</p>
         <p className="mt-1 text-xs text-chalk-300">Applying is a separate, explicit Admin action. It does not create assignments or modify Google Sheets.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -164,7 +157,7 @@ export function MatchMasterPreviewClient() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="font-display text-lg text-chalk-50">Google Sheet Changes</h2>
-            <p className="mt-1 text-sm text-chalk-300">Check whether existing Match Master details changed in the source sheet, including SLA. Refreshing updates the Match Master cache; it does not change assignments or edit the sheet.</p>
+            <p className="mt-1 text-sm text-chalk-300">Checking only rows whose ETA falls within the latest 7 ETA calendar days. New matches remain pending until you press Apply Match Master to Supabase.</p>
           </div>
           <button
             type="button"
@@ -172,14 +165,23 @@ export function MatchMasterPreviewClient() {
               setRefreshingDetails(true);
               setApplyResult(null);
               try {
-                const response = await fetch("/api/admin/match-master/sync", { method: "POST" });
-                const payload = await response.json();
-                if (!response.ok) throw new Error(payload.error ?? "Unable to refresh Match Master details.");
-                setApplyResult("Match Master refreshed: " + (payload.changedRows ?? 0) + " existing matches updated, " + (payload.sourceRows ?? 0) + " source matches synced.");
-                await loadChangeCheck();
-                const refreshed = await fetch("/api/admin/matches/sync-preview", { cache: "no-store" });
-                const refreshedPayload = await refreshed.json();
-                if (refreshed.ok) setData(refreshedPayload);
+                const response = await fetch("/api/admin/matches/sync-preview", { method: "POST" });
+                const payload = await response.json() as {
+                  error?: string;
+                  preview?: PreviewData;
+                  changeCheck?: ChangeCheck;
+                  sync?: { changedRows?: number; sourceRows?: number; upsertedRows?: number; deletedStaleRows?: number };
+                };
+                if (!response.ok || !payload.preview || !payload.changeCheck) {
+                  throw new Error(payload.error ?? "Unable to check and update Match Master details.");
+                }
+                setData(payload.preview);
+                setChangeCheck(payload.changeCheck);
+                setApplyResult(
+                  "Match Master refreshed: " + (payload.sync?.changedRows ?? 0) +
+                  " existing matches updated, " + (payload.sync?.sourceRows ?? 0) +
+                  " source rows in the latest 7 ETA days checked. No full-sheet match rows were downloaded."
+                );
               } catch (reason: unknown) {
                 setApplyResult(reason instanceof Error ? reason.message : "Unable to refresh Match Master details.");
               } finally {

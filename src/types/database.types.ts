@@ -426,6 +426,30 @@ export interface Database {
         };
         Relationships: [];
       };
+      match_master_sheet_delta: {
+        Row: {
+          source_row: number;
+          row_values: Record<string, unknown>;
+          is_deleted: boolean;
+          edited_at: string;
+          received_at: string;
+        };
+        Insert: {
+          source_row: number;
+          row_values: Record<string, unknown>;
+          is_deleted?: boolean;
+          edited_at?: string;
+          received_at?: string;
+        };
+        Update: {
+          source_row?: number;
+          row_values?: Record<string, unknown>;
+          is_deleted?: boolean;
+          edited_at?: string;
+          received_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: ProfileRow;
         Insert: {

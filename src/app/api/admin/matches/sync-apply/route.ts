@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { buildMatchMasterApplyPlan, createMatchMasterPreviewFingerprint, fetchAllMatches, normalizeMatchMasterDate, normalizeMatchMasterKickoff } from "@/lib/match-master-preview";
-import { readMatchesMasterSheetForPreview } from "@/lib/sync/google-sheets";
+import { buildMatchMasterApplyPlan, createMatchMasterPreviewFingerprint, normalizeMatchMasterDate, normalizeMatchMasterKickoff } from "@/lib/match-master-preview";
+import { readMatchesMasterSheetForEtaWindow } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import type { MatchRow } from "@/types/database.types";
+import { acquireMatchMasterSyncLock, releaseMatchMasterSyncLock } from "@/lib/match-master-sync-lock";
 
 export const runtime = "nodejs";
 const BATCH_SIZE = 100;
@@ -10,8 +11,11 @@ const BATCH_SIZE = 100;
 function validDate(value: string | null): value is string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split("-").map(Number);
-  return year !== undefined && month !== undefined && day !== undefined &&
-    month >= 1 && month <= 12 && day >= 1 && day <= 31;
+  if (year === undefined || month === undefined || day === undefined) return false;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
 }
 
 function validKickoff(value: string | null): value is string {
@@ -60,11 +64,22 @@ export async function POST(request: Request) {
   }
   if (!body.fingerprint) return NextResponse.json({ error: "A fresh preview fingerprint is required." }, { status: 400 });
 
+  const lock = await acquireMatchMasterSyncLock();
+  if (!lock) {
+    return NextResponse.json({ error: "Another Match Master sync or Apply operation is already running. Please try again shortly." }, { status: 409 });
+  }
+
   try {
-    const [sourceRows, currentMatches] = await Promise.all([
-      readMatchesMasterSheetForPreview(),
-      fetchAllMatches(supabase),
-    ]);
+    const sourceRows = await readMatchesMasterSheetForEtaWindow(7);
+    const sourceIds = [...new Set(sourceRows.map((row) => row.match_id).filter(Boolean))];
+    const currentMatches: MatchRow[] = [];
+    for (let offset = 0; offset < sourceIds.length; offset += 500) {
+      const { data, error } = await supabase.from("matches")
+        .select("*")
+        .in("external_id", sourceIds.slice(offset, offset + 500));
+      if (error) throw error;
+      currentMatches.push(...(data ?? []));
+    }
     const currentFingerprint = createMatchMasterPreviewFingerprint(sourceRows, currentMatches);
     if (currentFingerprint !== body.fingerprint) {
       return NextResponse.json({ error: "Source or Supabase Match Master data changed. Refresh the preview before applying." }, { status: 409 });
@@ -109,7 +124,8 @@ export async function POST(request: Request) {
         return;
       }
       if (!actual || actual.home_team !== item.row.home_team || actual.away_team !== item.row.away_team ||
-        actual.competition !== item.row.competition || actual.match_date !== item.row.match_date) {
+        actual.competition !== item.row.competition || actual.match_date !== item.row.match_date ||
+        actual.kickoff_time !== item.row.kickoff_time) {
         failed.push({ external_id: item.row.external_id, error: "Inserted row failed field verification." });
         return;
       }
@@ -124,12 +140,27 @@ export async function POST(request: Request) {
       }
       const duplicate = error.code === "23505" || error.message.includes("matches_external_id_key") || error.message.includes("duplicate key");
       if (duplicate) {
-        const { data: existing } = await service
+        const { data: existing, error: lookupError } = await service
           .from("matches")
-          .select("external_id")
+          .select("*")
           .eq("external_id", item.row.external_id)
           .maybeSingle();
-        if (existing) return;
+        if (lookupError) {
+          failed.push({ external_id: item.row.external_id, error: lookupError.message });
+          return;
+        }
+        if (existing && existing.home_team === item.row.home_team &&
+          existing.away_team === item.row.away_team &&
+          existing.competition === item.row.competition &&
+          existing.match_date === item.row.match_date &&
+          existing.kickoff_time === item.row.kickoff_time) {
+          applied.push({ external_id: item.row.external_id, sourceRow: item.candidate.retainedSourceRow, result: item.candidate.result });
+          return;
+        }
+        if (existing) {
+          failed.push({ external_id: item.row.external_id, error: "A match with this external ID already exists but its metadata differs; it was not overwritten." });
+          return;
+        }
       }
       failed.push({
         external_id: item.row.external_id,
@@ -154,16 +185,20 @@ export async function POST(request: Request) {
       for (const item of batch) {
         const actual = verifiedById.get(item.row.external_id);
         if (!actual || actual.home_team !== item.row.home_team || actual.away_team !== item.row.away_team ||
-          actual.competition !== item.row.competition || actual.match_date !== item.row.match_date) {
+          actual.competition !== item.row.competition || actual.match_date !== item.row.match_date ||
+          actual.kickoff_time !== item.row.kickoff_time) {
           failed.push({ external_id: item.row.external_id, error: "Inserted row failed field verification." });
         } else {
           applied.push({ external_id: item.row.external_id, sourceRow: item.candidate.retainedSourceRow, result: item.candidate.result });
         }
       }
     }
-    const finalMatches = await fetchAllMatches(service);
+    const { data: finalMatches, error: finalReadError } = await service.from("matches")
+      .select("external_id")
+      .in("external_id", inserts.map((item) => item.row.external_id));
+    if (finalReadError) throw finalReadError;
     const counts = new Map<string, number>();
-    for (const match of finalMatches) counts.set(match.external_id, (counts.get(match.external_id) ?? 0) + 1);
+    for (const match of finalMatches ?? []) counts.set(match.external_id, (counts.get(match.external_id) ?? 0) + 1);
     const duplicateExternalIds = [...counts.entries()].filter(([, count]) => count > 1).map(([external_id]) => external_id);
     const failedSample = failed.slice(0, 20);
     const failedByError = failed.reduce<Record<string, number>>((acc, item) => {
@@ -176,6 +211,9 @@ export async function POST(request: Request) {
       blocked: plan.blockedDuplicateConflicts.length,
       invalidMetadata: invalidRows.length,
       failed: failed.length,
+      partial: failed.length > 0 && applied.length > 0,
+      retryable: failed.length > 0,
+      retryGuidance: failed.length > 0 ? "Refresh the preview, review failed rows, then retry Apply. Already inserted rows are verified and will not be overwritten." : null,
       blockedDuplicateConflicts: plan.blockedDuplicateConflicts,
       duplicateExactDeduped: applied.filter((item) => item.result === "DUPLICATE_EXACT_DEDUPED"),
       appliedRows: applied,
@@ -188,6 +226,8 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Match Master apply failed", error);
-    return NextResponse.json({ error: "Unable to apply Match Master records." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to apply Match Master records." }, { status: 500 });
+  } finally {
+    await releaseMatchMasterSyncLock(lock);
   }
 }
