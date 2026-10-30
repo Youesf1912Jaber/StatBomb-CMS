@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileOrRedirect } from "@/lib/auth/getProfile";
-import { getAllAssignments } from "@/lib/assignments/queries";
+import { getAssignmentsForCollector, getAssignmentTaskTimersForAssignments } from "@/lib/assignments/queries";
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
 import type { AssignmentTaskTimerRow } from "@/types/database.types";
 import { LiveTrackedDuration } from "@/components/LiveTrackedDuration";
@@ -51,16 +51,13 @@ export default async function TrackingAnalysisPage({ searchParams }: { searchPar
   const allowedStatuses = ["Completed", "In Progress", "Overdue", "Not Started"];
   const selectedStatus = allowedStatuses.includes(requestedStatus) ? requestedStatus : "";
   const supabase = createClient();
-  const [assignmentsResult, timersResult] = await Promise.all([
-    getAllAssignments(supabase),
-    supabase.from("assignment_task_timers").select("*").order("started_at", { ascending: true }),
-  ]);
-
-  if (timersResult.error) throw timersResult.error;
-
-  const allCollectorAssignments = (assignmentsResult as Assignment[])
-    .filter((assignment) => assignment.collector_id === profile.id);
-  const timers = (timersResult.data ?? []) as AssignmentTaskTimerRow[];
+  // RLS remains the security boundary, while the explicit collector scope
+  // avoids loading every visible assignment/timer just to discard other users.
+  const allCollectorAssignments = await getAssignmentsForCollector(supabase, profile.id);
+  const timers = await getAssignmentTaskTimersForAssignments(
+    supabase,
+    allCollectorAssignments.map((assignment) => assignment.id)
+  );
   const allAssignmentIds = new Set(allCollectorAssignments.map((assignment) => assignment.id));
   const allCollectorTimers = timers.filter((timer) => allAssignmentIds.has(timer.assignment_id));
   const allTimersByAssignment = new Map<string, AssignmentTaskTimerRow[]>();
