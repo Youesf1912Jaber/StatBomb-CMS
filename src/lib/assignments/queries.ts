@@ -29,7 +29,8 @@ function assignmentQueryCounts(assignments: Database["public"]["Tables"]["assign
  * matches are fetched separately and joined in JS. Keeps the types honest
  * instead of casting through `any`.
  */
-// One bounded IN query now covers up to 500 unique matches, reducing REST round trips.\nconst MATCH_ID_CHUNK_SIZE = 500;
+// One bounded IN query now covers up to 500 unique matches, reducing REST round trips.
+const MATCH_ID_CHUNK_SIZE = 500;
 const ASSIGNMENTS_PAGE_SIZE = 1000;
 
 async function attachMatches(
@@ -58,7 +59,7 @@ async function attachMatches(
       matchChunks.slice(i, i + MATCH_QUERY_CONCURRENCY).map(async (chunk) => {
         const { data, error } = await supabase
           .from("matches")
-          .select("*")
+          .select("id, external_id, home_team, away_team, competition, match_date, kickoff_time, official_website_url")
           .in("id", chunk);
         if (error) {
           console.error("Admin dashboard query failed", {
