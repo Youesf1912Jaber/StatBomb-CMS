@@ -185,14 +185,26 @@ export async function syncMatchMasterCache(sourceRowsOverride?: MatchMasterRow[]
       slaChanged;
   });
   const changedRows = changedCacheRows.filter((row) => existingCache.has(row.match_id)).length;
+
+  // Safety gate: refuse destructive cleanup when the source snapshot suddenly
+  // omits a material portion of the existing cache. This catches truncated or
+  // partially-read sheets before any cache writes/deletes are started.
+  const sourceIds = new Set(cacheRows.map((row) => row.match_id));
+  const staleIds = [...existingCache.keys()].filter((id) => !sourceIds.has(id));
+  const staleLimit = Math.max(1, Math.floor(existingCache.size * 0.2));
+  if (staleIds.length > staleLimit) {
+    throw new Error(
+      `Unsafe Match Master snapshot: ${staleIds.length} of ${existingCache.size} cached matches are missing from the source (limit: ${staleLimit}). No cache changes were applied.`
+    );
+  }
+
+  // All destructive-snapshot checks complete before the first write.
   for (let offset = 0; offset < changedCacheRows.length; offset += 500) {
     const { error } = await supabase.from("match_master_cache").upsert(changedCacheRows.slice(offset, offset + 500), { onConflict: "match_id" });
     if (error) throw error;
   }
 
   // Reuse the existing cache index to remove IDs no longer present in the sheet.
-  const sourceIds = new Set(cacheRows.map((row) => row.match_id));
-  const staleIds = [...existingCache.keys()].filter((id) => !sourceIds.has(id));
   for (let offset = 0; offset < staleIds.length; offset += 500) {
     const { error } = await supabase.from("match_master_cache").delete().in("match_id", staleIds.slice(offset, offset + 500));
     if (error) throw error;
