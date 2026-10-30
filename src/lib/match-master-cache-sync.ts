@@ -199,12 +199,37 @@ export async function syncMatchMasterCache(sourceRowsOverride?: MatchMasterRow[]
   }
 
   // All destructive-snapshot checks complete before the first write.
+  // Writes are idempotent: if a later batch fails, the next run safely retries
+  // the same upserts. Verify every changed row before any stale-row deletion.
   for (let offset = 0; offset < changedCacheRows.length; offset += 500) {
     const { error } = await supabase.from("match_master_cache").upsert(changedCacheRows.slice(offset, offset + 500), { onConflict: "match_id" });
-    if (error) throw error;
+    if (error) throw new Error(`Match Master cache upsert failed at batch ${Math.floor(offset / 500) + 1}; retry is safe and no stale rows were deleted: ${error.message}`);
+  }
+
+  for (let offset = 0; offset < changedCacheRows.length; offset += 500) {
+    const batch = changedCacheRows.slice(offset, offset + 500);
+    const ids = batch.map((row) => row.match_id);
+    const { data, error } = await supabase.from("match_master_cache")
+      .select("match_id, source_fingerprint, eta_date, sla_sort_at")
+      .in("match_id", ids);
+    if (error) throw new Error(`Unable to verify Match Master cache batch ${Math.floor(offset / 500) + 1}; stale rows were not deleted: ${error.message}`);
+    const verified = new Map((data ?? []).map((row) => [row.match_id, row]));
+    const mismatch = batch.find((row) => {
+      const actual = verified.get(row.match_id);
+      const actualSla = actual?.sla_sort_at ? Date.parse(actual.sla_sort_at) : null;
+      const expectedSla = row.sla_sort_at ? Date.parse(row.sla_sort_at) : null;
+      return !actual ||
+        actual.source_fingerprint !== row.source_fingerprint ||
+        actual.eta_date !== row.eta_date ||
+        actualSla !== expectedSla;
+    });
+    if (mismatch) {
+      throw new Error(`Match Master cache verification failed for ${mismatch.match_id}; stale rows were not deleted. Retry is safe.`);
+    }
   }
 
   // Reuse the existing cache index to remove IDs no longer present in the sheet.
+  // If deletion fails part-way, the next run recomputes stale IDs and safely resumes.
   for (let offset = 0; offset < staleIds.length; offset += 500) {
     const { error } = await supabase.from("match_master_cache").delete().in("match_id", staleIds.slice(offset, offset + 500));
     if (error) throw error;
