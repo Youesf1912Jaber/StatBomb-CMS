@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 type DeltaPayload = {
   sheetName?: string;
   sourceRow?: number;
+  headers?: string[];
   values?: unknown[];
   editedAt?: string;
 };
@@ -26,12 +27,16 @@ export async function POST(request: NextRequest) {
   }
 
   if (!Number.isSafeInteger(payload.sourceRow) || (payload.sourceRow ?? 0) < 2 ||
-      !Array.isArray(payload.values) || payload.values.length > 22) {
+      !Array.isArray(payload.headers) || !Array.isArray(payload.values) ||
+      payload.headers.length !== payload.values.length || payload.headers.length > 22) {
     return NextResponse.json({ error: "Invalid Match Master row payload." }, { status: 400 });
   }
 
-  const values = payload.values.map((value) => String(value ?? ""));
-  const isDeleted = values.every((value) => value.trim() === "");
+  const rowValues = Object.fromEntries(payload.headers.map((header, index) => [
+    String(header ?? "").trim(),
+    String(payload.values?.[index] ?? ""),
+  ]));
+  const isDeleted = Object.values(rowValues).every((value) => String(value).trim() === "");
   const editedAt = payload.editedAt && Number.isFinite(Date.parse(payload.editedAt))
     ? new Date(payload.editedAt).toISOString()
     : new Date().toISOString();
@@ -39,7 +44,7 @@ export async function POST(request: NextRequest) {
   const supabase = createServiceRoleClient();
   const { error } = await supabase.from("match_master_sheet_delta").upsert({
     source_row: payload.sourceRow,
-    row_values: values,
+    row_values: rowValues,
     is_deleted: isDeleted,
     edited_at: editedAt,
     received_at: new Date().toISOString(),
