@@ -46,11 +46,13 @@ function matchMasterOnEdit(e) {
   const secret = props.getProperty("MATCH_MASTER_DELTA_WEBHOOK_SECRET");
   if (!url || !secret) throw new Error("Match Master delta webhook Script Properties are missing.");
 
+  const headers = sheet.getRange(1, 1, 1, 22).getDisplayValues()[0];
   const rows = sheet.getRange(firstRow, 1, lastRow - firstRow + 1, 22).getDisplayValues();
   rows.forEach(function (values, index) {
     const payload = {
       sheetName: tabName,
       sourceRow: firstRow + index,
+      headers: headers,
       values: values,
       editedAt: new Date().toISOString()
     };
