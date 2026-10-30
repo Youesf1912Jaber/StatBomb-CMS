@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { parseMatchMasterSla, syncMatchMasterCache } from "@/lib/match-master-cache-sync";
 import { readMatchesMasterSheet } from "@/lib/sync/google-sheets";
+import { acquireMatchMasterSyncLock, releaseMatchMasterSyncLock } from "@/lib/match-master-sync-lock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,11 +101,18 @@ export async function POST() {
     return NextResponse.json({ error: "Admin access required." }, { status: 403 });
   }
 
+  const lock = await acquireMatchMasterSyncLock();
+  if (!lock) {
+    return NextResponse.json({ error: "Another Match Master sync or Apply operation is already running. Please try again shortly." }, { status: 409 });
+  }
+
   try {
     const result = await syncMatchMasterCache();
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     console.error("Manual Match Master cache sync failed", error);
-    return NextResponse.json({ error: "Match Master cache sync failed. Existing cache was retained where possible." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Match Master cache sync failed. Retry is safe." }, { status: 500 });
+  } finally {
+    await releaseMatchMasterSyncLock(lock);
   }
 }
