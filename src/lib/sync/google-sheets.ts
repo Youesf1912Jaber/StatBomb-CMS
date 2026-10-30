@@ -8,6 +8,7 @@ import {
   normalizeMatchId as normalizeMatchIdValue,
 } from "@/lib/sync/distribution-identity";
 import { PREVIEW_LIMITS, PreviewInputError } from "@/lib/sync/preview";
+import { normalizeEtaDate } from "@/lib/match-master-date";
 
 export const normalizeMatchId = normalizeMatchIdValue;
 export const normalizeDistributionTask = normalizeDistributionTaskValue;
@@ -1506,5 +1507,93 @@ export async function readFfShots2026Sheet(): Promise<FfShotSheetSourceRow[]> {
       mapped.changed,
     ].some((value) => value !== "");
     return hasValue ? [mapped] : [];
+  });
+}
+
+/**
+ * Read only Match Master rows whose ETA falls in the latest seven ETA calendar
+ * days. The ETA column is scanned as a narrow single-column range; A:V is
+ * fetched only for qualifying rows using one values:batchGet request.
+ */
+export async function readMatchesMasterSheetForEtaWindow(days = 7): Promise<MatchMasterPreviewRow[]> {
+  const spreadsheetId = required("GOOGLE_SHEETS_SPREADSHEET_ID");
+  const sheet = await findConfiguredSheet(
+    spreadsheetId, "GOOGLE_SHEETS_MATCHES_GID", "GOOGLE_SHEETS_MATCHES_TAB",
+    "1180574881", "Matches (T)"
+  );
+  const base = `${GOOGLE_SHEETS_API}/${encodeURIComponent(spreadsheetId)}/values`;
+  const [headerPayload, etaPayload] = await Promise.all([
+    googleRequest<{ values?: unknown[][] }>(`${base}/${encodeURIComponent(`${sheet.title}!A1:V1`)}`),
+    googleRequest<{ values?: unknown[][] }>(`${base}/${encodeURIComponent(`${sheet.title}!N:N`)}`),
+  ]);
+  const rawHeaders = headerPayload.values?.[0] ?? [];
+  const headers = rawHeaders.map((value) =>
+    String(value ?? "").trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\\s+/g, " ")
+  );
+  const etaIndex = headers.indexOf("eta");
+  const idIndex = headers.indexOf("id");
+  if (etaIndex < 0 || idIndex < 0) throw new PreviewInputError("The Matches (T) sheet must contain ID and ETA headers.");
+
+  // Column N is the known ETA column in Matches (T); retain header-driven
+  // validation so a moved ETA column fails safely rather than reading wrong data.
+  if (etaIndex !== 13) throw new PreviewInputError("The ETA column moved from column N. Update the narrow ETA scan before syncing.");
+
+  const etaValues = etaPayload.values ?? [];
+  const datedRows = etaValues.slice(1).map((row, index) => ({
+    rowNumber: index + 2,
+    etaDate: normalizeEtaDate(String(row[0] ?? "").trim()),
+  })).filter((item) => item.etaDate);
+  if (!datedRows.length) return [];
+
+  const newestEta = datedRows.reduce((latest, item) => item.etaDate! > latest ? item.etaDate! : latest, datedRows[0]!.etaDate!);
+  const end = new Date(`${newestEta}T00:00:00.000Z`);
+  end.setUTCDate(end.getUTCDate() - Math.max(1, days) + 1);
+  const windowStart = end.toISOString().slice(0, 10);
+  const selectedRows = datedRows.filter((item) => item.etaDate! >= windowStart && item.etaDate! <= newestEta);
+  if (!selectedRows.length) return [];
+
+  const ranges = selectedRows.map((item) => `${sheet.title}!A${item.rowNumber}:V${item.rowNumber}`);
+  const batchUrl = new URL(`${base}:batchGet`);
+  batchUrl.searchParams.set("ranges", ranges.join("&ranges="));
+  batchUrl.searchParams.set("valueRenderOption", "FORMATTED_VALUE");
+  const batch = await googleRequest<{ valueRanges?: Array<{ values?: unknown[][] }> }>(batchUrl.toString());
+
+  const value = (row: unknown[], key: string) => {
+    const index = headers.indexOf(key);
+    if (index < 0) return null;
+    const text = String(row[index] ?? "").trim();
+    return text || null;
+  };
+  return selectedRows.map((selected, index) => {
+    const row = batch.valueRanges?.[index]?.values?.[0] ?? [];
+    const rawMatchId = value(row, "id");
+    const matchId = normalizeMatchId(rawMatchId);
+    return {
+      source_row: selected.rowNumber,
+      raw_match_id: rawMatchId,
+      match_id_valid: Boolean(matchId),
+      match_id: matchId ?? "",
+      home_team_priority: value(row, "home team priority"),
+      away_team_priority: value(row, "away team priority"),
+      competition_season_priority: value(row, "comp season priority"),
+      competition_name: value(row, "competition name"),
+      season_name: value(row, "season name"),
+      home_team: value(row, "home team"),
+      away_team: value(row, "away team"),
+      match_date: value(row, "match date"),
+      kick_off_time: value(row, "kick off time2"),
+      match_day: value(row, "match day"),
+      match_status: value(row, "match status"),
+      eta: value(row, "eta"),
+      sla: value(row, "sla"),
+      sla_status: value(row, "sla status"),
+      team: value(row, "team"),
+      shift_type: value(row, "shift type"),
+      country: value(row, "country"),
+      video_eta: value(row, "video eta"),
+      diff: value(row, "diff"),
+      match_type: value(row, "match type"),
+      diff_sla: value(row, "diff sla"),
+    };
   });
 }
