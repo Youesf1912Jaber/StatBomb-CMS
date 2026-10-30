@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AssignmentStatus, AssignmentTaskTimerRow, Database, MatchRow } from "@/types/database.types";
-import type { AssignmentWithMatch } from "./types";
+import type { AssignmentMatchData, AssignmentWithMatch } from "./types";
 
 type Client = SupabaseClient<Database>;
 
@@ -29,7 +29,7 @@ function assignmentQueryCounts(assignments: Database["public"]["Tables"]["assign
  * matches are fetched separately and joined in JS. Keeps the types honest
  * instead of casting through `any`.
  */
-const MATCH_ID_CHUNK_SIZE = 100;
+// One bounded IN query now covers up to 500 unique matches, reducing REST round trips.\nconst MATCH_ID_CHUNK_SIZE = 500;
 const ASSIGNMENTS_PAGE_SIZE = 1000;
 
 async function attachMatches(
@@ -45,7 +45,7 @@ async function attachMatches(
     ...counts,
   });
 
-  const matches: MatchRow[] = [];
+  const matches: AssignmentMatchData[] = [];
   const matchChunks: string[][] = [];
   for (let i = 0; i < matchIds.length; i += MATCH_ID_CHUNK_SIZE) {
     matchChunks.push(matchIds.slice(i, i + MATCH_ID_CHUNK_SIZE));
@@ -80,7 +80,7 @@ async function attachMatches(
     matchesReturned: matches.length,
   });
 
-  const byId = new Map<string, MatchRow>(matches.map((m) => [m.id, m]));
+  const byId = new Map<string, AssignmentMatchData>(matches.map((m) => [m.id, m]));
 
   return assignments
     .filter((a) => byId.has(a.match_id))
