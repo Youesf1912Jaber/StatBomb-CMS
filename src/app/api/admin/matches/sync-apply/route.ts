@@ -3,6 +3,7 @@ import { buildMatchMasterApplyPlan, createMatchMasterPreviewFingerprint, fetchAl
 import { readMatchesMasterSheetForPreview } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import type { MatchRow } from "@/types/database.types";
+import { acquireMatchMasterSyncLock, releaseMatchMasterSyncLock } from "@/lib/match-master-sync-lock";
 
 export const runtime = "nodejs";
 const BATCH_SIZE = 100;
@@ -59,6 +60,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A fresh preview fingerprint is required." }, { status: 400 });
   }
   if (!body.fingerprint) return NextResponse.json({ error: "A fresh preview fingerprint is required." }, { status: 400 });
+
+  const lock = await acquireMatchMasterSyncLock();
+  if (!lock) {
+    return NextResponse.json({ error: "Another Match Master sync or Apply operation is already running. Please try again shortly." }, { status: 409 });
+  }
 
   try {
     const [sourceRows, currentMatches] = await Promise.all([
@@ -188,6 +194,8 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Match Master apply failed", error);
-    return NextResponse.json({ error: "Unable to apply Match Master records." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to apply Match Master records." }, { status: 500 });
+  } finally {
+    await releaseMatchMasterSyncLock(lock);
   }
 }
