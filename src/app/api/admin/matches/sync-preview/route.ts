@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPreviewFingerprint, fetchMatchMasterPreviewMatches } from "@/lib/match-master-preview";
-import { parseMatchMasterSla } from "@/lib/match-master-cache-sync";
+import { parseMatchMasterSla, syncMatchMasterCache } from "@/lib/match-master-cache-sync";
 import { readMatchesMasterSheetForPreview } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 
@@ -150,5 +150,54 @@ export async function GET() {
   } catch (error) {
     console.error("Match Master combined preview failed", error);
     return NextResponse.json({ error: "Unable to generate the Match Master preview." }, { status: 500 });
+  }
+}
+
+export async function POST() {
+  const supabase = createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles").select("role").eq("id", user.id).single();
+  if (profileError || profile?.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  }
+
+  try {
+    // One source snapshot powers both the cache update and the refreshed preview.
+    const sourceRows = await readMatchesMasterSheetForPreview();
+    const syncResult = await syncMatchMasterCache(sourceRows);
+    const matches = await fetchMatchMasterPreviewMatches(supabase);
+    const preview = classifyMatchMasterRows(sourceRows, matches);
+    const plan = buildMatchMasterApplyPlan(sourceRows, matches);
+    const counts = new Map<string, number>();
+    for (const row of sourceRows) counts.set(row.match_id, (counts.get(row.match_id) ?? 0) + 1);
+
+    return NextResponse.json({
+      success: true,
+      sync: syncResult,
+      preview: {
+        ...preview,
+        fingerprint: createMatchMasterPreviewFingerprint(sourceRows, matches),
+        apply: {
+          candidates: plan.candidates.length,
+          blockedDuplicateConflicts: plan.blockedDuplicateConflicts.length,
+          duplicateExactDeduped: plan.candidates.filter((candidate) => candidate.result === "DUPLICATE_EXACT_DEDUPED").length,
+          invalidMetadata: plan.invalidMetadata.length,
+        },
+      },
+      changeCheck: {
+        success: true,
+        changedMatches: 0,
+        newMatches: 0,
+        duplicateIdsSkipped: [...counts.values()].filter((count) => count > 1).length,
+        sample: [],
+        pendingChanges: [],
+      },
+    });
+  } catch (error) {
+    console.error("Match Master Check & Update failed", error);
+    return NextResponse.json({ error: "Unable to check and update Match Master details." }, { status: 500 });
   }
 }
