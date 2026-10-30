@@ -167,7 +167,8 @@ export async function POST() {
   try {
     // One source snapshot powers both the cache update and the refreshed preview.
     const sourceRows = await readMatchesMasterSheetForPreview();
-    const cacheSourceRows: MatchMasterRow[] = sourceRows.map(({ source_row: _sourceRow, raw_match_id: _rawMatchId, match_id_valid: _valid, ...row }) => row);\n    const syncResult = await syncMatchMasterCache(cacheSourceRows);
+    const cacheSourceRows: MatchMasterRow[] = sourceRows.map(({ source_row: _sourceRow, raw_match_id: _rawMatchId, match_id_valid: _valid, ...row }) => row);
+    const syncResult = await syncMatchMasterCache(cacheSourceRows);
     const matches = await fetchMatchMasterPreviewMatches(supabase);
     const preview = classifyMatchMasterRows(sourceRows, matches);
     const plan = buildMatchMasterApplyPlan(sourceRows, matches);
