@@ -2,7 +2,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminShiftAnalysisAssignments, getAssignmentTaskTimersForAssignments } from "@/lib/assignments/queries";
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
-import type { AssignmentTaskTimerRow } from "@/types/database.types";
 import { LiveTrackedDuration } from "@/components/LiveTrackedDuration";
 import { ShiftAnalysisLiveRefresh } from "@/components/ShiftAnalysisLiveRefresh";
 
