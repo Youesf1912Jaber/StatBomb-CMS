@@ -26,7 +26,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
   }
 
-  if (!Number.isSafeInteger(payload.sourceRow) || (payload.sourceRow ?? 0) < 2 ||
+  const sourceRow = payload.sourceRow;
+  if (typeof sourceRow !== "number" || !Number.isSafeInteger(sourceRow) || sourceRow < 2 ||
       !Array.isArray(payload.headers) || !Array.isArray(payload.values) ||
       payload.headers.length !== payload.values.length || payload.headers.length > 22) {
     return NextResponse.json({ error: "Invalid Match Master row payload." }, { status: 400 });
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
 
   const supabase = createServiceRoleClient();
   const { error } = await supabase.from("match_master_sheet_delta").upsert({
-    source_row: payload.sourceRow,
+    source_row: sourceRow,
     row_values: rowValues,
     is_deleted: isDeleted,
     edited_at: editedAt,
@@ -55,5 +56,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unable to save Match Master row change." }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, sourceRow: payload.sourceRow });
+  return NextResponse.json({ success: true, sourceRow });
 }
