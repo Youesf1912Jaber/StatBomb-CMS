@@ -1552,10 +1552,15 @@ export async function readMatchesMasterSheetForEtaWindow(days = 7): Promise<Matc
   if (!selectedRows.length) return [];
 
   const ranges = selectedRows.map((item) => `${sheet.title}!A${item.rowNumber}:V${item.rowNumber}`);
-  const batchUrl = new URL(`${base}:batchGet`);
-  for (const range of ranges) batchUrl.searchParams.append("ranges", range);
-  batchUrl.searchParams.set("valueRenderOption", "FORMATTED_VALUE");
-  const batch = await googleRequest<{ valueRanges?: Array<{ values?: unknown[][] }> }>(batchUrl.toString());
+  const valueRanges: Array<{ values?: unknown[][] }> = [];
+  // Keep URLs bounded even when the selected seven-day window contains many rows.
+  for (let offset = 0; offset < ranges.length; offset += 100) {
+    const batchUrl = new URL(`${base}:batchGet`);
+    for (const range of ranges.slice(offset, offset + 100)) batchUrl.searchParams.append("ranges", range);
+    batchUrl.searchParams.set("valueRenderOption", "FORMATTED_VALUE");
+    const batch = await googleRequest<{ valueRanges?: Array<{ values?: unknown[][] }> }>(batchUrl.toString());
+    valueRanges.push(...(batch.valueRanges ?? []));
+  }
 
   const value = (row: unknown[], key: string) => {
     const index = headers.indexOf(key);
@@ -1564,7 +1569,7 @@ export async function readMatchesMasterSheetForEtaWindow(days = 7): Promise<Matc
     return text || null;
   };
   return selectedRows.map((selected, index) => {
-    const row = batch.valueRanges?.[index]?.values?.[0] ?? [];
+    const row = valueRanges[index]?.values?.[0] ?? [];
     const rawMatchId = value(row, "id");
     const matchId = normalizeMatchId(rawMatchId);
     return {
