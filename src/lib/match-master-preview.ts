@@ -26,7 +26,7 @@ export async function fetchAllMatches(client: SupabaseClient<Database>): Promise
   return rows;
 }
 
-export function findMatchByExternalId(matches: MatchMasterPreviewMatch[], matchId: string | null | undefined): MatchRow | undefined {
+export function findMatchByExternalId(matches: MatchMasterPreviewMatch[], matchId: string | null | undefined): MatchMasterPreviewMatch | undefined {
   const normalized = normalizeMatchId(matchId);
   if (!normalized) return undefined;
   return matches.find((match) => normalizeMatchId(match.external_id) === normalized);
