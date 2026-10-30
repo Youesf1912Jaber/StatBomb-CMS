@@ -134,7 +134,10 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
 
   return (
     <div className="shift-analysis-page relative isolate mx-auto w-full min-w-0 max-w-[1600px] space-y-6 pb-10 sm:space-y-8">
-      <ShiftAnalysisLiveRefresh />
+      <ShiftAnalysisLiveRefresh
+        assignmentIds={allAssignments.map((assignment) => assignment.id)}
+        filters={{ from, to, collectorId: selectedCollector, status: selectedStatus }}
+      />
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-20 bg-cover bg-center opacity-20" style={{ backgroundImage: 'url("/images/football/pitch-background-tactical.webp")' }} />
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(180deg,rgba(1,22,20,0.68)_0%,rgba(1,22,20,0.9)_55%,rgba(1,22,20,0.96)_100%)]" />
       <header className="relative isolate overflow-hidden rounded-2xl border border-pitch-700 bg-pitch-950 shadow-xl shadow-black/20">
