@@ -134,7 +134,7 @@ function sameNullableText(left: string | null, right: string | null): boolean {
   return (left ?? "").trim().toLowerCase() === (right ?? "").trim().toLowerCase();
 }
 
-function mappedFieldsMatch(source: MatchMasterPreviewRow, existing: MatchRow): boolean {
+function mappedFieldsMatch(source: MatchMasterPreviewRow, existing: MatchMasterPreviewMatch): boolean {
   return sameNullableText(source.home_team, existing.home_team) &&
     sameNullableText(source.away_team, existing.away_team) &&
     sameNullableText(source.competition_name, existing.competition) &&
