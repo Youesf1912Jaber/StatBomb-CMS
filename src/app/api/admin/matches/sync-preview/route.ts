@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPreviewFingerprint, fetchAllMatches } from "@/lib/match-master-preview";
 import { parseMatchMasterSla } from "@/lib/match-master-cache-sync";
@@ -5,6 +6,20 @@ import { readMatchesMasterSheetForPreview } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function sourceFingerprint(source: Record<string, unknown>): string {
+  const { source_row: _sourceRow, raw_match_id: _rawMatchId, match_id_valid: _valid, ...cacheRow } = source;
+  return createHash("sha256").update(stableStringify(cacheRow)).digest("hex");
+}
 
 export async function GET() {
   const supabase = createClient();
@@ -25,31 +40,46 @@ export async function GET() {
     const preview = classifyMatchMasterRows(sourceRows, matches);
     const plan = buildMatchMasterApplyPlan(sourceRows, matches);
 
-    // Keep the existing change-check behavior, but run it against the same sheet
-    // snapshot instead of triggering a second Google Sheets read from the client.
+    // First fetch compact cache metadata. Full JSON payloads are fetched only for
+    // matches whose source fingerprint changed (or whose legacy fingerprint is absent).
     const service = createServiceRoleClient();
     const cachedRows: Array<{
       match_id: string;
-      match_data: Record<string, unknown> | null;
+      source_fingerprint: string | null;
       sla_sort_at: string | null;
     }> = [];
     for (let offset = 0; ; offset += 1000) {
       const { data, error } = await service.from("match_master_cache")
-        .select("match_id, match_data, sla_sort_at")
+        .select("match_id, source_fingerprint, sla_sort_at")
         .order("match_id", { ascending: true })
         .range(offset, offset + 999);
       if (error) throw error;
-      cachedRows.push(...(data ?? []).map((row) => ({
-        match_id: row.match_id,
-        match_data: row.match_data as Record<string, unknown> | null,
-        sla_sort_at: row.sla_sort_at,
-      })));
+      cachedRows.push(...(data ?? []));
       if (!data || data.length < 1000) break;
     }
 
     const counts = new Map<string, number>();
     for (const row of sourceRows) counts.set(row.match_id, (counts.get(row.match_id) ?? 0) + 1);
     const cacheById = new Map(cachedRows.map((row) => [row.match_id, row]));
+    const changedSources = sourceRows.filter((source) => {
+      if ((counts.get(source.match_id) ?? 0) > 1) return false;
+      const cached = cacheById.get(source.match_id);
+      if (!cached) return false;
+      return !cached.source_fingerprint || cached.source_fingerprint !== sourceFingerprint(source as unknown as Record<string, unknown>);
+    });
+
+    const previousById = new Map<string, Record<string, unknown>>();
+    for (let offset = 0; offset < changedSources.length; offset += 100) {
+      const ids = changedSources.slice(offset, offset + 100).map((source) => source.match_id);
+      const { data, error } = await service.from("match_master_cache")
+        .select("match_id, match_data")
+        .in("match_id", ids);
+      if (error) throw error;
+      for (const row of data ?? []) {
+        previousById.set(row.match_id, (row.match_data ?? {}) as Record<string, unknown>);
+      }
+    }
+
     const changes: Array<{
       matchId: string;
       fields: string[];
@@ -60,9 +90,12 @@ export async function GET() {
       if ((counts.get(source.match_id) ?? 0) > 1) continue;
       const cached = cacheById.get(source.match_id);
       if (!cached) { newRows += 1; continue; }
-      const previous = cached.match_data ?? {};
+      const previous = previousById.get(source.match_id);
+      // A matching fingerprint guarantees there are no field-level differences.
+      if (!previous) continue;
       const details: Array<{ field: string; before: string; after: string }> = [];
       for (const key of Object.keys(source)) {
+        if (key === "source_row" || key === "raw_match_id" || key === "match_id_valid") continue;
         const beforeValue = previous[key];
         const afterValue = source[key as keyof typeof source];
         const before = beforeValue == null ? "" : String(beforeValue).trim();
