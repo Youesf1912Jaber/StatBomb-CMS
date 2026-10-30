@@ -8,13 +8,15 @@ import type { Database, MatchRow } from "@/types/database.types";
 
 const MATCHES_PAGE_SIZE = 1000;
 
-export async function fetchAllMatches(client: SupabaseClient<Database>): Promise<MatchRow[]> {
-  const rows: MatchRow[] = [];
+type MatchMasterPreviewMatch = Pick<MatchRow, "external_id" | "home_team" | "away_team" | "competition" | "match_date" | "kickoff_time">;
+
+export async function fetchAllMatches(client: SupabaseClient<Database>): Promise<MatchMasterPreviewMatch[]> {
+  const rows: MatchMasterPreviewMatch[] = [];
   for (let from = 0; ; from += MATCHES_PAGE_SIZE) {
     const { data, error } = await client
       .from("matches")
-      .select("*")
-      .order("id", { ascending: true })
+      .select("external_id, home_team, away_team, competition, match_date, kickoff_time")
+      .order("external_id", { ascending: true })
       .range(from, from + MATCHES_PAGE_SIZE - 1);
     if (error) throw error;
     const page = data ?? [];
@@ -24,7 +26,7 @@ export async function fetchAllMatches(client: SupabaseClient<Database>): Promise
   return rows;
 }
 
-export function findMatchByExternalId(matches: MatchRow[], matchId: string | null | undefined): MatchRow | undefined {
+export function findMatchByExternalId(matches: MatchMasterPreviewMatch[], matchId: string | null | undefined): MatchRow | undefined {
   const normalized = normalizeMatchId(matchId);
   if (!normalized) return undefined;
   return matches.find((match) => normalizeMatchId(match.external_id) === normalized);
