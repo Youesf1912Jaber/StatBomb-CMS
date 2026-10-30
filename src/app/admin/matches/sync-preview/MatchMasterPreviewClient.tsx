@@ -165,11 +165,23 @@ export function MatchMasterPreviewClient() {
               setRefreshingDetails(true);
               setApplyResult(null);
               try {
-                const response = await fetch("/api/admin/match-master/sync", { method: "POST" });
-                const payload = await response.json();
-                if (!response.ok) throw new Error(payload.error ?? "Unable to refresh Match Master details.");
-                setApplyResult("Match Master refreshed: " + (payload.changedRows ?? 0) + " existing matches updated, " + (payload.sourceRows ?? 0) + " source matches synced.");
-                await loadPreviewSnapshot();
+                const response = await fetch("/api/admin/matches/sync-preview", { method: "POST" });
+                const payload = await response.json() as {
+                  error?: string;
+                  preview?: PreviewData;
+                  changeCheck?: ChangeCheck;
+                  sync?: { changedRows?: number; sourceRows?: number; upsertedRows?: number; deletedStaleRows?: number };
+                };
+                if (!response.ok || !payload.preview || !payload.changeCheck) {
+                  throw new Error(payload.error ?? "Unable to check and update Match Master details.");
+                }
+                setData(payload.preview);
+                setChangeCheck(payload.changeCheck);
+                setApplyResult(
+                  "Match Master refreshed: " + (payload.sync?.changedRows ?? 0) +
+                  " existing matches updated, " + (payload.sync?.sourceRows ?? 0) +
+                  " source matches checked. No second preview read was needed."
+                );
               } catch (reason: unknown) {
                 setApplyResult(reason instanceof Error ? reason.message : "Unable to refresh Match Master details.");
               } finally {
