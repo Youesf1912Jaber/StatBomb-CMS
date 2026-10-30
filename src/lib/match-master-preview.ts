@@ -155,7 +155,7 @@ function sourceSignature(source: MatchMasterPreviewRow): string {
 
 export function classifyMatchMasterRows(
   sourceRows: MatchMasterPreviewRow[],
-  matches: MatchRow[],
+  matches: MatchMasterPreviewMatch[],
 ): { rows: MatchMasterPreviewRowResult[]; summary: MatchMasterPreviewSummary } {
   const grouped = new Map<string, MatchMasterPreviewRow[]>();
   for (const source of sourceRows) {
@@ -237,7 +237,7 @@ export function classifyMatchMasterRows(
 
 export function buildMatchMasterApplyPlan(
   sourceRows: MatchMasterPreviewRow[],
-  matches: MatchRow[],
+  matches: MatchMasterPreviewMatch[],
 ): MatchMasterApplyPlan {
   const preview = classifyMatchMasterRows(sourceRows, matches);
   const byMatchId = new Map<string, MatchMasterPreviewRow[]>();
@@ -284,7 +284,7 @@ export function buildMatchMasterApplyPlan(
 
 export function createMatchMasterPreviewFingerprint(
   sourceRows: MatchMasterPreviewRow[],
-  matches: MatchRow[],
+  matches: MatchMasterPreviewMatch[],
 ): string {
   const payload = JSON.stringify({
     sourceRows,
