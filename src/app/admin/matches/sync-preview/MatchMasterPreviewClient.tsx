@@ -142,7 +142,7 @@ export function MatchMasterPreviewClient() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl text-chalk-50">Match Master Sync Preview</h1>
-        <p className="mt-1 text-sm font-semibold text-clock-amber">READ-ONLY PREVIEW — No Supabase match data will be changed.</p>
+        <p className="mt-1 text-sm font-semibold text-clock-amber">READ-ONLY PREVIEW — Latest 7 ETA days only; no Supabase match data will be changed.</p>
         <p className="mt-1 text-xs text-chalk-300">Applying is a separate, explicit Admin action. It does not create assignments or modify Google Sheets.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -157,7 +157,7 @@ export function MatchMasterPreviewClient() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="font-display text-lg text-chalk-50">Google Sheet Changes</h2>
-            <p className="mt-1 text-sm text-chalk-300">Check whether existing Match Master details changed in the source sheet, including SLA. Refreshing updates the Match Master cache; it does not change assignments or edit the sheet.</p>
+            <p className="mt-1 text-sm text-chalk-300">Checking only rows whose ETA falls within the latest 7 ETA calendar days. New matches remain pending until you press Apply Match Master to Supabase.</p>
           </div>
           <button
             type="button"
@@ -180,7 +180,7 @@ export function MatchMasterPreviewClient() {
                 setApplyResult(
                   "Match Master refreshed: " + (payload.sync?.changedRows ?? 0) +
                   " existing matches updated, " + (payload.sync?.sourceRows ?? 0) +
-                  " source matches checked. No second preview read was needed."
+                  " source rows in the latest 7 ETA days checked. No full-sheet match rows were downloaded."
                 );
               } catch (reason: unknown) {
                 setApplyResult(reason instanceof Error ? reason.message : "Unable to refresh Match Master details.");
