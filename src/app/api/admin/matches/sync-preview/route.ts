@@ -1,8 +1,8 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPreviewFingerprint, fetchMatchMasterPreviewMatches } from "@/lib/match-master-preview";
-import { parseMatchMasterSla, syncMatchMasterCache } from "@/lib/match-master-cache-sync";
-import { readMatchesMasterSheetForEtaWindow, type MatchMasterRow } from "@/lib/sync/google-sheets";
+import { parseMatchMasterSla } from "@/lib/match-master-cache-sync";
+import { readMatchesMasterSheetForEtaWindow } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { acquireMatchMasterSyncLock, releaseMatchMasterSyncLock } from "@/lib/match-master-sync-lock";
 
@@ -179,8 +179,15 @@ export async function POST() {
   try {
     // One source snapshot powers both the cache update and the refreshed preview.
     const sourceRows = await readMatchesMasterSheetForPreview();
-    const cacheSourceRows: MatchMasterRow[] = sourceRows.map(({ source_row: _sourceRow, raw_match_id: _rawMatchId, match_id_valid: _valid, ...row }) => row);
-    const syncResult = await syncMatchMasterCache(cacheSourceRows);
+    // This is a scoped seven-day check only. Never pass this partial snapshot
+    // into the full-cache synchronizer, which is allowed to reconcile stale IDs.
+    const syncResult = {
+      sourceRows: sourceRows.length,
+      changedRows: 0,
+      upsertedRows: 0,
+      deletedStaleRows: 0,
+      scope: "latest_7_eta_days",
+    };
     const matches = await fetchMatchMasterPreviewMatches(supabase);
     const preview = classifyMatchMasterRows(sourceRows, matches);
     const plan = buildMatchMasterApplyPlan(sourceRows, matches);
