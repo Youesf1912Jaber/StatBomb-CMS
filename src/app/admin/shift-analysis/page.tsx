@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getAllAssignments } from "@/lib/assignments/queries";
+import { getAdminShiftAnalysisAssignments, getAssignmentTaskTimersForAssignments } from "@/lib/assignments/queries";
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
-import type { AssignmentTaskTimerRow } from "@/types/database.types";
 import { LiveTrackedDuration } from "@/components/LiveTrackedDuration";
 import { ShiftAnalysisLiveRefresh } from "@/components/ShiftAnalysisLiveRefresh";
+import type { AssignmentStatus, AssignmentTaskTimerRow } from "@/types/database.types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type SearchParams = { from?: string; to?: string; task?: string; collector?: string; status?: string };
-type Assignment = Awaited<ReturnType<typeof getAllAssignments>>[number];
+type Assignment = Awaited<ReturnType<typeof getAdminShiftAnalysisAssignments>>[number];
 
 function normalizeHrCode(value: string | null | undefined) {
   return (value ?? "").trim().toUpperCase().replace(/\s+/g, "");
@@ -50,19 +50,19 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
   const from = params.from ?? "";
   const to = params.to ?? "";
   const requestedCollector = params.collector ?? "";
-  const selectedStatus = params.status ?? "";
+  const allowedStatuses: readonly AssignmentStatus[] = ["Not Started", "In Progress", "Completed", "Overdue"];
+  const selectedStatus: AssignmentStatus | undefined = allowedStatuses.includes(params.status as AssignmentStatus)
+    ? (params.status as AssignmentStatus)
+    : undefined;
   const supabase = createClient();
 
-  const [allAssignments, timerResult, profileResult] = await Promise.all([
-    getAllAssignments(supabase),
-    supabase.from("assignment_task_timers").select("*").order("started_at", { ascending: true }),
+  const [allAssignments, profileResult] = await Promise.all([
+    getAdminShiftAnalysisAssignments(supabase, { from, to, status: selectedStatus }),
     // Match the Admin > Collectors page: every non-deleted profile, including protected admins.
     supabase.from("profiles").select("id, full_name, email, hr_code, role, is_protected_admin").is("deleted_at", null).order("full_name"),
   ]);
-  if (timerResult.error) throw timerResult.error;
   if (profileResult.error) throw profileResult.error;
 
-  const timers = (timerResult.data ?? []) as AssignmentTaskTimerRow[];
   const profiles = profileResult.data ?? [];
   const profileById = new Map(profiles.map((p) => [p.id, p]));
   // Accept both current profile IDs and legacy HR-Code query parameters.
@@ -72,6 +72,10 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
     normalizeHrCode(profile.hr_code) === normalizeHrCode(requestedCollector)
   );
   const selectedCollector = requestedProfile?.id ?? "";
+  const scopedAssignments = selectedCollector
+    ? allAssignments.filter((assignment) => assignment.collector_id === selectedCollector)
+    : allAssignments;
+  const timers = await getAssignmentTaskTimersForAssignments(supabase, scopedAssignments.map((assignment) => assignment.id));
   // Only analyze assignments whose owner is still listed in Admin > Collectors.
   const currentRosterAssignments = allAssignments.filter((assignment) => profileById.has(assignment.collector_id));
   const timersByAssignment = new Map<string, AssignmentTaskTimerRow[]>();

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AssignmentTaskTimerRow, Database, MatchRow } from "@/types/database.types";
+import type { AssignmentStatus, AssignmentTaskTimerRow, Database, MatchRow } from "@/types/database.types";
 import type { AssignmentWithMatch } from "./types";
 
 type Client = SupabaseClient<Database>;
@@ -97,6 +97,41 @@ export async function getAssignmentsForCollector(
     .select("*")
     .eq("collector_id", collectorId);
 
+  if (error) throw error;
+  return attachMatches(supabase, data ?? []);
+}
+
+
+/** Fetch task timers only for assignments already narrowed by the calling page. */
+export async function getAssignmentTaskTimersForAssignments(
+  supabase: Client,
+  assignmentIds: string[]
+): Promise<AssignmentTaskTimerRow[]> {
+  if (assignmentIds.length === 0) return [];
+  const rows: AssignmentTaskTimerRow[] = [];
+  const chunkSize = 100;
+  for (let i = 0; i < assignmentIds.length; i += chunkSize) {
+    const { data, error } = await supabase
+      .from("assignment_task_timers")
+      .select("*")
+      .in("assignment_id", assignmentIds.slice(i, i + chunkSize))
+      .order("started_at", { ascending: true });
+    if (error) throw error;
+    rows.push(...(data ?? []));
+  }
+  return rows;
+}
+
+/** Admin analytics assignments constrained in Postgres before match hydration. */
+export async function getAdminShiftAnalysisAssignments(
+  supabase: Client,
+  filters: { from?: string; to?: string; status?: AssignmentStatus }
+): Promise<AssignmentWithMatch[]> {
+  let query = supabase.from("assignments").select("*");
+  if (filters.from) query = query.gte("shift_date", filters.from);
+  if (filters.to) query = query.lte("shift_date", filters.to);
+  if (filters.status) query = query.eq("status", filters.status);
+  const { data, error } = await query.order("shift_date", { ascending: false });
   if (error) throw error;
   return attachMatches(supabase, data ?? []);
 }
