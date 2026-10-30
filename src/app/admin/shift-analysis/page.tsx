@@ -4,7 +4,7 @@ import { getAdminShiftAnalysisAssignments, getAssignmentTaskTimersForAssignments
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
 import { LiveTrackedDuration } from "@/components/LiveTrackedDuration";
 import { ShiftAnalysisLiveRefresh } from "@/components/ShiftAnalysisLiveRefresh";
-import type { AssignmentTaskTimerRow } from "@/types/database.types";
+import type { AssignmentStatus, AssignmentTaskTimerRow } from "@/types/database.types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,7 +50,10 @@ export default async function ShiftAnalysisPage({ searchParams }: { searchParams
   const from = params.from ?? "";
   const to = params.to ?? "";
   const requestedCollector = params.collector ?? "";
-  const selectedStatus = params.status ?? "";
+  const allowedStatuses: readonly AssignmentStatus[] = ["Not Started", "In Progress", "Completed", "Overdue"];
+  const selectedStatus: AssignmentStatus | undefined = allowedStatuses.includes(params.status as AssignmentStatus)
+    ? (params.status as AssignmentStatus)
+    : undefined;
   const supabase = createClient();
 
   const [allAssignments, profileResult] = await Promise.all([
