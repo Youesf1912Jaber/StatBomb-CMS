@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPreviewFingerprint, fetchMatchMasterPreviewMatches } from "@/lib/match-master-preview";
 import { parseMatchMasterSla, syncMatchMasterCache } from "@/lib/match-master-cache-sync";
-import { readMatchesMasterSheetForPreview, type MatchMasterRow } from "@/lib/sync/google-sheets";
+import { readMatchesMasterSheetForEtaWindow, type MatchMasterRow } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { acquireMatchMasterSyncLock, releaseMatchMasterSyncLock } from "@/lib/match-master-sync-lock";
 
@@ -34,10 +34,17 @@ export async function GET() {
 
   try {
     // Read the Google Sheet once and reuse this exact snapshot for both reports.
-    const [sourceRows, matches] = await Promise.all([
-      readMatchesMasterSheetForPreview(),
-      fetchMatchMasterPreviewMatches(supabase),
-    ]);
+    const sourceRows = await readMatchesMasterSheetForEtaWindow(7);
+    const sourceIds = [...new Set(sourceRows.map((row) => row.match_id).filter(Boolean))];
+    const matches: Awaited<ReturnType<typeof fetchMatchMasterPreviewMatches>> = [];
+    for (let offset = 0; offset < sourceIds.length; offset += 500) {
+      const ids = sourceIds.slice(offset, offset + 500);
+      const { data, error } = await supabase.from("matches")
+        .select("external_id, home_team, away_team, competition, match_date, kickoff_time")
+        .in("external_id", ids);
+      if (error) throw error;
+      matches.push(...(data ?? []));
+    }
     const preview = classifyMatchMasterRows(sourceRows, matches);
     const plan = buildMatchMasterApplyPlan(sourceRows, matches);
 
@@ -49,14 +56,13 @@ export async function GET() {
       source_fingerprint: string | null;
       sla_sort_at: string | null;
     }> = [];
-    for (let offset = 0; ; offset += 1000) {
+    for (let offset = 0; offset < sourceIds.length; offset += 500) {
+      const ids = sourceIds.slice(offset, offset + 500);
       const { data, error } = await service.from("match_master_cache")
         .select("match_id, source_fingerprint, sla_sort_at")
-        .order("match_id", { ascending: true })
-        .range(offset, offset + 999);
+        .in("match_id", ids);
       if (error) throw error;
       cachedRows.push(...(data ?? []));
-      if (!data || data.length < 1000) break;
     }
 
     const counts = new Map<string, number>();
