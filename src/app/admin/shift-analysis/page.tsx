@@ -4,6 +4,7 @@ import { getAdminShiftAnalysisAssignments, getAssignmentTaskTimersForAssignments
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
 import { LiveTrackedDuration } from "@/components/LiveTrackedDuration";
 import { ShiftAnalysisLiveRefresh } from "@/components/ShiftAnalysisLiveRefresh";
+import type { AssignmentTaskTimerRow } from "@/types/database.types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
