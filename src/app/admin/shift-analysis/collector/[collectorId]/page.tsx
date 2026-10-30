@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAssignmentsForCollector, getAssignmentTaskTimersForAssignments } from "@/lib/assignments/queries";
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
 import { LiveTrackedDuration } from "@/components/LiveTrackedDuration";
+import type { AssignmentTaskTimerRow } from "@/types/database.types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
