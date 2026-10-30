@@ -178,7 +178,7 @@ export async function POST() {
 
   try {
     // One source snapshot powers both the cache update and the refreshed preview.
-    const sourceRows = await readMatchesMasterSheetForPreview();
+    const sourceRows = await readMatchesMasterSheetForEtaWindow(7);
     // This is a scoped seven-day check only. Never pass this partial snapshot
     // into the full-cache synchronizer, which is allowed to reconcile stale IDs.
     const syncResult = {
@@ -188,7 +188,15 @@ export async function POST() {
       deletedStaleRows: 0,
       scope: "latest_7_eta_days",
     };
-    const matches = await fetchMatchMasterPreviewMatches(supabase);
+    const sourceIds = [...new Set(sourceRows.map((row) => row.match_id).filter(Boolean))];
+    const matches: Awaited<ReturnType<typeof fetchMatchMasterPreviewMatches>> = [];
+    for (let offset = 0; offset < sourceIds.length; offset += 500) {
+      const { data, error } = await supabase.from("matches")
+        .select("external_id, home_team, away_team, competition, match_date, kickoff_time")
+        .in("external_id", sourceIds.slice(offset, offset + 500));
+      if (error) throw error;
+      matches.push(...(data ?? []));
+    }
     const preview = classifyMatchMasterRows(sourceRows, matches);
     const plan = buildMatchMasterApplyPlan(sourceRows, matches);
     const counts = new Map<string, number>();
