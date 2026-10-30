@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAllAssignments } from "@/lib/assignments/queries";
+import { getAssignmentsForCollector, getAssignmentTaskTimersForAssignments } from "@/lib/assignments/queries";
 import { ASSIGNMENT_TASK_NAMES, formatDurationSeconds } from "@/lib/assignments/task-names";
-import type { AssignmentTaskTimerRow } from "@/types/database.types";
 import { LiveTrackedDuration } from "@/components/LiveTrackedDuration";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Assignment = Awaited<ReturnType<typeof getAllAssignments>>[number];
+type Assignment = Awaited<ReturnType<typeof getAssignmentsForCollector>>[number];
 type SearchParams = { from?: string; to?: string; task?: string; status?: string };
 
 
@@ -50,20 +49,16 @@ export default async function CollectorShiftAnalysisPage({ params, searchParams 
   const allowedStatuses = ["Completed", "In Progress", "Overdue", "Not Started"];
   const selectedStatus = allowedStatuses.includes(requestedStatus) ? requestedStatus : "";
   const supabase = createClient();
-  const [profileResult, assignmentsResult, timersResult] = await Promise.all([
+  const [profileResult, allCollectorAssignments] = await Promise.all([
     supabase.from("profiles").select("id, full_name, email, hr_code, role, is_protected_admin").is("deleted_at", null).eq("id", collectorId).maybeSingle(),
-    getAllAssignments(supabase),
-    supabase.from("assignment_task_timers").select("*").order("started_at", { ascending: true }),
+    getAssignmentsForCollector(supabase, collectorId),
   ]);
 
   if (profileResult.error) throw profileResult.error;
-  if (timersResult.error) throw timersResult.error;
   const profile = profileResult.data;
   if (!profile) notFound();
 
-  const allCollectorAssignments = (assignmentsResult as Assignment[])
-    .filter((assignment) => assignment.collector_id === profile.id);
-  const timers = (timersResult.data ?? []) as AssignmentTaskTimerRow[];
+  const timers = await getAssignmentTaskTimersForAssignments(supabase, allCollectorAssignments.map((assignment) => assignment.id));
   const allAssignmentIds = new Set(allCollectorAssignments.map((assignment) => assignment.id));
   const allCollectorTimers = timers.filter((timer) => allAssignmentIds.has(timer.assignment_id));
   const allTimersByAssignment = new Map<string, AssignmentTaskTimerRow[]>();
