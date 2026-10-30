@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
-import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPreviewFingerprint, fetchAllMatches } from "@/lib/match-master-preview";
+import { buildMatchMasterApplyPlan, classifyMatchMasterRows, createMatchMasterPreviewFingerprint, fetchMatchMasterPreviewMatches } from "@/lib/match-master-preview";
 import { parseMatchMasterSla } from "@/lib/match-master-cache-sync";
 import { readMatchesMasterSheetForPreview } from "@/lib/sync/google-sheets";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
@@ -35,7 +35,7 @@ export async function GET() {
     // Read the Google Sheet once and reuse this exact snapshot for both reports.
     const [sourceRows, matches] = await Promise.all([
       readMatchesMasterSheetForPreview(),
-      fetchAllMatches(supabase),
+      fetchMatchMasterPreviewMatches(supabase),
     ]);
     const preview = classifyMatchMasterRows(sourceRows, matches);
     const plan = buildMatchMasterApplyPlan(sourceRows, matches);
