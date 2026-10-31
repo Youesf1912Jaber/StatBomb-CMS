@@ -18,6 +18,11 @@ describe("parseDistributionSla", () => {
       }
     });
 
+    it("uses Cairo winter time after the 2026 DST change", () => {
+      const result = parseDistributionSla("10/31/2026 15:45:00");
+      expect(result).toBe("2026-10-31T13:45:00.000Z");
+    });
+
     it("parses 9/30/2026 10:15:00 as September 30, 2026 10:15 Cairo time", () => {
       const result = parseDistributionSla("9/30/2026 10:15:00");
       expect(result).toBeTruthy();
