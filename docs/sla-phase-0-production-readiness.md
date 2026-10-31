@@ -108,7 +108,9 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - [x] User confirmed `x-cron-secret` value matches Production `CRON_SECRET`.
 - [ ] Inspect longer cron-job.org execution history and retry behavior.
 - [ ] Measure actual assignment writes and Distribution refresh frequency from available application logs.
-- [ ] Reconcile all migration files with live Production function/schema definitions, especially duplicate 0028 and timestamped migrations.
+- [x] Directly compare Production migration history and live definitions for `create_assignment`, `start_assignment`, `get_sla_alert_assignments`, and Match Master lock functions.
+- [x] Confirm three timestamp/name differences are already applied and must not be replayed.
+- [ ] Review the real missing `create_assignment()` restore behavior against constraints, RLS, reconciliation paths, and test coverage before proposing a safe migration.
 - [ ] Validate Broadcast/private-topic design and RLS for delivering targeted in-app alarm updates; no production changes.
 - [ ] Audit the current in-app alarm lifecycle: duplicate suppression, simultaneous alarms, tab visibility, audio/autoplay behavior, Stop Alarm semantics, and recovery after missed events.
 - [ ] Add/plan fallback-SLA and DST regression tests.
