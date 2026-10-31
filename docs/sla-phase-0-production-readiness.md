@@ -13,6 +13,9 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - Confirmed request settings: HTTP `GET`; timeout 30 seconds; request body empty; HTTP Basic authentication disabled; custom header key is `x-cron-secret`. User explicitly confirmed that its configured value is the same as Production's `CRON_SECRET`; no secret value was shared. Authentication configuration is therefore confirmed.
 - Confirmed advanced behavior: redirects with HTTP 3xx are not treated as success; schedule expiration is disabled; response saving in job history is disabled; failure notification is disabled; success-after-failure notification is disabled; automatic job disabling after too many failures is enabled; notification channel setting is "all notification channels" but no failure/success event notifications are enabled in the screenshot.
 - The earlier dashboard screenshot showed five recent executions as Successful (HTTP 200). This plus the current settings confirms recent operation, not long-term uptime.
+- Vercel Production runtime logs are retained for only the latest 1 hour on the current plan; a 24-hour Vercel runtime-log request was rejected by the API because the plan does not retain that range. The available 50-minute sample shows the scheduled scanner executing approximately once per minute with successful completion logs. One separate request at 18:40:18 UTC was rejected as unauthorized, while the scheduled invocation at 18:40:01 UTC succeeded; this looks like an extra invalid request, not a missed scheduled run.
+- In the available 50-minute sample, successful scanner durations ranged roughly 0.18–1.89 seconds, with no RPC failure shown. The log sample includes one scan that fired 3 warnings and 3 overdue transitions; most sampled runs fired zero.
+
 - The scanner route requires `CRON_SECRET` and accepts it through `Authorization: Bearer` or `x-cron-secret`; the user confirmed the configured `x-cron-secret` value matches Production `CRON_SECRET`.
 - Empty `vercel.json` is expected because the user uses cron-job.org, not Vercel Cron. Do not add a competing scheduler.
 - Supabase `cron.job` contains only the Match Master refresh job (job 2, `*/5 * * * *`). There is no SLA job in Supabase pg_cron.
@@ -26,6 +29,10 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - No non-internal trigger on `public.assignments` currently handles SLA event reconciliation.
 - Current scanner marks warning when SLA is within one hour and warning flag is null; it marks incomplete assignments Overdue after SLA. It does not reset flags after SLA/collector/status changes and does not filter hidden or distribution-absent assignments.
 - `GlobalSlaAlerts.tsx` refreshes every 60 seconds, on every visibility-to-visible event, and after every unfiltered Postgres Changes event on `public.assignments`.
+- Supabase unified logs for the available rolling ~24-hour window show 10,542 calls to `get_sla_alert_assignments` (average 102 ms, p95 296 ms, max 2.8 s; zero non-2xx). This endpoint volume is far above one request/minute and indicates many active browser refreshes/sessions. The observed count averages about 12.3 requests/minute during the ~14.2-hour interval where this endpoint was active.
+- The same log window shows 1,435 calls to `evaluate_assignment_sla_states` (average 524 ms, p95 1.16 s, max 3.39 s; zero non-2xx), consistent with approximately one scheduled scan per minute across the 24-hour retained window.
+- Realtime logs show 74 events stating "Stopping Postgres Changes streaming for tenant due to no active subscriptions". No assignment table is published to `supabase_realtime`, so these logs do not establish successful assignment change delivery.
+
 - Client warning identity is `assignmentId:sla`; collector identity is not part of the event key.
 
 ### Realtime and in-app alarm
@@ -56,7 +63,9 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - Match-specific Distribution endpoint `/api/matches/[matchId]/distribution` reconciles current rows and writes assignments.
 - Admin delete-row endpoint `/api/admin/distribution-row` marks `distribution_present=false`.
 - Assignment status sync from Distribution performs direct per-assignment updates using the service-role client; assignment reassignment uses `reassign_assignment()`; start/complete use their own RPCs.
-- Reconciliation fetches assignments in pages of 1,000, and can update/create/restore many rows in one refresh. Exact writes per run and run frequency have not yet been measured from logs. A row trigger must be tested against full refresh/bulk sync, not only single-row UI edits.
+- Supabase API logs in the available rolling ~24-hour window show 50 calls to `reconcile_distribution_presence` (average 299 ms, p95 548 ms, max 619 ms; 0 non-2xx), 35 calls to `create_assignment` (1 non-2xx), and 4 calls to `reassign_assignment`. This provides observed RPC frequency but **not exact assignment row-write counts**.
+- PostgreSQL logs do not contain successful per-statement DML/query records in the retained sample; they mainly expose checkpoint/cron lifecycle plus three logged SQL errors. Therefore actual assignment rows written per reconciliation run cannot be derived from current logs. A controlled staging run with instrumentation or an audited sync-run counter is required.
+- Reconciliation fetches assignments in pages of 1,000, and can update/create/restore many rows in one refresh. A row trigger must be tested against full refresh/bulk sync, not only single-row UI edits.
 - `started_at` is set when work starts and cleared for Not Started sync/reset paths; it can help restore In Progress vs Not Started, but all reset/reassignment/reconciliation semantics must be tested before treating it as the sole source of truth.
 
 ### SLA and Cairo timezone parsing
@@ -70,8 +79,18 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - Versions 0036–0041 are absent from both the current repository migration directory and Production history; this is not, by itself, a missing-migration gap.
 - Repository has two files with version prefix `0028`: `0028_deductions.sql` and `0028_restore_removed_assignment_on_redistribution.sql`. Production history has only one applied `0028`, named `deductions`.
 - Production `create_assignment()` currently has the old behavior: it rejects an existing logical assignment and does not restore a row whose `distribution_present=false`. The repository's `0028_restore_removed_assignment_on_redistribution.sql` contains restore behavior but does not have a separately represented applied migration version in Production history. This is a confirmed migration/schema drift candidate that needs reconciliation before any new migrations are applied.
+- The restore migration updates collector/status/timestamps when the collector changes, but does **not** reset `sla_warning_sent_at` or `overdue_notified_at` when restoring/reassigning the preserved row. Under the approved SLA decisions, that could suppress a fresh warning/Overdue event for the new collector. Do not apply this file verbatim; its behavior needs a follow-up design and tests.
+- Production has the unique logical identity constraint/index on `(match_id, task, half)`, confirming why restoration of the existing row is needed instead of inserting a duplicate.
+
 - Several timestamped migration filenames do not match the applied history version/name exactly. Examples: repository `20261026193000_allow_start_unstarted_overdue_assignments.sql` vs applied version `20261026161259`; repository `20261029202900_get_sla_alert_assignments_rpc.sql` vs applied version `20261029175551`; repository `20261030150000_add_match_master_sync_lock.sql` while Production history contains `20261030134217` and `20261030134954`. Names and live function definitions must be reconciled migration-by-migration rather than assuming filenames are exact history versions.
 - Production function `reconcile_distribution_presence()` exists and updates `distribution_present` in bulk.
+
+### Production log measurements and advisor review
+- Available Supabase unified log sample (rolling ~24 hours as returned by the log service): `edge_logs` 28,821 entries, `auth_logs` 4,536, `postgres_logs` 1,160, `auth_audit_logs` 347, `realtime_logs` 121, `pgbouncer_logs` 88, `postgrest_logs` 14, `storage_logs` 6, and `workflow_run_logs` 6.
+- Relevant endpoint counts and latency percentiles are recorded above. These are request counts, not assignment row mutation counts.
+- Supabase Performance Advisor reported 33 unused-index notices and one duplicate-index warning (`sync_runs_created_at_desc_idx` and `sync_runs_created_at_idx`). Do not drop indexes during this SLA phase; several may be newly introduced or workload-dependent.
+- Supabase Security Advisor reported: 3 RLS-enabled internal Match Master tables without policies; catalog grants confirm `anon` and `authenticated` have no table privileges and `service_role` does, so this appears intentionally service-role-only. It also reports mutable search_path warnings for 3 functions and SECURITY DEFINER execute grants exposed to anon/authenticated across multiple RPCs (20 anon findings and 21 authenticated findings in the returned summary). These need a separate function-by-function authorization review; do not blanket-revoke because application RPCs may intentionally be callable by signed-in users and may perform internal authorization checks.
+- Performance Advisor also reports RLS policies repeatedly evaluating auth/current_setting functions on several tables including `assignments`, `profiles`, `matches`, `notifications`, and task timers; this is an optimization candidate, not a reason to change policies without validating semantics.
 
 ### Production scale snapshot
 - Approximate table stats: assignments 3,774 rows / 2.4 MB; notifications 12,850 rows / 5.65 MB; push_subscriptions 29 rows / 120 KB.
@@ -118,17 +137,21 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - [x] Inspect Cairo timezone parser and blank-SLA fallback implementation.
 - [x] Inspect cron-job.org schedule, timezone, request method, timeout, and configured auth header name.
 - [x] User confirmed `x-cron-secret` value matches Production `CRON_SECRET`.
-- [ ] Inspect longer cron-job.org execution history and retry behavior.
-- [ ] Measure actual assignment writes and Distribution refresh frequency from available application logs.
+- [ ] Inspect longer cron-job.org execution history and retry behavior (Vercel log retention is only 1 hour on current plan; scheduler history still needed).
+- [x] Measure available Distribution/SLA RPC request counts and latency from Supabase logs.
+- [ ] Measure exact assignment row writes per reconciliation run; current logs do not expose successful DML row counts.
 - [x] Directly compare Production migration history and live definitions for `create_assignment`, `start_assignment`, `get_sla_alert_assignments`, and Match Master lock functions.
 - [x] Confirm three timestamp/name differences are already applied and must not be replayed.
-- [ ] Review the real missing `create_assignment()` restore behavior against constraints, RLS, reconciliation paths, and test coverage before proposing a safe migration.
+- [x] Review the missing `create_assignment()` restore SQL against Production logical-identity constraint and SLA fields; identified missing reset of SLA notification flags as a blocker to applying it verbatim.
+- [ ] Design and test a corrected restore migration against RLS, reconciliation paths, and approved SLA behavior.
 - [x] Recheck Production Realtime publication membership, realtime.messages policies, and assignment triggers; findings recorded above.
 - [ ] Design and validate Broadcast/private-topic authorization for targeted in-app alarm updates; no production changes.
+- [x] Verify Match Master internal tables with no RLS policies have no anon/authenticated table grants; service_role-only access is configured.
 - [x] Audit current in-app alarm client behavior: 60-second refresh, visibility refresh, current Realtime listener, looping audio, explicit audio unlock, per-event Stop, localStorage silencing, and cross-tab audio lease.
 - [ ] Test/decide alarm lifecycle semantics: reassignment identity, Stop behavior across devices/tabs, simultaneous warnings, missed-event recovery, and inactive/background tabs.
 - [ ] Add/plan fallback-SLA and DST regression tests.
-- [ ] Validate pg_cron sub-minute runtime behavior or retain the external one-minute scheduler.
+- [x] Verify external cron-job.org scanner runs about once per minute in the available 50-minute Vercel log sample; keep external scheduler for now.
+- [ ] Inspect longer scheduler history/retry settings before final scheduler reliability sign-off.
 - [ ] Produce final Phase 0 go/no-go and implementation sequence.
 
 ## Safety
