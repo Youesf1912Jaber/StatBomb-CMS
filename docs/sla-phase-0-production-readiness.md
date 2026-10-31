@@ -14,6 +14,7 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - Supabase `cron.job` contains only the Match Master refresh job (job 2, `*/5 * * * *`). There is no SLA job in Supabase pg_cron.
 - Recent Match Master pg_cron history shows successful five-minute runs. This does not provide cron-job.org history.
 - Supabase project is ACTIVE_HEALTHY; PostgreSQL 17.6; `pg_cron 1.6.4`, `pg_net 0.20.4`, `supabase_vault 0.3.1`.
+- pg_cron upstream 1.5+ supports interval schedules such as `'15 seconds'`; installed 1.6.4 is new enough at the extension level. However, no test job was created, so Supabase-hosted runtime/plan behavior and operational suitability have not been verified. Existing SLA cadence remains external cron-job.org at about one minute.
 
 ### Current SLA implementation
 - Production contains `evaluate_assignment_sla_states()`, `get_sla_alert_assignments()`, and `claim_pending_push_notifications()`.
@@ -40,6 +41,12 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - Reconciliation fetches assignments in pages of 1,000, and can update/create/restore many rows in one refresh. Exact writes per run and run frequency have not yet been measured from logs. A row trigger must be tested against full refresh/bulk sync, not only single-row UI edits.
 - `started_at` is set when work starts and cleared for Not Started sync/reset paths; it can help restore In Progress vs Not Started, but all reset/reassignment/reconciliation semantics must be tested before treating it as the sole source of truth.
 
+### SLA and Cairo timezone parsing
+- `parseDistributionSla()` converts Cairo civil time to UTC using `Intl.DateTimeFormat({ timeZone: 'Africa/Cairo' })`, including the timezone offset applicable to the target date.
+- The assignment planner explicitly fills an empty SLA with 23:59:59 on the shift date (or match date fallback), converted using the same Cairo timezone conversion.
+- Existing tests cover Cairo DST transition on 2026-10-31, explicit timestamps, time-only values, ambiguous US-style dates, and invalid values. There is no explicit test asserting the blank-SLA fallback equals 23:59:59 Cairo time or that its one-hour warning is generated. Add that regression test during implementation.
+- Important nuance: malformed non-empty SLA values are rejected; only a truly blank value gets the 23:59:59 fallback.
+
 ### Migration parity and schema drift
 - All repository migration files and production migration history were compared.
 - Versions 0036–0041 are absent from both the current repository migration directory and Production history; this is not, by itself, a missing-migration gap.
@@ -61,8 +68,8 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 5. Decide reliable restoration of `In Progress` vs `Not Started` after Overdue; `started_at` is a candidate, not yet approved as sole truth.
 6. Implementing Web Push requires service worker, subscription UI, sender route, pinned dependency, VAPID configuration, retries, and expired-subscription cleanup; current repo only has database scaffolding.
 7. Confirm cron-job.org sends `CRON_SECRET` using an accepted header. Never paste the secret into the audit document or chat.
-8. Confirm exact fallback SLA timestamp parsing and Africa/Cairo timezone behavior against code/tests.
-9. The proposed 15-second pg_cron cadence is not yet validated for the installed `pg_cron 1.6.4`; current external scheduler runs approximately every minute. Do not assume sub-minute scheduling works.
+8. Add a regression test for blank SLA fallback at 23:59:59 Cairo and its warning timing; verify DST boundary cases.
+9. Although pg_cron 1.6.4 supports seconds intervals upstream, do not switch schedulers or assume 15-second production cadence until Supabase runtime/plan behavior and load are verified.
 
 ## Phase 0 checklist
 
@@ -78,12 +85,13 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - [x] Compare repository migration directory with Production migration history; identify duplicate 0028 and version/name drift candidates.
 - [x] Identify assignment mutation/reconciliation endpoints and direct status update paths.
 - [x] Check repository for push sender, web-push dependency, and service worker; none found.
+- [x] Inspect Cairo timezone parser and blank-SLA fallback implementation.
 - [ ] Inspect full cron-job.org job settings, timezone, auth header presence, retries, and longer execution history.
 - [ ] Measure actual assignment writes and Distribution refresh frequency from available application logs.
 - [ ] Reconcile all migration files with live Production function/schema definitions, especially duplicate 0028 and timestamped migrations.
 - [ ] Validate Broadcast private-topic design and RLS; no production changes.
-- [ ] Validate Cairo timezone/fallback SLA parser and tests.
-- [ ] Validate pg_cron sub-minute support or choose a compatible scheduler cadence.
+- [ ] Add/plan fallback-SLA and DST regression tests.
+- [ ] Validate pg_cron sub-minute runtime behavior or retain the external one-minute scheduler.
 - [ ] Produce final Phase 0 go/no-go and implementation sequence.
 
 ## Safety
