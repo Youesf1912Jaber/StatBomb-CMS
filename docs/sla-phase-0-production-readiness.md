@@ -8,8 +8,12 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 
 ### Scheduler and scanner
 - Production SLA scanner endpoint: `/api/cron/sla-scan`.
-- User-provided cron-job.org dashboard screenshot shows one enabled job named `StatBomb SLA Scanner`, targeting `https://stat-bomb-cms.vercel.app/api/cron/sla-scan`; next execution appears one minute later, and the five visible recent executions are Successful (HTTP 200). This confirms configuration and recent success as visible in the screenshot, not full historical uptime or hidden job settings.
-- The scanner route requires `CRON_SECRET` and accepts it through `Authorization: Bearer` or `x-cron-secret`; it fails closed with 401 when missing/incorrect. The cron-job.org job must send one of those headers.
+- User-provided cron-job.org configuration screenshots confirm one enabled job named `StatBomb SLA Scanner`, targeting `https://stat-bomb-cms.vercel.app/api/cron/sla-scan`.
+- Confirmed schedule: every 1 minute; job timezone: `Africa/Cairo`. The five upcoming executions shown are spaced one minute apart in Cairo local time.
+- Confirmed request settings: HTTP `GET`; timeout 30 seconds; request body empty; HTTP Basic authentication disabled; custom header key is `x-cron-secret` with its value redacted by the user. The header name matches one of the scanner's accepted authentication methods. Because the value is hidden, we cannot independently verify that it matches Production's `CRON_SECRET`; do not expose it in chat or documentation.
+- Confirmed advanced behavior: redirects with HTTP 3xx are not treated as success; schedule expiration is disabled; response saving in job history is disabled; failure notification is disabled; success-after-failure notification is disabled; automatic job disabling after too many failures is enabled; notification channel setting is "all notification channels" but no failure/success event notifications are enabled in the screenshot.
+- The earlier dashboard screenshot showed five recent executions as Successful (HTTP 200). This plus the current settings confirms recent operation, not long-term uptime.
+- The scanner route requires `CRON_SECRET` and accepts it through `Authorization: Bearer` or `x-cron-secret`; the configured header key is compatible. Matching the redacted value to the deployed secret remains unverified.
 - Empty `vercel.json` is expected because the user uses cron-job.org, not Vercel Cron. Do not add a competing scheduler.
 - Supabase `cron.job` contains only the Match Master refresh job (job 2, `*/5 * * * *`). There is no SLA job in Supabase pg_cron.
 - Recent Match Master pg_cron history shows successful five-minute runs. This does not provide cron-job.org history.
@@ -63,13 +67,13 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 
 ## Important implementation blockers / decisions
 
-1. Obtain cron-job.org job Details view to confirm exact interval, timezone, request method, auth header presence, timeout/retry settings, and longer execution history. Do not expose any token/secret.
+1. Scheduler settings are now confirmed: every minute in Africa/Cairo, GET, 30-second timeout, and `x-cron-secret` header configured (value redacted). Remaining scheduler checks: verify the redacted value matches the deployed `CRON_SECRET` without sharing it, and inspect longer execution history / retry policy.
 2. Reconcile the duplicate `0028` migration and timestamped migration history vs live Production functions before creating/applying any new migrations. Do not blindly replay or mark migrations applied.
 3. Decide the intended Postgres Changes vs Broadcast path. `public.assignments` is not in `supabase_realtime`; `realtime.messages` has RLS but no current policies. Broadcast needs a deliberate private-topic authorization model.
 4. Confirm all assignment write paths and measure actual Distribution refresh row writes/run frequency; test trigger overhead with a production-sized staging dataset.
 5. Decide reliable restoration of `In Progress` vs `Not Started` after Overdue; `started_at` is a candidate, not yet approved as sole truth.
 6. Web Push/browser notifications are explicitly excluded. Keep the existing In-App SLA Alarm UX (warning panel + sound + Stop Alarm) as the only supported notification surface for this scope; audit and harden its delivery, deduplication, lifecycle, and audio behavior.
-7. Confirm cron-job.org sends `CRON_SECRET` using an accepted header. Never paste the secret into the audit document or chat.
+7. Confirm privately that the configured `x-cron-secret` value equals the deployed `CRON_SECRET`. The header key is correct; the redacted value cannot be verified from screenshots. Never paste the secret into the audit document or chat.
 8. Add a regression test for blank SLA fallback at 23:59:59 Cairo and its warning timing; verify DST boundary cases.
 9. Although pg_cron 1.6.4 supports seconds intervals upstream, do not switch schedulers or assume 15-second production cadence until Supabase runtime/plan behavior and load are verified.
 
@@ -100,7 +104,8 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - [x] Confirm user decision: Web Push/browser notifications are out of scope; in-site SLA Alarm is the required notification experience.
 - [x] Record the supplied In-App SLA Alarm screenshot as the UX reference (warning details, one-hour badge, audible alarm, Stop Alarm control).
 - [x] Inspect Cairo timezone parser and blank-SLA fallback implementation.
-- [ ] Inspect full cron-job.org job settings, timezone, auth header presence, retries, and longer execution history.
+- [x] Inspect cron-job.org schedule, timezone, request method, timeout, and configured auth header name.
+- [ ] Verify privately that the redacted `x-cron-secret` value matches Production `CRON_SECRET`; inspect longer execution history and retry behavior.
 - [ ] Measure actual assignment writes and Distribution refresh frequency from available application logs.
 - [ ] Reconcile all migration files with live Production function/schema definitions, especially duplicate 0028 and timestamped migrations.
 - [ ] Validate Broadcast/private-topic design and RLS for delivering targeted in-app alarm updates; no production changes.
