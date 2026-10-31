@@ -24,11 +24,13 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - `GlobalSlaAlerts.tsx` refreshes every 60 seconds, on every visibility-to-visible event, and after every unfiltered Postgres Changes event on `public.assignments`.
 - Client warning identity is `assignmentId:sla`; collector identity is not part of the event key.
 
-### Realtime and push
+### Realtime and in-app alarm
 - The `supabase_realtime` publication exists but currently has no published application tables such as `public.assignments`. Thus the current Postgres Changes subscription to assignments is not supported by the current publication membership, and its effectiveness needs a controlled test after publication configuration is understood.
 - A separate internal publication named `supabase_realtime_messages_publication` contains partitioned `realtime.messages_*` tables. This is not the same as publishing `public.assignments` for Postgres Changes.
 - `realtime.messages` has RLS enabled, but the current catalog query found no policies on it. Private Broadcast topic authorization is therefore not ready to be assumed; design and test topic policies before using private channels.
-- Push database scaffolding exists: `push_subscriptions`, `notifications.pushed_at`, `push_claimed_at`, and `claim_pending_push_notifications()`. However repository search and `package.json` show no `web-push` package, service worker, `navigator.serviceWorker` registration, or sender route. Web Push delivery is not implemented in the audited branch.
+- **Web Push and browser notifications are explicitly out of scope.** The user confirmed that the product intentionally relies on the in-site In-App SLA Alarm, not operating-system/browser push notifications. The absence of a `web-push` package, service worker, or sender route is therefore not a blocker and must not trigger implementation work. Existing push-related database scaffolding (if retained) is legacy/unused for this feature unless separately audited; do not build on it or add VAPID configuration.
+- The accepted UX reference is the user-provided screenshot: an in-site `SLA WARNING` panel showing match, competition, assignment, task, deadline, remaining-time badge (for example `1 HOUR LEFT`), audible alarm, and a `Stop Alarm` action. Phase 1 must preserve this in-app experience and improve its event delivery/reliability rather than replace it with browser notifications.
+- The in-app alarm still depends on the page being open and its client runtime/audio being active. Confirm the intended behavior for multiple simultaneous warnings, tab visibility/backgrounding, audio permission/autoplay restrictions, stopping one alarm vs all alarms, and avoiding duplicate/replayed alarms.
 - Assignment, notification, and push-subscription tables have RLS enabled; existing policies restrict assignment reads to assigned collector/admin and notification/push-subscription access to recipients/owners.
 
 ### Assignment write paths and bulk sync
@@ -66,10 +68,21 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 3. Decide the intended Postgres Changes vs Broadcast path. `public.assignments` is not in `supabase_realtime`; `realtime.messages` has RLS but no current policies. Broadcast needs a deliberate private-topic authorization model.
 4. Confirm all assignment write paths and measure actual Distribution refresh row writes/run frequency; test trigger overhead with a production-sized staging dataset.
 5. Decide reliable restoration of `In Progress` vs `Not Started` after Overdue; `started_at` is a candidate, not yet approved as sole truth.
-6. Implementing Web Push requires service worker, subscription UI, sender route, pinned dependency, VAPID configuration, retries, and expired-subscription cleanup; current repo only has database scaffolding.
+6. Web Push/browser notifications are explicitly excluded. Keep the existing In-App SLA Alarm UX (warning panel + sound + Stop Alarm) as the only supported notification surface for this scope; audit and harden its delivery, deduplication, lifecycle, and audio behavior.
 7. Confirm cron-job.org sends `CRON_SECRET` using an accepted header. Never paste the secret into the audit document or chat.
 8. Add a regression test for blank SLA fallback at 23:59:59 Cairo and its warning timing; verify DST boundary cases.
 9. Although pg_cron 1.6.4 supports seconds intervals upstream, do not switch schedulers or assume 15-second production cadence until Supabase runtime/plan behavior and load are verified.
+
+
+## Confirmed product decisions for the SLA redesign
+
+- Notification surface: **in-app alarm only**. Do not implement Web Push, browser notification popups, service-worker push delivery, or VAPID setup as part of this work.
+- Preserve the current visual/interaction contract shown in the supplied screenshot: `SLA WARNING` panel, match/competition/assignment/task/deadline details, remaining-time indicator, audible alarm, and `Stop Alarm` control.
+- If an assignment is currently Overdue and its SLA moves into the future, restore its status to `In Progress` when work has started, otherwise `Not Started`.
+- If the scanner resumes after an outage and both warning time and SLA have already passed, emit Overdue only; do not emit a stale one-hour warning.
+- If an assignment is reassigned to a new collector within the last hour before SLA, send the new collector an immediate warning.
+- If SLA is blank and the established fallback is 23:59:59 Cairo time, the one-hour warning must be scheduled relative to that fallback.
+- If an assignment is hidden from the Admin dashboard or removed from the Distribution sheet, cancel its pending alerts.
 
 ## Phase 0 checklist
 
@@ -84,12 +97,14 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - [x] Inspect Vercel project and latest Production deployment.
 - [x] Compare repository migration directory with Production migration history; identify duplicate 0028 and version/name drift candidates.
 - [x] Identify assignment mutation/reconciliation endpoints and direct status update paths.
-- [x] Check repository for push sender, web-push dependency, and service worker; none found.
+- [x] Confirm user decision: Web Push/browser notifications are out of scope; in-site SLA Alarm is the required notification experience.
+- [x] Record the supplied In-App SLA Alarm screenshot as the UX reference (warning details, one-hour badge, audible alarm, Stop Alarm control).
 - [x] Inspect Cairo timezone parser and blank-SLA fallback implementation.
 - [ ] Inspect full cron-job.org job settings, timezone, auth header presence, retries, and longer execution history.
 - [ ] Measure actual assignment writes and Distribution refresh frequency from available application logs.
 - [ ] Reconcile all migration files with live Production function/schema definitions, especially duplicate 0028 and timestamped migrations.
-- [ ] Validate Broadcast private-topic design and RLS; no production changes.
+- [ ] Validate Broadcast/private-topic design and RLS for delivering targeted in-app alarm updates; no production changes.
+- [ ] Audit the current in-app alarm lifecycle: duplicate suppression, simultaneous alarms, tab visibility, audio/autoplay behavior, Stop Alarm semantics, and recovery after missed events.
 - [ ] Add/plan fallback-SLA and DST regression tests.
 - [ ] Validate pg_cron sub-minute runtime behavior or retain the external one-minute scheduler.
 - [ ] Produce final Phase 0 go/no-go and implementation sequence.
