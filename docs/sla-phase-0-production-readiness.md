@@ -100,6 +100,53 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - Supabase Security Advisor reported: 3 RLS-enabled internal Match Master tables without policies; catalog grants confirm `anon` and `authenticated` have no table privileges and `service_role` does, so this appears intentionally service-role-only. It also reports mutable search_path warnings for 3 functions and SECURITY DEFINER execute grants exposed to anon/authenticated across multiple RPCs (20 anon findings and 21 authenticated findings in the returned summary). These need a separate function-by-function authorization review; do not blanket-revoke because application RPCs may intentionally be callable by signed-in users and may perform internal authorization checks.
 - Performance Advisor also reports RLS policies repeatedly evaluating auth/current_setting functions on several tables including `assignments`, `profiles`, `matches`, `notifications`, and task timers; this is an optimization candidate, not a reason to change policies without validating semantics.
 
+### Phase 0 closure: bounded evidence, architecture decisions, and Phase 1 gates
+
+#### Production assignment snapshot (read-only, 2026-10-31)
+- Total assignments: 3,774.
+- `distribution_present=true`: 2,911; `distribution_present=false`: 863.
+- `hidden_from_admin_dashboard=true`: 52.
+- Status `Overdue`: 11.
+- `sla_warning_sent_at IS NOT NULL`: 2,954.
+- `overdue_notified_at IS NOT NULL`: 2,875.
+- These are a point-in-time row snapshot, not counts of rows changed by a particular Sync run. They must not be interpreted as historical mutation volume.
+
+#### Distribution Sync write-volume measurement decision
+- The current retained Supabase logs expose RPC invocation counts and latency but not successful per-statement affected-row counts.
+- Exact writes per reconciliation run cannot be measured read-only from the current logs or a point-in-time table snapshot. Doing so requires instrumentation (run ID + inserted/updated/restored/hidden row counters) or a controlled staging replay with before/after snapshots.
+- Phase 0 is therefore closed with this limitation explicitly recorded. Phase 1 must add non-sensitive per-run counters and test a production-sized staging replay before enabling row-level SLA triggers. No instrumentation was added to Production in Phase 0.
+
+#### Private Broadcast architecture decision for Phase 1
+- Use private topics scoped to a single collector, e.g. `sla:collector:<collector_uuid>`, and a separate tightly scoped Admin topic only if Admin needs team-wide events.
+- Topic authorization must derive the authenticated user's collector identity from trusted server-side profile/app metadata and validate Admin role from trusted authorization data; never trust client-supplied collector IDs or editable user metadata.
+- Broadcast payloads should contain only event/assignment identifiers and minimal display fields; the client must fetch the assignment details through the existing RLS-protected read path. Do not broadcast other collectors' assignment details to a shared topic.
+- Keep Realtime Broadcast messages ephemeral; durable event/notification state remains in Postgres so clients can recover after reconnect. Do not expose `realtime.messages` with broad grants or add a permissive policy.
+- Enable private Broadcast only after policies are tested with two collectors, an Admin, an unauthenticated client, and a forged topic attempt. Verify cross-collector delivery is denied.
+- Existing `postgres_changes` listener is not a valid fallback until publication membership and access behavior are explicitly configured and tested.
+
+#### In-app alarm lifecycle decisions carried into Phase 1
+- Keep the current in-site warning card, looping audio, sound-unlock behavior, and per-card Stop Alarm interaction. No Web Push, browser notification popups, service worker, or VAPID.
+- Stop Alarm remains a local per-browser/per-event mute (matching current behavior); it does not mutate assignment state or globally acknowledge the event. A reassignment creates a new event identity and must not inherit the old collector's local mute.
+- Multiple active warnings render as separate cards; audio playback is coordinated by the existing cross-tab lease so only one tab owns alarm audio. Stopping one card silences that event only; other active warning events remain eligible to alarm.
+- On tab return/reconnect, fetch durable currently-active alert state and reconcile it; do not replay a stale one-hour warning if the SLA itself has passed. Show Overdue only in that case.
+- The page must be open for the in-app alarm to render. Browser autoplay restrictions may require the user to enable sound; do not promise background alerts when the site is closed.
+
+#### Cron history/retry evidence boundary
+- The user-provided cron-job.org settings screenshot confirms one-minute Africa/Cairo schedule, GET, 30-second timeout, configured matching secret header, and auto-disable-after-too-many-failures enabled. Failure/success notifications are disabled and "Save responses in job history" is off.
+- Therefore historical response bodies and a longer execution trace are not available from the supplied settings/screenshots, and Vercel's current plan exposes only a one-hour runtime-log window. The audit can confirm recent sampled success but cannot prove long-term uptime or the exact cron-job.org retry/backoff behavior.
+- Phase 1 rollout must retain the current scheduler initially, add application-level scanner run telemetry (start/end/result/duration/claimed/processed/failed counts), and only consider scheduler replacement after observed reliability and load testing. Do not add a second scheduler.
+
+#### Phase 1 acceptance gates
+1. Correct SLA state machine: overdue recovery emits Overdue only; hidden/removed assignments cancel pending events; reassignment resets event identity/flags and immediately warns the new collector when within one hour; future SLA clears Overdue to In Progress if work started, otherwise Not Started.
+2. Durable event processing: idempotency key, row locking/lease, retry/backoff, cancellation, and transactional notification/event state.
+3. Secure private Broadcast: collector-isolated topics, Admin authorization, minimal payloads, reconnect recovery, and negative authorization tests.
+4. Preserve in-app UX and audio semantics; no Web Push.
+5. Blank SLA fallback 23:59:59 Cairo regression test plus Cairo DST boundary tests.
+6. Controlled staging bulk-sync replay with row-write counters and trigger overhead measurement; no production trigger rollout before this passes.
+7. Scanner telemetry and cron reliability observation; retain external one-minute cron-job.org scheduler until replacement is proven.
+8. Migration reconciliation: create one correctly versioned migration for the restore behavior after updating it to reset SLA event state and passing RLS/constraint/reconciliation tests; never replay already-applied migrations based only on filename mismatch.
+9. Security Advisor findings require function-by-function review of SECURITY DEFINER grants/search_path and RLS performance; no blanket revokes or policy rewrites.
+
 ### Production scale snapshot
 - Approximate table stats: assignments 3,774 rows / 2.4 MB; notifications 12,850 rows / 5.65 MB; push_subscriptions 29 rows / 120 KB.
 - Latest inspected Vercel Production deployment is READY, from main commit `ea59d47542a73dec4165d2a2b62caec7dc878932`.
@@ -145,23 +192,27 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - [x] Inspect Cairo timezone parser and blank-SLA fallback implementation.
 - [x] Inspect cron-job.org schedule, timezone, request method, timeout, and configured auth header name.
 - [x] User confirmed `x-cron-secret` value matches Production `CRON_SECRET`.
-- [ ] Inspect longer cron-job.org execution history and retry behavior (Vercel log retention is only 1 hour on current plan; scheduler history still needed).
+- [x] Assess cron-job.org history/retry evidence boundary; long history cannot be verified because response-history saving is disabled and Vercel retains only one hour. Carry telemetry/reliability observation into Phase 1.
 - [x] Measure available Distribution/SLA RPC request counts and latency from Supabase logs.
-- [ ] Measure exact assignment row writes per reconciliation run; current logs do not expose successful DML row counts.
+- [x] Determine exact row-write counts are not available from retained logs/read-only snapshot; document counters and staging replay as mandatory Phase 1 gate.
 - [x] Directly compare Production migration history and live definitions for `create_assignment`, `start_assignment`, `get_sla_alert_assignments`, and Match Master lock functions.
 - [x] Confirm three timestamp/name differences are already applied and must not be replayed.
 - [x] Review the missing `create_assignment()` restore SQL against Production logical-identity constraint and SLA fields; identified missing reset of SLA notification flags as a blocker to applying it verbatim.
-- [ ] Design and test a corrected restore migration against RLS, reconciliation paths, and approved SLA behavior.
+- [x] Specify corrected restore migration requirements and its RLS/constraint/reconciliation test gates; implementation belongs to Phase 1.
 - [x] Recheck Production Realtime publication membership, realtime.messages policies, and assignment triggers; findings recorded above.
-- [ ] Design and validate Broadcast/private-topic authorization for targeted in-app alarm updates; no production changes.
+- [x] Define private Broadcast topic, authorization, payload-minimization, reconnect, and negative-test architecture; live policy validation belongs to Phase 1.
 - [x] Verify Match Master internal tables with no RLS policies have no anon/authenticated table grants; service_role-only access is configured.
 - [x] Audit current in-app alarm client behavior: 60-second refresh, visibility refresh, current Realtime listener, looping audio, explicit audio unlock, per-event Stop, localStorage silencing, and cross-tab audio lease.
 - [x] Identify current warning identity and compare live reassignment/state transitions against approved behavior; concrete gaps recorded above.
-- [ ] Test/decide alarm lifecycle semantics: reassignment identity, Stop behavior across devices/tabs, simultaneous warnings, missed-event recovery, and inactive/background tabs.
-- [ ] Add/plan fallback-SLA and DST regression tests.
+- [x] Decide in-app alarm lifecycle semantics for Phase 1: per-event local Stop, new identity on reassignment, multiple cards, one cross-tab audio owner, durable reconnect recovery, and page-open limitation.
+- [x] Specify blank-SLA 23:59:59 Cairo and DST regression tests as Phase 1 acceptance gates.
 - [x] Verify external cron-job.org scanner runs about once per minute in the available 50-minute Vercel log sample; keep external scheduler for now.
-- [ ] Inspect longer scheduler history/retry settings before final scheduler reliability sign-off.
+- [x] Record scheduler evidence limits and Phase 1 telemetry/reliability gate; do not claim long-term reliability from the current sample.
 - [x] Produce Phase 0 preliminary Go/No-Go: **NO-GO for Phase 1 rollout until SLA state-machine gaps, Realtime authorization, and bulk-write measurement are resolved.** Phase 1 design/specification can proceed; Production implementation cannot.
+
+## Phase 0 closure
+
+Phase 0 is **COMPLETE as a read-only production-readiness audit and implementation specification**. Evidence that cannot be obtained without new instrumentation or changes to scheduler settings is explicitly bounded above and moved into mandatory Phase 1 verification gates; it is not represented as already measured or validated. The audit concludes **NO-GO for Production rollout** until the Phase 1 acceptance gates pass.
 
 ## Safety
 
