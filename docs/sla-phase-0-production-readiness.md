@@ -35,6 +35,14 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 
 - Client warning identity is `assignmentId:sla`; collector identity is not part of the event key.
 
+### SLA state-machine gap confirmed in live Production
+- Direct inspection of the live `evaluate_assignment_sla_states()` function confirms the warning update condition is `now() >= sla - interval '1 hour'` with no upper bound `now() < sla`. Therefore an assignment first scanned after its SLA has passed can receive both a stale one-hour warning and an Overdue transition in the same scanner run. This violates the approved outage-recovery rule (Overdue only when both warning time and SLA have passed).
+- The warning and overdue update loops do not filter `distribution_present = true` or `hidden_from_admin_dashboard = false`. A removed-from-sheet or hidden assignment can still be processed and generate notifications. This violates the approved cancellation rule.
+- Live `reassign_assignment()` changes the collector and may reset progress, but does not reset `sla_warning_sent_at` or `overdue_notified_at`. A new collector within the last hour can therefore miss the immediate warning because the old warning flag remains set.
+- Live `reassign_assignment()` has no behavior to restore an Overdue assignment to `In Progress` or `Not Started` when its SLA is moved into the future; the current function only changes collector/progress fields.
+- The proposed restore implementation in `0028_restore_removed_assignment_on_redistribution.sql` has the same notification-flag reset gap when changing collector on a restored assignment.
+- These are confirmed state-machine gaps, not merely test gaps. They must be addressed in the Phase 1 design before implementation; no Production behavior was changed during this audit.
+
 ### Realtime and in-app alarm
 ### Direct Production verification of Realtime and assignment triggers
 - A fresh read-only catalog query confirms the `supabase_realtime` publication currently contains no application tables; the separate `supabase_realtime_messages_publication` contains only partitioned `realtime.messages_*` tables.
@@ -148,11 +156,12 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - [ ] Design and validate Broadcast/private-topic authorization for targeted in-app alarm updates; no production changes.
 - [x] Verify Match Master internal tables with no RLS policies have no anon/authenticated table grants; service_role-only access is configured.
 - [x] Audit current in-app alarm client behavior: 60-second refresh, visibility refresh, current Realtime listener, looping audio, explicit audio unlock, per-event Stop, localStorage silencing, and cross-tab audio lease.
+- [x] Identify current warning identity and compare live reassignment/state transitions against approved behavior; concrete gaps recorded above.
 - [ ] Test/decide alarm lifecycle semantics: reassignment identity, Stop behavior across devices/tabs, simultaneous warnings, missed-event recovery, and inactive/background tabs.
 - [ ] Add/plan fallback-SLA and DST regression tests.
 - [x] Verify external cron-job.org scanner runs about once per minute in the available 50-minute Vercel log sample; keep external scheduler for now.
 - [ ] Inspect longer scheduler history/retry settings before final scheduler reliability sign-off.
-- [ ] Produce final Phase 0 go/no-go and implementation sequence.
+- [x] Produce Phase 0 preliminary Go/No-Go: **NO-GO for Phase 1 rollout until SLA state-machine gaps, Realtime authorization, and bulk-write measurement are resolved.** Phase 1 design/specification can proceed; Production implementation cannot.
 
 ## Safety
 
