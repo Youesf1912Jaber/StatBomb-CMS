@@ -19,8 +19,7 @@ export function parseMatchMasterSla(value: string | null): string | null {
     if (meridiem === "AM" && hour === 12) hour = 0;
 
     // Google Sheets SLA values without an explicit timezone are Cairo wall-clock
-    // times. Validate the civil date first, then attach Cairo's UTC+03:00 offset
-    // before converting to the UTC instant stored in the cache.
+    // times. Resolve the offset for the specific date so winter/summer time is correct.
     const civil = new Date(Date.UTC(year, month - 1, day));
     if (
       civil.getUTCFullYear() !== year ||
@@ -31,14 +30,20 @@ export function parseMatchMasterSla(value: string | null): string | null {
       second < 0 || second > 59
     ) return null;
 
-    const cairoLocal = String(year).padStart(4, "0") + "-" +
-      String(month).padStart(2, "0") + "-" +
-      String(day).padStart(2, "0") + "T" +
-      String(hour).padStart(2, "0") + ":" +
-      String(minute).padStart(2, "0") + ":" +
-      String(second).padStart(2, "0") + "+03:00";
-    const date = new Date(cairoLocal);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+    const wallClockUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+    const formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Africa/Cairo",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hourCycle: "h23",
+    });
+    const local = Object.fromEntries(formatter.formatToParts(new Date(wallClockUtc)).map((part) => [part.type, part.value]));
+    const representedUtc = Date.UTC(
+      Number(local.year), Number(local.month) - 1, Number(local.day),
+      Number(local.hour), Number(local.minute), Number(local.second),
+    );
+    const instant = new Date(wallClockUtc - (representedUtc - wallClockUtc));
+    return Number.isNaN(instant.getTime()) ? null : instant.toISOString();
   }
 
   // Values with an explicit ISO timezone already identify an absolute instant.
