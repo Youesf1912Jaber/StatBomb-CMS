@@ -32,7 +32,23 @@ type ParsedCivilDateTime = {
   second: number;
 };
 
-const CAIRO_OFFSET = "+03:00";
+function cairoCivilTimeToIso(parts: ParsedCivilDateTime): string | null {
+  const wallClockUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Cairo",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hourCycle: "h23",
+  });
+  const partsByType = Object.fromEntries(formatter.formatToParts(new Date(wallClockUtc)).map((part) => [part.type, part.value]));
+  const representedUtc = Date.UTC(
+    Number(partsByType.year), Number(partsByType.month) - 1, Number(partsByType.day),
+    Number(partsByType.hour), Number(partsByType.minute), Number(partsByType.second),
+  );
+  const offsetMs = representedUtc - wallClockUtc;
+  const instant = new Date(wallClockUtc - offsetMs);
+  return Number.isNaN(instant.getTime()) ? null : instant.toISOString();
+}
 
 function pad(value: number, size = 2): string {
   return value.toString().padStart(size, "0");
@@ -86,9 +102,7 @@ function fromCivil(parts: ParsedCivilDateTime): string | null {
   ) {
     return null;
   }
-  const iso = `${pad(parts.year, 4)}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}:${pad(parts.second)}${CAIRO_OFFSET}`;
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  return cairoCivilTimeToIso(parts);
 }
 
 function parseDistributionDateTime(value: string | null): ParsedCivilDateTime | null {
