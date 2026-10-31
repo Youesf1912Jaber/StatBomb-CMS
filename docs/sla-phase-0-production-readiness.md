@@ -13,7 +13,7 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - Confirmed request settings: HTTP `GET`; timeout 30 seconds; request body empty; HTTP Basic authentication disabled; custom header key is `x-cron-secret`. User explicitly confirmed that its configured value is the same as Production's `CRON_SECRET`; no secret value was shared. Authentication configuration is therefore confirmed.
 - Confirmed advanced behavior: redirects with HTTP 3xx are not treated as success; schedule expiration is disabled; response saving in job history is disabled; failure notification is disabled; success-after-failure notification is disabled; automatic job disabling after too many failures is enabled; notification channel setting is "all notification channels" but no failure/success event notifications are enabled in the screenshot.
 - The earlier dashboard screenshot showed five recent executions as Successful (HTTP 200). This plus the current settings confirms recent operation, not long-term uptime.
-- The scanner route requires `CRON_SECRET` and accepts it through `Authorization: Bearer` or `x-cron-secret`; the configured header key is compatible. Matching the redacted value to the deployed secret remains unverified.
+- The scanner route requires `CRON_SECRET` and accepts it through `Authorization: Bearer` or `x-cron-secret`; the user confirmed the configured `x-cron-secret` value matches Production `CRON_SECRET`.
 - Empty `vercel.json` is expected because the user uses cron-job.org, not Vercel Cron. Do not add a competing scheduler.
 - Supabase `cron.job` contains only the Match Master refresh job (job 2, `*/5 * * * *`). There is no SLA job in Supabase pg_cron.
 - Recent Match Master pg_cron history shows successful five-minute runs. This does not provide cron-job.org history.
@@ -29,6 +29,18 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - Client warning identity is `assignmentId:sla`; collector identity is not part of the event key.
 
 ### Realtime and in-app alarm
+### Direct Production verification of Realtime and assignment triggers
+- A fresh read-only catalog query confirms the `supabase_realtime` publication currently contains no application tables; the separate `supabase_realtime_messages_publication` contains only partitioned `realtime.messages_*` tables.
+- A fresh query of policies on `realtime.messages` returned no policies. Private Broadcast authorization is not yet in place; do not switch the client to private Broadcast until topic authorization and role/assignment scoping are designed and tested.
+- A fresh query confirms `public.assignments` has only two non-internal triggers: `assignments_protect_distribution_present` and `assignments_set_updated_at`. There is no SLA-event reconciliation trigger today.
+- These findings reinforce that the existing `postgres_changes` subscription in the browser cannot be assumed to receive assignment changes with the current publication membership.
+
+- `GlobalSlaAlerts.tsx` implements the in-site alarm: fixed-position SLA cards, looping `/sounds/sla-warning.wav`, explicit sound-enable interaction for autoplay restrictions, per-alert Stop behavior, and localStorage silencing keyed by warning event ID.
+- It currently refreshes alert assignments every 60 seconds, on tab visibility becoming visible, and after every matching `postgres_changes` event. Current publication membership does not support that assignment subscription, so the realtime callback is not a dependable delivery path today.
+- Audio ownership is coordinated across tabs with a localStorage lease (15-second TTL, renewed every 7.5 seconds), reducing duplicate audio across tabs; add coverage for lease expiry/races.
+- This is a page-based alarm, not a background notification. With the site closed no in-app alarm can render; if audio is blocked/not unlocked, the card may render silently until the user enables sound.
+- Stop Alarm silences one warning event in that browser's localStorage/session state; it does not change the assignment or globally acknowledge the warning on other devices. Confirm whether this is intended.
+- Warning identity currently uses `assignmentId:sla`; collector identity is not included. On reassignment, the new collector could inherit an old local silencing key. Decide whether the event identity should include collector ID as part of the reassignment behavior.
 - The `supabase_realtime` publication exists but currently has no published application tables such as `public.assignments`. Thus the current Postgres Changes subscription to assignments is not supported by the current publication membership, and its effectiveness needs a controlled test after publication configuration is understood.
 - A separate internal publication named `supabase_realtime_messages_publication` contains partitioned `realtime.messages_*` tables. This is not the same as publishing `public.assignments` for Postgres Changes.
 - `realtime.messages` has RLS enabled, but the current catalog query found no policies on it. Private Broadcast topic authorization is therefore not ready to be assumed; design and test topic policies before using private channels.
@@ -111,8 +123,10 @@ Scope: Read-only inspection. No application code, database schema/data, cron job
 - [x] Directly compare Production migration history and live definitions for `create_assignment`, `start_assignment`, `get_sla_alert_assignments`, and Match Master lock functions.
 - [x] Confirm three timestamp/name differences are already applied and must not be replayed.
 - [ ] Review the real missing `create_assignment()` restore behavior against constraints, RLS, reconciliation paths, and test coverage before proposing a safe migration.
-- [ ] Validate Broadcast/private-topic design and RLS for delivering targeted in-app alarm updates; no production changes.
-- [ ] Audit the current in-app alarm lifecycle: duplicate suppression, simultaneous alarms, tab visibility, audio/autoplay behavior, Stop Alarm semantics, and recovery after missed events.
+- [x] Recheck Production Realtime publication membership, realtime.messages policies, and assignment triggers; findings recorded above.
+- [ ] Design and validate Broadcast/private-topic authorization for targeted in-app alarm updates; no production changes.
+- [x] Audit current in-app alarm client behavior: 60-second refresh, visibility refresh, current Realtime listener, looping audio, explicit audio unlock, per-event Stop, localStorage silencing, and cross-tab audio lease.
+- [ ] Test/decide alarm lifecycle semantics: reassignment identity, Stop behavior across devices/tabs, simultaneous warnings, missed-event recovery, and inactive/background tabs.
 - [ ] Add/plan fallback-SLA and DST regression tests.
 - [ ] Validate pg_cron sub-minute runtime behavior or retain the external one-minute scheduler.
 - [ ] Produce final Phase 0 go/no-go and implementation sequence.
